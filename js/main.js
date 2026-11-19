@@ -1,48 +1,49 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=rb7v8a01';
-import { World } from './world.js?v=rb7v8a01';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=rb7v8a01';
-import { Sound } from './audio.js?v=rb7v8a01';
-import { Particles, Skids } from './fx.js?v=rb7v8a01';
-import { Weather } from './weather.js?v=rb7v8a01';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rb7v8a01';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=grid26a01';
+import { World } from './world.js?v=grid26a01';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=grid26a01';
+import { Sound } from './audio.js?v=grid26a01';
+import { Particles, Skids } from './fx.js?v=grid26a01';
+import { Weather } from './weather.js?v=grid26a01';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=grid26a01';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
 
-/* ---------------- Teams, drivers, tyres (all fictional) ---------------- */
+/* ---------------- Teams, drivers, tyres ---------------- */
+// the 2026 grid: 11 teams, 2 drivers each (DRIVERS lists them in team order)
 const TEAMS = [
-  { name: 'Halcyon Racing', color: '#14b8a6', accent: '#0f172a' },
-  { name: 'Ironclad GP', color: '#f97316', accent: '#1f2937' },
-  { name: 'Solaris Motorsport', color: '#a3e635', accent: '#111827' },
-  { name: 'Corvid Racing', color: '#7c3aed', accent: '#e5e7eb' },
-  { name: 'Brightwater', color: '#38bdf8', accent: '#0b1324' },
-  { name: 'Vermilion Works', color: '#dc2626', accent: '#fde68a' },
-  { name: 'Pinnacle Engineering', color: '#22c55e', accent: '#f8fafc' },
-  { name: 'Atlas Velocity', color: '#ec4899', accent: '#1e1b4b' },
-  { name: 'Northstar GP', color: '#1e3a8a', accent: '#fbbf24' },
-  { name: 'Granite Motorsport', color: '#9ca3af', accent: '#dc2626' },
-  { name: 'Copperline Racing', color: '#b45309', accent: '#0a0a0a' },
+  { name: 'McLaren', color: '#ff8000', accent: '#111111' },
+  { name: 'Ferrari', color: '#dc0000', accent: '#fff200' },
+  { name: 'Red Bull Racing', color: '#1e2a5a', accent: '#e10600' },
+  { name: 'Mercedes', color: '#c8ccd0', accent: '#00a19c' },
+  { name: 'Aston Martin', color: '#006f62', accent: '#cedc00' },
+  { name: 'Alpine', color: '#0078c1', accent: '#ff87bc' },
+  { name: 'Williams', color: '#1868db', accent: '#ffffff' },
+  { name: 'Racing Bulls', color: '#f4f4f4', accent: '#1634cb' },
+  { name: 'Audi', color: '#5b5f63', accent: '#ff2d1a' },
+  { name: 'Haas', color: '#b6babd', accent: '#e10600' },
+  { name: 'Cadillac', color: '#111111', accent: '#e5e5e5' },
 ];
 const DRIVERS = [
-  ['Marco Ferrante', 'FER'], ['Lena Hoffmann', 'HOF'], ['Kai Tanaka', 'TAN'], ['Rafael Duarte', 'DUA'],
-  ['Sofia Lindqvist', 'LIN'], ['Theo Marchetti', 'MAR'], ['Amara Okafor', 'OKA'], ['Jonas Brandt', 'BRA'],
-  ['Elise Moreau', 'MOR'], ['Diego Salvador', 'SAL'], ['Niko Virtanen', 'VIR'], ['Priya Raman', 'RAM'],
-  ['Oscar Whitfield', 'WHI'], ['Yuki Mori', 'MRI'], ['Felix Arnaud', 'ARN'], ['Mateo Rojas', 'ROJ'],
-  ['Lucas Bremer', 'BRE'], ['Isabela Costa', 'COS'], ['Hugo Lefevre', 'LEF'], ['Anya Petrova', 'PET'],
-  ['Tom Ashworth', 'ASH'], ['Kenji Arai', 'ARA'],
+  ['Lando Norris', 'NOR'], ['Oscar Piastri', 'PIA'],
+  ['Charles Leclerc', 'LEC'], ['Lewis Hamilton', 'HAM'],
+  ['Max Verstappen', 'VER'], ['Isack Hadjar', 'HAD'],
+  ['George Russell', 'RUS'], ['Kimi Antonelli', 'ANT'],
+  ['Fernando Alonso', 'ALO'], ['Lance Stroll', 'STR'],
+  ['Pierre Gasly', 'GAS'], ['Franco Colapinto', 'COL'],
+  ['Alex Albon', 'ALB'], ['Carlos Sainz', 'SAI'],
+  ['Liam Lawson', 'LAW'], ['Arvid Lindblad', 'LIN'],
+  ['Nico Hulkenberg', 'HUL'], ['Gabriel Bortoleto', 'BOR'],
+  ['Esteban Ocon', 'OCO'], ['Oliver Bearman', 'BEA'],
+  ['Sergio Perez', 'PER'], ['Valtteri Bottas', 'BOT'],
 ];
-const CAR_NUMS = [4, 7, 11, 14, 16, 22, 27, 31, 33, 44, 55, 63, 77, 81, 88, 99, 3, 5, 10, 12, 18, 23];
-let TEAM_MAP = DRIVERS.map((_, i) => Math.floor(i / 2) % TEAMS.length);
+const CAR_NUMS = [4, 81, 16, 44, 3, 6, 63, 12, 14, 18, 10, 43, 23, 55, 30, 41, 27, 5, 31, 87, 11, 77];
+let TEAM_MAP = DRIVERS.map((_, i) => Math.floor(i / 2));
 const teamIdxOf = di => TEAM_MAP[di];
-/* random pairings: shuffle the drivers, then seat them two to a team */
-function shuffleTeams(r, seated) {
-  // seat the drivers actually racing (minus the player's teammate) two per team, so every team is a pair
-  const pool = (seated || DRIVERS.map((_, i) => i)).slice().sort(() => r() - 0.5), map = DRIVERS.map((_, i) => Math.floor(i / 2) % TEAMS.length);
-  const slots = TEAMS.map((_, t) => t).sort(() => r() - 0.5);
-  pool.forEach((di, k) => { map[di] = slots[Math.floor(k / 2) % slots.length]; });
-  return map;
-}
+/* fixed line-ups: each driver always drives for their own team */
+const FIXED_TEAMS = DRIVERS.map((_, i) => Math.floor(i / 2));
+function shuffleTeams() { return FIXED_TEAMS.slice(); }
 const LIVERIES = ['#ffcc00', '#f8fafc', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#111827'];
 const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 // 100 = right on the limit and slightly over it (they rely on kerbs and run-off); 75 ≈ old Hard
@@ -105,8 +106,8 @@ sound.muted = store.get('apexgp-muted') === '1';
 const audio = { init() { sound.init(); }, set() {}, get muted() { return sound.muted; }, set muted(v) { sound.muted = v; } };
 
 /* ---------------- Championship ---------------- */
-const loadSeason = () => store.json('apexgp2-season', null);
-const saveSeason = s => store.set('apexgp2-season', JSON.stringify(s));
+const loadSeason = () => store.json('apexgp3-season', null);
+const saveSeason = s => store.set('apexgp3-season', JSON.stringify(s));
 function newSeason() {
   const r = rng(Date.now() & 0xfffff);
   const order = DRIVERS.map((d, i) => i).sort(() => r() - 0.5).slice(0, settings.opp);
@@ -194,7 +195,7 @@ function startWeekend() {
   game.skill = champ ? (game.season.ai ?? 50) : settings.ai;
   const r = rng((Date.now() & 0xffff) + 1);
   let lineup = [];
-  if (champ) { if (!game.season.teamMap) { game.season.teamMap = shuffleTeams(r, game.season.lineup.slice(1).map(l => l.di)); saveSeason(game.season); } TEAM_MAP = game.season.teamMap; }
+  if (champ) TEAM_MAP = shuffleTeams();
   if (champ) lineup = game.season.lineup.slice();
   else if (!tt) lineup = DRIVERS.map((d, i) => i).sort(() => r() - 0.5).slice(0, settings.opp).map(di => ({ di, rating: 0.99 + r() * 0.02 }));
   if (!champ && !tt) TEAM_MAP = shuffleTeams(r, lineup.slice(1).map(l => l.di));
@@ -1582,14 +1583,14 @@ function initMenu() {
     $('trackList').appendChild(el);
   });
   $('startBtn').onclick = () => withLoading(startWeekend);
-  $('newSeason').onclick = () => { store.del('apexgp2-season'); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
+  $('newSeason').onclick = () => { store.del('apexgp3-season'); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
   for (let k = 0; k < 5; k++) { const pod = document.createElement('div'); pod.className = 'pod'; pod.innerHTML = '<i></i><i></i>'; $('startLights').appendChild(pod); }
   for (let k = 0; k < 10; k++) $('shift').appendChild(document.createElement('i'));
   $('pResume').onclick = () => togglePause(false);
   $('pRestart').onclick = () => { if (settings.mode === 'champ') return; withLoading(startWeekend); };
   $('pEnd').onclick = () => { togglePause(false); if (!isRace() && game.session !== 'tt') { game.player.lapInvalid = false; endQualiSession(); } };
   $('pQuit').onclick = toMenu; $('rMenu').onclick = toMenu;
-  $('rAgain').onclick = () => { if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del('apexgp2-season'); } withLoading(startWeekend); };
+  $('rAgain').onclick = () => { if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del('apexgp3-season'); } withLoading(startWeekend); };
   $('qNext').onclick = () => { $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
   $('stratGo').onclick = () => withLoading(startRace);
   $('leaveGarage').onclick = leaveGarage;
@@ -1668,7 +1669,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=rb7v8a01');
+await loadCarModel('js/car.bin?v=grid26a01');
 initMenu();
 requestAnimationFrame(frame);
 
