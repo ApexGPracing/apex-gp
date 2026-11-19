@@ -64,6 +64,11 @@ button{font-family:inherit;cursor:pointer}
 .rmsg{background:rgba(10,12,18,.84);border:1px solid var(--line);border-left:5px solid #3d8bff;border-radius:8px;padding:8px 12px;font-size:18px;font-weight:600;line-height:1.25;animation:slidein .35s ease;transition:opacity .5s,transform .5s}
 .rmsg .who{display:block;font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:700;margin-bottom:2px}
 .rmsg.warn{border-left-color:#f5b400}.rmsg.bad{border-left-color:var(--red)}.rmsg.good{border-left-color:var(--green)}
+.rmsg.me{border-left-color:#ffffff;background:rgba(30,34,46,.88)}
+#engMenu{position:absolute;right:16px;bottom:250px;width:360px;background:rgba(10,12,18,.9);border:1px solid var(--line);border-left:5px solid #3d8bff;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px;z-index:5;pointer-events:auto}
+#engMenu .eh{font-size:14px;letter-spacing:.14em;font-weight:800;color:#fff;margin-bottom:4px}#engMenu .eh small{color:var(--muted);letter-spacing:.06em;margin-left:6px;font-weight:600}
+#engMenu button{all:unset;cursor:pointer;font-size:17px;font-weight:600;padding:5px 6px;border-radius:6px;color:#e8eaf0}#engMenu button:hover{background:rgba(61,139,255,.2)}
+#engMenu kbd{margin-right:8px}
 .rmsg.out{opacity:0;transform:translateX(30px)}
 @keyframes slidein{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
 #drs{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);padding:6px 16px;border-radius:8px;font-size:22px;font-weight:800;letter-spacing:.08em;white-space:nowrap}
@@ -215,6 +220,7 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
   <div id="camTag" class="panel">CAMERA <b id="camName">CHASE</b> · C to switch · ESC pause</div>
   <div id="wrongway" class="hidden">WRONG WAY</div>
   <div id="radio"></div>
+  <div id="engMenu" class="hidden"></div>
   <div id="carPanel" class="panel"><div class="tyre"><span id="tyreBadge" class="tb">M</span><div><b id="tyreWear">100%</b><small id="tyreName">MEDIUM</small></div></div><div class="dmg" title="Car damage"><i id="dFW" class="fw"></i><i id="dTL" class="tl"></i><i id="dTR" class="tr"></i><i id="dSus" class="sus"></i><i id="dBL" class="bl"></i><i id="dBR" class="br"></i><i id="dRW" class="rw"></i></div></div>
   <div id="pitTag" class="hidden"></div>
   <div id="pitHint" class="hidden"></div>
@@ -242,7 +248,7 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
     <div class="opt panel"><h4>Damage</h4><div class="seg" data-opt="damage"><button data-v="off">Off</button><button data-v="reduced">Reduced</button><button data-v="sim">Simulation</button></div></div>
     <div class="opt panel"><h4>Racing Line <span style="text-transform:none;letter-spacing:0">(L in race)</span></h4><div class="seg" data-opt="line"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
     <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div></div>
-    <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd> Throttle &nbsp; <kbd>S</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> Steer &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
+    <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd> Throttle &nbsp; <kbd>S</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> Steer &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>R</kbd> Team radio &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
     <button class="btn primary" id="startBtn">Start Race</button>
   </div>
   <div></div>
@@ -282,6 +288,6 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=kerb26c"></script>
+<script type="module" src="js/main.js?v=ai26a"></script>
 </body>
 </html>

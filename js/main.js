@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=kerb26c';
-import { World } from './world.js?v=kerb26c';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=kerb26c';
-import { Sound } from './audio.js?v=kerb26c';
-import { Particles, Skids } from './fx.js?v=kerb26c';
-import { Weather } from './weather.js?v=kerb26c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=kerb26c';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=ai26a';
+import { World } from './world.js?v=ai26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=ai26a';
+import { Sound } from './audio.js?v=ai26a';
+import { Particles, Skids } from './fx.js?v=ai26a';
+import { Weather } from './weather.js?v=ai26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ai26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -38,6 +38,17 @@ const DRIVERS = [
   ['Esteban Ocon', 'OCO'], ['Oliver Bearman', 'BEA'],
   ['Sergio Perez', 'PER'], ['Valtteri Bottas', 'BOT'],
 ];
+/* driver personalities: skill (pace), agg (how hard they attack and how late they brake when passing),
+   def (how hard they defend), cons (consistency: fewer mistakes), tyre (wear rate: lower = kinder to tyres) */
+const PERSONA = {
+  NOR: [0.93, 0.7, 0.6, 0.85, 1.0], PIA: [0.92, 0.6, 0.7, 0.92, 0.95], LEC: [0.93, 0.75, 0.7, 0.8, 1.05], HAM: [0.92, 0.65, 0.8, 0.9, 0.9],
+  VER: [0.98, 0.95, 0.95, 0.95, 0.95], HAD: [0.84, 0.75, 0.6, 0.75, 1.05], RUS: [0.91, 0.75, 0.75, 0.88, 1.0], ANT: [0.85, 0.8, 0.55, 0.72, 1.05],
+  ALO: [0.9, 0.8, 0.95, 0.93, 0.85], STR: [0.78, 0.55, 0.55, 0.75, 1.0], GAS: [0.84, 0.65, 0.7, 0.85, 1.0], COL: [0.78, 0.8, 0.5, 0.68, 1.05],
+  ALB: [0.85, 0.6, 0.75, 0.88, 0.95], SAI: [0.88, 0.65, 0.85, 0.9, 0.9], LAW: [0.8, 0.8, 0.7, 0.75, 1.05], LIN: [0.78, 0.75, 0.5, 0.7, 1.05],
+  HUL: [0.83, 0.6, 0.8, 0.9, 0.95], BOR: [0.8, 0.65, 0.6, 0.78, 1.0], OCO: [0.82, 0.7, 0.9, 0.85, 0.95], BEA: [0.81, 0.8, 0.6, 0.75, 1.0],
+  PER: [0.84, 0.6, 0.75, 0.82, 0.85], BOT: [0.83, 0.5, 0.7, 0.88, 0.95],
+};
+const personaOf = code => { const a = PERSONA[code] || [0.85, 0.7, 0.7, 0.85, 1]; return { skill: a[0], agg: a[1], def: a[2], cons: a[3], tyre: a[4] }; };
 const CAR_NUMS = [4, 81, 16, 44, 3, 6, 63, 12, 14, 18, 10, 43, 23, 55, 30, 41, 27, 5, 31, 87, 11, 77];
 let TEAM_MAP = DRIVERS.map((_, i) => Math.floor(i / 2));
 const teamIdxOf = di => TEAM_MAP[di];
@@ -140,7 +151,7 @@ function resetState(c) {
   });
   c.fwing.visible = c.rwing.visible = true;
 }
-function setTyres(c, comp) { c.tyre = { comp, wear: 0 }; c.stints = c.stints || []; c.stints.push(comp); setCompound(c, comp); }
+function setTyres(c, comp) { c.tyre = { comp, wear: 0 }; c.tyreLap = Math.max(1, (c.maxDone ?? -1) + 1); c.stints = c.stints || []; c.stints.push(comp); setCompound(c, comp); }
 
 /* Build the field: player, teammate (in Your Team colours) and AI rivals */
 function makeField(lineup, skill) {
@@ -153,7 +164,7 @@ function makeField(lineup, skill) {
     const tm = TEAMS[teamIdxOf(di)];
     const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium' }),
       { name: DRIVERS[di][0], code: DRIVERS[di][1], team: mate ? 'Your Team' : tm.name, color: mate ? colr : tm.color, isPlayer: false, mate, teamIdx: mate ? TEAMS.length : teamIdxOf(di),
-        pace: Math.min(1.03, aiPace(skill) * L.rating), lateBrake: skill >= 70, rating: L.rating, boost: aiBoost(skill) });
+        per: personaOf(DRIVERS[di][1]), pace: Math.min(1.035, aiPace(skill) * L.rating * (1 + (personaOf(DRIVERS[di][1]).skill - 0.86) * 0.03)), lateBrake: skill >= 70, rating: L.rating, boost: aiBoost(skill) });
     game.cars.push(c); if (mate) game.mate = c;
   });
   for (const c of game.cars) { resetState(c); c.stints = []; scene.add(c.group); }
@@ -353,7 +364,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity;
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false);
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -385,6 +396,8 @@ function surfaceOf(c, Tr) {
 }
 const GRIP = [1, 0.93, 0.88, 0.45, 0.6];
 const PLAYER_GRIP = 1.18; // extra grip for the player's car
+// driving modes the player can ask the engineer for: more grip and pace, or kinder to the tyres
+const MODES = [{ name: 'SAVE', grip: 0.98, wear: 0.6 }, { name: 'STANDARD', grip: 1, wear: 1 }, { name: 'PUSH', grip: 1.03, wear: 1.5 }];
 const DRAG = [0, 0, 0, 0.95, 0.4];
 
 function setVel(c, vx, vz) {
@@ -402,7 +415,7 @@ function stepCar(c, inp, dt, Tr) {
   const tg = tyreGrip(c.tyre.comp, c.tyre.wear, wet), d = c.dmg;
   const dmgF = 1 - 0.2 * d.fw - 0.1 * d.susp - (d.punct ? 0.3 : 0);
   const boost = c.boost || 1;
-  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * (c.isPlayer ? PLAYER_GRIP : 1);
+  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : 1);
   c.gripTD = tg * dmgF;
   let v = c.v;
   const vm = VMAX * (c.drsOpen ? 1.08 : 1) * (1 + 0.04 * (c.tow || 0)) * (1 - 0.05 * d.rw) * (d.punct ? 0.35 : 1) * Math.sqrt(boost);
@@ -448,7 +461,8 @@ function stepCar(c, inp, dt, Tr) {
   const lapsLife = isRace() ? Math.max(2, COMP[c.tyre.comp].life * game.laps) : COMP[c.tyre.comp].life * 20;
   const load = Math.min(1, Math.abs(yaw * sp) / 30) + Math.abs(slip);
   const dryPen = !SLICK(c.tyre.comp) ? (c.tyre.comp === 'inter' ? 1 + 2.5 * Math.max(0, 0.25 - wet) * 4 : 1 + 4 * Math.max(0, 0.4 - wet) * 2.5) : 1;
-  if (isRace()) c.tyre.wear += sp * dt / DS / (lapsLife * Tr.N) * (0.7 + 0.6 * load) * dryPen;
+  const wearK = c.isPlayer ? MODES[game.mode ?? 1].wear : (c.per ? c.per.tyre : 1);
+  if (isRace()) c.tyre.wear += sp * dt / DS / (lapsLife * Tr.N) * (0.7 + 0.6 * load) * dryPen * wearK;
 
   const ni = locate(Tr, c.x, c.z, c.idx);
   let dn = ni - c.idx; if (dn > Tr.N / 2) dn -= Tr.N; else if (dn < -Tr.N / 2) dn += Tr.N;
@@ -686,9 +700,10 @@ function playerInput(c, dt) {
 
 function aiInput(c, dt, Tr) {
   const N = Tr.N;
-  c.blockT -= dt; c.yieldT -= dt;
+  c.blockT -= dt; c.yieldT -= dt; c.attackT = (c.attackT || 0) - dt; c.defT = (c.defT || 0) - dt; c.mistT = (c.mistT || 0) - dt;
   if (c.blockT <= 0) c.laneTarget *= Math.pow(0.5, dt);
-  let follow = Infinity;
+  const per = c.per || personaOf(c.code), straight = Math.abs(Tr.curv[c.idx]) < 0.004;
+  let follow = Infinity, pressure = false;
   for (const o of game.cars) {
     if (o === c || !o.active || o.pit) continue;
     const dp = o.prog - c.prog;
@@ -696,12 +711,21 @@ function aiInput(c, dt, Tr) {
       const want = clamp(o.lat + (c.lat >= o.lat ? 3.8 : -3.8), -(W - 1.2), W - 1.2);
       if (Math.abs(want - o.lat) >= 3) { c.laneTarget = want - Tr.race[c.idx]; c.blockT = Math.max(c.blockT, 0.8); }
     }
-    if (dp > 0 && dp < 16 && Math.abs(o.lat - c.lat) < 2.6) {
+    if (dp > 0 && dp < 10 + 10 * per.agg && Math.abs(o.lat - c.lat) < 2.6) {
       if (c.v > o.v - 0.5 || o.dnf) {
         const leftRoom = W - 1.4 - o.lat, rightRoom = o.lat + W - 1.4;
         c.laneTarget = clamp((leftRoom > rightRoom ? o.lat + 3.0 : o.lat - 3.0) - Tr.race[c.idx], -2 * W, 2 * W); c.blockT = 1.6;
+        if (!o.dnf) c.attackT = 1.2;
       }
       if (dp < 5 && !o.dnf) follow = Math.min(follow, o.v - 0.5);
+    }
+    // defending: a faster car close behind on a straight gets one move to cover the inside
+    if (dp < -2 && dp > -14 && !o.dnf && !o.finished) {
+      pressure = true;
+      if (racing() && straight && c.defT <= 0 && c.yieldT <= 0 && !game.flag && !(c.mate && o.isPlayer) && o.v > c.v - 1) {
+        c.defT = 3.5;
+        if (Math.random() < per.def) { c.laneTarget = clamp(c.lat + (o.lat - c.lat) * 0.85, -(W - 1.4), W - 1.4) - Tr.race[c.idx]; c.blockT = 1.4; }
+      }
     }
   }
   const P = Tr.pit, toEntry = (P.entry - c.idx + N) % N, inEntryRoad = ((c.idx - P.entry + N) % N) < P.limIn + 2;
@@ -735,6 +759,19 @@ function aiInput(c, dt, Tr) {
   // going over the limit only pays in slow corners; in fast sweepers the best AI drive exactly on it
   const pace = c.pace > 1 ? 1 + (c.pace - 1) * clamp((72 - target) / 30, 0, 1) : c.pace;
   target = Math.min(target * pace * Math.sqrt(Math.min(1.04, c.gripTD || 1) * (c.boost || 1)) * (c.yieldT > 0 ? 0.9 : 1), follow);
+  // aggressive drivers brake later when they are attacking
+  if (c.attackT > 0) target *= 1 + 0.025 * per.agg;
+  // mistakes: lock-ups and running wide, more likely in the wet and under pressure
+  if (racing() && !game.flag && c.mistT <= -4 && c.v > 30 && c.v > target + 4) {
+    const rate = (1 - per.cons) * 0.02 * (weather.wetAt(c.idx) > 0.3 ? 2.5 : 1) * (pressure ? 1.8 : 1);
+    if (Math.random() < rate * dt) {
+      c.mistT = 1.1; c.lockFx = 0.45;
+      const p = game.player;
+      if (p && !p.dnf && Math.abs(c.prog - p.prog) < 350 && clock - (game.mistSaid || -99) > 12) { game.mistSaid = clock; radio(c.code + (Math.random() < 0.5 ? ' has locked up and gone wide!' : ' has made a mistake, run wide!'), 'good', 4); }
+    }
+  }
+  if (c.mistT > 0) target *= 1.1;
+  if (c.lockFx > 0) c.lockFx -= dt;
   if (wide > 0) target = Math.min(target, c.v * (1 - Math.min(0.08, wide * 0.03)));
   if (c.surf >= 3) target = Math.min(target, 35);
   if (c.dmg.punct) target = Math.min(target, 28);
@@ -1092,14 +1129,14 @@ const positionOf = c => standings().indexOf(c) + 1;
 
 /* ---------------- Race engineer & team orders ---------------- */
 let radioQ = [], radioNext = 0;
-function radio(text, kind = 'info', dur = 6) {
-  if (performance.now() < radioNext && kind !== 'bad') { if (radioQ.length < 3) radioQ.push([text, kind, dur]); return; }
-  showRadio(text, kind, dur);
+function radio(text, kind = 'info', dur = 6, who) {
+  if (performance.now() < radioNext && kind !== 'bad' && !who) { if (radioQ.length < 3) radioQ.push([text, kind, dur]); return; }
+  showRadio(text, kind, dur, who);
 }
-function showRadio(text, kind, dur) {
-  radioNext = performance.now() + 1800;
+function showRadio(text, kind, dur, who) {
+  if (!who) radioNext = performance.now() + 1800;
   const box = $('radio'), el = document.createElement('div');
-  el.className = 'rmsg ' + kind; el.innerHTML = '<span class="who">RACE ENGINEER</span>' + text;
+  el.className = 'rmsg ' + kind + (who ? ' me' : ''); el.innerHTML = '<span class="who">' + (who || 'RACE ENGINEER') + '</span>' + text;
   box.prepend(el); while (box.children.length > 4) box.lastChild.remove();
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, dur * 1000);
 }
@@ -1163,6 +1200,84 @@ function teamOrders() {
   else if (gap > 0 && m.lastLap && p.lastLap && p.lastLap < m.lastLap - 0.25) { to.issued = 'swap'; m.yieldT = 14; radio('We have told ' + m.code + ' to let you by. Get past on the next straight.', 'good', 7); }
 }
 
+/* ---------------- Talk to the race engineer (R, then 1-8) ---------------- */
+const ENG = [
+  { q: 'How are my tyres?', a: engTyres },
+  { q: 'What are the gaps?', a: engGaps },
+  { q: "What's the weather doing?", a: engWeather },
+  { q: 'How is my pace?', a: engPace },
+  { q: 'Tell me about the car behind', a: engBehind },
+  { q: 'Change mode (Save / Standard / Push)', a: engMode },
+  { q: 'Box this lap / stay out', a: engBox },
+  { q: 'Ask my teammate to let me by', a: engMate },
+];
+function engMenu(open) {
+  const el = $('engMenu'), show = open === undefined ? el.classList.contains('hidden') : open;
+  if (show && !(game.state === 'race' && game.player && game.phase !== 'idle')) return;
+  if (show) el.innerHTML = '<div class="eh">TEAM RADIO <small>press a number</small></div>' + ENG.map((o, k) => '<button data-k="' + k + '"><kbd>' + (k + 1) + '</kbd>' + o.q.replace('(Save / Standard / Push)', '(now ' + MODES[game.mode ?? 1].name + ')') + '</button>').join('');
+  el.classList.toggle('hidden', !show);
+}
+function engAsk(k) {
+  const o = ENG[k]; if (!o) return; engMenu(false);
+  radio(o.q.replace(' (Save / Standard / Push)', ''), 'info', 4, 'YOU');
+  setTimeout(() => { const r = o.a(); if (r) radio(r[0], r[1] || 'info', 7); }, 900 + Math.random() * 700);
+}
+const inRace = () => racing() && game.player && !game.player.dnf;
+function engTyres() {
+  const p = game.player, w = p.tyre.wear, name = COMP[p.tyre.comp].name + 's';
+  if (!isRace()) return ['Tyres are fine for this session. Just push.'];
+  const laps = Math.max(0.5, curLap(p) - (p.tyreLap || 1) + 1), perLap = w / laps, left = perLap > 0.005 ? Math.max(0, Math.floor((1 - w) / perLap)) : 99;
+  const pct = Math.round(w * 100);
+  if (w > 1) return [name + ' are finished, ' + pct + '% worn. We need to box.', 'warn'];
+  return [name + ' at ' + pct + '% wear. ' + (left > game.laps - curLap(p) ? 'They will make it to the end.' : 'Good for about ' + left + ' more lap' + (left === 1 ? '' : 's') + '.'), w > 0.7 ? 'warn' : 'info'];
+}
+function engGaps() {
+  if (!inRace()) return ['No gaps to give you in this session. Focus on your lap.'];
+  const p = game.player, st = standings(), i = st.indexOf(p), a = st[i - 1], b = st[i + 1], parts = ['You are P' + (i + 1) + ' of ' + st.length + '.'];
+  if (a) { const g = gapTo(p, a); parts.push(a.code + ' ahead' + (g !== null ? ' by ' + g.toFixed(1) + 's' : '') + '.'); } else parts.push('You are leading!');
+  if (b) { const g = gapTo(p, b); parts.push(b.code + ' behind' + (g !== null ? ' by ' + g.toFixed(1) + 's' : '') + '.'); }
+  return [parts.join(' ')];
+}
+function engWeather() {
+  const t = game.raceTime, g = weather.global(t), nr = weather.nextRain(t), avg = weather.average();
+  if (g > 0.05) return [(g > 0.6 ? 'Heavy rain' : g > 0.3 ? 'Steady rain' : 'Light rain') + ' right now. Track is ' + Math.round(avg * 100) + '% wet.' + (SLICK(game.player.tyre.comp) && avg > 0.3 ? ' Consider boxing for inters.' : ''), 'warn'];
+  if (nr - t < 120) return ['Rain expected in about ' + Math.max(10, Math.round((nr - t) / 10) * 10) + ' seconds.', 'warn'];
+  if (avg > 0.1) return ['No rain, track is drying. ' + Math.round(avg * 100) + '% wet now.'];
+  return ['Dry, and the radar looks clear for now.'];
+}
+function engPace() {
+  const p = game.player; if (!p.lastLap) return ['Complete a lap and I will tell you.'];
+  let best = null; for (const c of game.cars) if (c !== p && c.active && !c.dnf && c.lastLap && (!best || c.lastLap < best.lastLap)) best = c;
+  if (!best) return ['Your last lap was ' + fmt(p.lastLap) + '.'];
+  const d = p.lastLap - best.lastLap;
+  return [d <= 0 ? 'You are the fastest car on track! Last lap ' + fmt(p.lastLap) + '.' : 'Last lap ' + fmt(p.lastLap) + '. Fastest is ' + best.code + ', ' + d.toFixed(2) + 's quicker.', d <= 0 ? 'good' : 'info'];
+}
+function engBehind() {
+  if (!inRace()) return ['Nobody racing you in this session.'];
+  const p = game.player, st = standings(), b = st[st.indexOf(p) + 1];
+  if (!b) return ['Nobody behind you. You are last.'];
+  const g = gapTo(p, b), faster = b.lastLap && p.lastLap && b.lastLap < p.lastLap - 0.1, per = b.per || personaOf(b.code);
+  const style = per.agg > 0.85 ? ' Very aggressive, expect a late lunge.' : per.def > 0.85 ? ' Smart racer, will wait for your mistake.' : per.cons < 0.75 ? ' Can make mistakes under pressure.' : '';
+  return [b.code + (g !== null ? ', ' + g.toFixed(1) + 's behind' : '') + ' on ' + Math.round(b.tyre.wear * 100) + '% worn ' + COMP[b.tyre.comp].name + 's. ' + (faster ? 'They are faster than you.' : 'You are quicker.') + style, faster ? 'warn' : 'info'];
+}
+function engMode() {
+  game.mode = ((game.mode ?? 1) + 1) % 3; const m = MODES[game.mode];
+  return [{ SAVE: 'Copy, tyre save mode. Less pace, much less wear.', STANDARD: 'Copy, standard mode.', PUSH: 'Copy, push mode! More pace, but the tyres will go off faster.' }[m.name], m.name === 'PUSH' ? 'good' : 'info'];
+}
+function engBox() {
+  const p = game.player;
+  if (!(racing() || game.phase === 'run') || p.pit) return ['Not now.'];
+  p.pitReq = !p.pitReq; return [p.pitReq ? 'Copy, box this lap. ' + COMP[nextCompound(p)].name + 's ready.' : 'Copy, staying out.'];
+}
+function engMate() {
+  const p = game.player, m = game.mate;
+  if (!inRace() || !m || m.dnf || settings.mode === 'tt') return ['You do not have a teammate on track.'];
+  if (m.prog < p.prog) return ['You are already ahead of ' + m.code + '.'];
+  if (m.prog - p.prog > 60) return ['You need to be closer to ' + m.code + ' first.'];
+  if (!p.lastLap || !m.lastLap || p.lastLap < m.lastLap + 0.3) { m.yieldT = 14; return ['OK, we have told ' + m.code + ' to let you by.', 'good']; }
+  return ['Negative. ' + m.code + ' is faster than you. Hold position.', 'warn'];
+}
+
 /* ---------------- Effects ---------------- */
 const tmpC = new THREE.Color();
 const SMOKE = new THREE.Color('#e9e9ea'), DUST = new THREE.Color('#c9b48a'), GRASS = new THREE.Color('#6b7a3a'), SPARK = new THREE.Color(3, 1.6, 0.5), SPRAY = new THREE.Color('#c5ccd4');
@@ -1173,7 +1288,7 @@ function carEffects(c, dt) {
   const fx = Math.sin(c.h), fz = Math.cos(c.h), lx = Math.cos(c.h), lz = -Math.sin(c.h), sp = Math.abs(c.v);
   const wheel = (side, z) => [c.x + lx * side * 0.83 + fx * z, c.z + lz * side * 0.83 + fz * z];
   const wet = weather.wetAt(c.idx), ey = c.group.position.y;
-  const lock = c.isPlayer && !c.autopilot && c.inp.brake > 0.8 && sp > 25 && Math.abs(c.steer) > 0.5;
+  const lock = (c.isPlayer && !c.autopilot && c.inp.brake > 0.8 && sp > 25 && Math.abs(c.steer) > 0.5) || (c.lockFx > 0 && sp > 15);
   const sliding = lock || c.scrub > 0.9 || Math.abs(c.slip) > 0.35;
   [[1, AXLE_F], [-1, AXLE_F]].forEach(([s, z], k) => {
     const [x, wz] = wheel(s, z);
@@ -1607,6 +1722,7 @@ function initMenu() {
   withLoading(() => buildTrack(settings.track));
 }
 function toMenu() {
+  engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
   game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear();
   weather.N = 0; weather.lines.visible = false; world.setWeather(0, 0);
@@ -1632,8 +1748,11 @@ addEventListener('keydown', e => {
   if (k === 'escape') togglePause();
   if (k === 'l' && game.state === 'race') { settings.line = settings.line === 'on' ? 'off' : 'on'; saveSettings(); world.setRaceLine(settings.line === 'on'); flashMsg('RACING LINE ' + settings.line.toUpperCase(), 0.9); }
   if (k === 'p' && (racing() || game.phase === 'run') && game.player && !game.player.pit) { const p = game.player; p.pitReq = !p.pitReq; radio(p.pitReq ? 'Copy, box this lap.' : 'Copy, staying out.', 'info', 3); }
+  if (k === 'r' && game.state === 'race' && !game.paused) engMenu();
+  if (k >= '1' && k <= '8' && !$('engMenu').classList.contains('hidden')) engAsk(+k - 1);
   if (k === 'm') { audio.muted = !audio.muted; store.set('apexgp-muted', audio.muted ? '1' : '0'); if (game.state === 'race') flashMsg(audio.muted ? 'SOUND OFF' : 'SOUND ON', 0.9); }
 });
+$('engMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (b) engAsk(+b.dataset.k); });
 addEventListener('keyup', e => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'race' && (game.phase === 'race' || game.phase === 'run')) togglePause(true); });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
@@ -1678,7 +1797,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=kerb26c');
+await loadCarModel('js/car.bin?v=ai26a');
 initMenu();
 requestAnimationFrame(frame);
 
