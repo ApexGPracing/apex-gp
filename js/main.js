@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=grid26a01';
-import { World } from './world.js?v=grid26a01';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=grid26a01';
-import { Sound } from './audio.js?v=grid26a01';
-import { Particles, Skids } from './fx.js?v=grid26a01';
-import { Weather } from './weather.js?v=grid26a01';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=grid26a01';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=grip26a01';
+import { World } from './world.js?v=grip26a01';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=grip26a01';
+import { Sound } from './audio.js?v=grip26a01';
+import { Particles, Skids } from './fx.js?v=grip26a01';
+import { Weather } from './weather.js?v=grip26a01';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=grip26a01';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -384,6 +384,7 @@ function surfaceOf(c, Tr) {
   return 4;
 }
 const GRIP = [1, 0.93, 0.88, 0.45, 0.6];
+const PLAYER_GRIP = 1.18; // extra grip for the player's car
 const DRAG = [0, 0, 0, 0.95, 0.4];
 
 function setVel(c, vx, vz) {
@@ -401,7 +402,7 @@ function stepCar(c, inp, dt, Tr) {
   const tg = tyreGrip(c.tyre.comp, c.tyre.wear, wet), d = c.dmg;
   const dmgF = 1 - 0.2 * d.fw - 0.1 * d.susp - (d.punct ? 0.3 : 0);
   const boost = c.boost || 1;
-  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost;
+  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * (c.isPlayer ? PLAYER_GRIP : 1);
   c.gripTD = tg * dmgF;
   let v = c.v;
   const vm = VMAX * (c.drsOpen ? 1.08 : 1) * (1 + 0.04 * (c.tow || 0)) * (1 - 0.05 * d.rw) * (d.punct ? 0.35 : 1) * Math.sqrt(boost);
@@ -1261,6 +1262,13 @@ function update(dt) {
   if (isRace() && game.resultsAt && game.raceTime >= game.resultsAt && $('results').classList.contains('hidden')) showResults();
 }
 
+/* road height and grade under a car, interpolated between the 2 m track samples so slopes are smooth
+   (using the nearest sample alone made the car step up and down on every hill) */
+function surfAt(Tr, c) {
+  const i = c.idx, N = Tr.N, f = ((c.x - Tr.px[i]) * Tr.tx[i] + (c.z - Tr.pz[i]) * Tr.tz[i]) / DS;
+  const j = f >= 0 ? (i + 1) % N : (i - 1 + N) % N, a = Math.min(1, Math.abs(f));
+  return { h: bankH(Tr, i, c.lat) * (1 - a) + bankH(Tr, j, c.lat) * a, g: (Tr.grade[i] || 0) * (1 - a) + (Tr.grade[j] || 0) * a };
+}
 function updateCarVisuals(dt) {
   for (const c of game.cars) {
     if (!c.group.visible) continue;
@@ -1268,10 +1276,11 @@ function updateCarVisuals(dt) {
     c.wheelRot += c.v * dt / 0.36;
     for (const w of c.wheels) { w.spin.rotation.x = c.wheelRot; if (w.front) w.pivot.rotation.y = c.steer * 0.32; }
     c.steering.rotation.z = -c.steer * 0.9;
-    const tgtPitch = (c.inp.brake ? 0.012 : 0) - (c.inp.throttle && c.v < 60 ? 0.006 : 0) - Math.atan(game.T.grade[c.idx] || 0) * Math.cos(angDiff(c.h, Math.atan2(game.T.tx[c.idx], game.T.tz[c.idx]))), tgtRoll = -c.steer * Math.min(1, Math.abs(c.v) / 50) * 0.012 + c.dmg.pull * 0.15;
+    const surf = surfAt(game.T, c);
+    const tgtPitch = (c.inp.brake ? 0.012 : 0) - (c.inp.throttle && c.v < 60 ? 0.006 : 0) - Math.atan(surf.g) * Math.cos(angDiff(c.h, Math.atan2(game.T.tx[c.idx], game.T.tz[c.idx]))), tgtRoll = -c.steer * Math.min(1, Math.abs(c.v) / 50) * 0.012 + c.dmg.pull * 0.15;
     c.group.rotation.x += (tgtPitch - c.group.rotation.x) * Math.min(1, dt * 6);
     c.roll = (c.roll || 0) + (tgtRoll - (c.roll || 0)) * Math.min(1, dt * 6); c.group.rotation.z = c.roll;
-    const Tb = game.T, bh = bankH(Tb, c.idx, c.lat), inBank = Math.abs(c.lat) < W + KERB + 2 ? Math.atan(Tb.bank[c.idx]) : 0;
+    const Tb = game.T, bh = surf.h, inBank = Math.abs(c.lat) < W + KERB + 2 ? Math.atan(Tb.bank[c.idx]) : 0;
     c.group.rotation.z += inBank;
     c.group.position.y = bh + (c.lift || 0) + ((c.surf === 1 && Math.abs(c.v) > 10) ? Math.sin(performance.now() * 0.08 + c.x) * 0.012 : (c.dmg.punct ? -0.05 : 0));
     const sp = Math.abs(c.v);
@@ -1669,7 +1678,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=grid26a01');
+await loadCarModel('js/car.bin?v=grip26a01');
 initMenu();
 requestAnimationFrame(frame);
 

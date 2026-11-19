@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp } from './util.js?v=grid26a01';
+import { clamp } from './util.js?v=grip26a01';
 
 export const W = 7;        // road half-width (m)
 export const KERB = 1.4;   // kerb width (m)
@@ -179,7 +179,9 @@ function buildTrackData(def) {
       const m1 = (p2[1] - p0[1]) / Math.max(1, p2[0] - p0[0]) * (p2[0] - p1[0]), m2 = (p3[1] - p1[1]) / Math.max(1, p3[0] - p1[0]) * (p2[0] - p1[0]);
       T.elev[i] = (2 * t3 - 3 * t2 + 1) * p1[1] + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2[1] + (t3 - t2) * m2;
     }
-    const sm = F(); for (let i = 0; i < N; i++) { let a = 0; for (let k = -12; k <= 12; k++) a += T.elev[(i + k + N) % N]; sm[i] = a / 25; }
+    // two smoothing passes (~100 m) so crests and dips roll smoothly instead of kinking
+    let sm = T.elev;
+    for (let pass = 0; pass < 2; pass++) { const o = F(); for (let i = 0; i < N; i++) { let a = 0; for (let k = -12; k <= 12; k++) a += sm[(i + k + N) % N]; o[i] = a / 25; } sm = o; }
     let lo = Infinity; for (let i = 0; i < N; i++) lo = Math.min(lo, sm[i]);
     for (let i = 0; i < N; i++) T.elev[i] = sm[i] - lo;
     for (let i = 0; i < N; i++) T.grade[i] = (T.elev[(i + 2) % N] - T.elev[(i - 2 + N) % N]) / (4 * DS);
