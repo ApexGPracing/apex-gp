@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, DS, bankH, elevAt } from './tracks.js?v=ai26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=ai26a';
+import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=pit26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=pit26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -167,8 +167,25 @@ export class World {
     this.dist = dist;
     const flat = T.wallOff + (T.street ? 70 : 45), amp = th.hillAmp;
     const wdir = th.water && th.water.mode === 'side' ? [Math.cos(th.water.angle), Math.sin(th.water.angle)] : null;
+    // The ground mesh is coarse, so on dips and compressions (Eau Rouge!) a flat triangle between two vertices
+    // can rise above the road and grass pokes through. Near the track, keep every ground vertex below the
+    // road's surface as seen from it: the lowest of the road's elevation extended along its own slope from every
+    // track sample in reach. On a steady slope that changes nothing; in a dip it sinks the ground under the road.
+    const seg = q === 0 ? 200 : q === 1 ? 280 : 360, tcell = span / seg, reachR = tcell * 1.5, corridor = T.wallOff + reachR;
+    const HB = 32, hash = new Map();
+    if (T.elev) for (let k = 0; k < N; k += 2) { const key = Math.floor(T.px[k] / HB) + ',' + Math.floor(T.pz[k] / HB); let a = hash.get(key); if (!a) hash.set(key, a = []); a.push(k); }
+    const roadCap = (x, z) => {
+      let cap = Infinity; const r2 = (reachR + T.wallOff) ** 2, cx = Math.floor(x / HB), cz = Math.floor(z / HB), nb = Math.ceil((reachR + T.wallOff) / HB);
+      for (let gx = cx - nb; gx <= cx + nb; gx++) for (let gz = cz - nb; gz <= cz + nb; gz++) {
+        const a = hash.get(gx + ',' + gz); if (!a) continue;
+        for (const k of a) { const dx = x - T.px[k], dz = z - T.pz[k]; if (dx * dx + dz * dz > r2) continue; cap = Math.min(cap, T.elev[k] + T.grade[k] * (dx * T.tx[k] + dz * T.tz[k]) - 0.25); }
+      }
+      return cap;
+    };
     const height = (x, z) => {
-      const d = dist(x, z), t = smooth(flat, flat + 600, d), base = T.elev ? elevNear(x, z) - 0.6 * (1 - smooth(T.wallOff, flat, d)) : 0;
+      const d = dist(x, z), t = smooth(flat, flat + 600, d);
+      let base = T.elev ? elevNear(x, z) - 0.6 * (1 - smooth(T.wallOff, flat, d)) : 0;
+      if (T.elev && d < corridor) base = Math.min(base, roadCap(x, z) - 0.6);
       if (t <= 0) return base;
       let h;
       const sx = x / 1000, sz = z / 1000;
@@ -188,7 +205,6 @@ export class World {
     };
     this.height = height;
     {
-      const seg = q === 0 ? 150 : q === 1 ? 240 : 320;
       const geo = new THREE.PlaneGeometry(span, span, seg, seg).rotateX(-Math.PI / 2);
       geo.translate(T.cx, 0, T.cz);
       const p = geo.attributes.position, colors = new Float32Array(p.count * 3);
@@ -234,12 +250,13 @@ export class World {
     for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * W, 0.01, 0), i => [s * (sideLim(T, s)(i) + 0.3), 0.01, 1]], T.street ? 6 : 16), vergeMat);
     // kerbs
     const kerbMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...(T.def.kerb || ['#c8202a', '#f1f1f1'])), roughness: 0.55 });
-    const apronMat = new THREE.MeshStandardMaterial({ map: tx.paint, color: th.apron, roughness: 0.7 });
+    const kc = T.def.kerb || ['#c8202a', '#f1f1f1'];
+    const apronMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...kc), color: '#d9d9d9', roughness: 0.8 });
     for (const [s0, e0] of T.kerbs) {
       const cnt = e0 - s0;
       for (const s of [1, -1]) {
         add(ribbon(T, s0, cnt, [col(s * (W - 0.03), 0.025, 0), col(s * (W + 0.55), 0.075, 0.4), col(s * (W + KERB - 0.25), 0.065, 0.8), col(s * (W + KERB), 0.018, 1)], 4), kerbMat);
-        if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 4), apronMat);
+        if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
       }
     }
     // gravel traps + tyre walls
@@ -365,10 +382,18 @@ export class World {
       const ps = P.side, range = []; for (let i = P.entry; i !== P.exit; i = (i + 1) % N) range.push(i);
       const outer = P.outer;
       const pitMat = new THREE.MeshStandardMaterial({ map: tx.asphalt, color: '#a3a6ad', roughness: 0.9 });
-      add(ribbon(T, P.entry, range.length, [() => [ps * (W + KERB), 0.016, 0], () => [ps * outer, 0.016, 2]], 6), pitMat);
-      add(ribbon(T, P.entry, range.length, [() => [ps * (P.wall + 5.1), 0.02, 0], () => [ps * (P.wall + 5.3), 0.02, 1]], 4), lineMat);
+      const k0 = Math.max(0, P.limIn - 8), k1 = Math.min(range.length, P.limOut + 8);
+      add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (P.wall - 0.3), 0.016, 0], () => [ps * outer, 0.016, 2]], 6), pitMat);
+      // entry and exit slip roads, with white edge lines
+      const roadMat = new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#bfc2c8', roughness: 0.88 });
+      for (const [s0, cnt] of [[(P.entry - 30 + N) % N, P.limIn + 33], [(P.entry + P.limOut - 2) % N, P.len - P.limOut + 33]]) {
+        const ed = (i, w) => { const r2 = pitRoad(T, i); return r2 ? (w ? r2.b : r2.a) : W; };
+        add(ribbon(T, s0, cnt, [i => [ps * ed(i, 0), 0.03, 0], i => [ps * ed(i, 1), 0.03, 1]], 6), roadMat);
+        add(ribbon(T, s0, cnt, [i => [ps * Math.max(ed(i, 0), ed(i, 1) - 0.35), 0.036, 0], i => [ps * Math.max(ed(i, 0), ed(i, 1) - 0.1), 0.036, 1]], 4), lineMat);
+      }
+      add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (P.wall + 5.1), 0.02, 0], () => [ps * (P.wall + 5.3), 0.02, 1]], 4), lineMat);
       // pit-lane speed limit lines
-      for (const k of [P.limIn, P.limOut]) add(ribbon(T, (P.entry + k) % N, 1, [() => [ps * (W + KERB), 0.021, 0], () => [ps * outer, 0.021, 1]], 2), new THREE.MeshStandardMaterial({ color: '#2563eb', roughness: 0.7 }));
+      for (const k of [P.limIn, P.limOut]) add(ribbon(T, (P.entry + k) % N, 1, [() => [ps * (P.wall - 0.3), 0.021, 0], () => [ps * outer, 0.021, 1]], 2), new THREE.MeshStandardMaterial({ color: '#2563eb', roughness: 0.7 }));
       const conc = new THREE.MeshStandardMaterial({ color: '#c9cdd3', roughness: 0.85, side: THREE.DoubleSide });
       add(ribbon(T, P.entry, range.length, [() => [ps * outer, 0, 0], () => [ps * outer, 1.1, 1]], 8, { up: false }), conc);
       // team boxes

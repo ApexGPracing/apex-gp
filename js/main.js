@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt } from './tracks.js?v=ai26a';
-import { World } from './world.js?v=ai26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=ai26a';
-import { Sound } from './audio.js?v=ai26a';
-import { Particles, Skids } from './fx.js?v=ai26a';
-import { Weather } from './weather.js?v=ai26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ai26a';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=pit26a';
+import { World } from './world.js?v=pit26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=pit26a';
+import { Sound } from './audio.js?v=pit26a';
+import { Particles, Skids } from './fx.js?v=pit26a';
+import { Weather } from './weather.js?v=pit26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=pit26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -225,8 +225,8 @@ function startWeekend() {
     if (n >= 12) { const rest = n - 10; game.q.elim = { Q1: Math.ceil(rest / 2), Q2: rest - Math.ceil(rest / 2), Q3: 0 }; } else game.q.elim = { Q: 0 };
     return startSession(game.q.stages[0]);
   }
-  // no qualifying: random grid with the player mid-field
-  const order = game.cars.filter(c => !c.isPlayer).sort(() => r() - 0.5);
+  // no qualifying: grid by pace (with a little randomness), player mid-field
+  const order = game.cars.filter(c => !c.isPlayer).map(c => [c, c.pace * (1 + (r() - 0.5) * 0.006)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
   order.splice(Math.floor(game.cars.length * 0.55), 0, game.player);
   game.grid = order;
   showStrategy();
@@ -255,7 +255,7 @@ function startSession(kind) {
     const factor = { Q1: 1, Q2: 0.998, Q3: 0.996, Q: 1 }[kind];
     for (const c of entrants) {
       if (c.isPlayer) continue;
-      const base = estimateLap(Tr, Math.min(1, c.pace), c.lateBrake ? Tr.vprof2 : Tr.vprof, c.boost || 1) * factor * 1.012;
+      const base = estimateLap(Tr, Math.min(1.04, c.pace), c.lateBrake ? Tr.vprof2 : Tr.vprof, c.boost || 1) * factor * 1.012;
       const wetPen = 1 + 0.16 * weather.average();
       const t = base * wetPen * (1 + (Math.random() - 0.5) * 0.006);
       sess.reveal.push({ c, t, at: 25 + Math.random() * (dur - 30) });
@@ -297,7 +297,7 @@ function nextQualiStep() {
   // simulate remaining sessions without the player
   while (q.idx < q.stages.length) {
     const name = q.stages[q.idx], f = { Q2: 0.998, Q3: 0.996 }[name] || 1;
-    const times = {}; q.entrants.forEach(c => times[c.code] = estimateLap(game.T, Math.min(1, c.pace), c.lateBrake ? game.T.vprof2 : game.T.vprof, c.boost || 1) * f * 1.012 * (1 + (Math.random() - 0.5) * 0.006));
+    const times = {}; q.entrants.forEach(c => times[c.code] = estimateLap(game.T, Math.min(1.04, c.pace), c.lateBrake ? game.T.vprof2 : game.T.vprof, c.boost || 1) * f * 1.012 * (1 + (Math.random() - 0.5) * 0.006));
     const ent = q.entrants.slice().sort((a, b) => times[a.code] - times[b.code]), elim = q.elim[name] || 0;
     q.results[name] = ent.map(c => ({ c, t: times[c.code] }));
     q.out = ent.slice(ent.length - elim).concat(q.out); q.entrants = ent.slice(0, ent.length - elim);
@@ -388,8 +388,10 @@ function surfaceOf(c, Tr) {
   const a = Math.abs(c.lat);
   if (a <= W + 0.3) return 0;
   if (a <= W + KERB) return 1;
-  if (Tr.street) return 2;
   const s = c.lat > 0 ? 1 : -1;
+  // pit entry / exit roads are proper tarmac
+  if (Tr.pit && s === Tr.pit.side) { const pr = pitRoad(Tr, c.idx); if (pr && a >= pr.a - 0.6 && a <= pr.b + 0.6) return 0; }
+  if (Tr.street) return 2;
   if (a <= W + KERB + 2.4) return 2;
   if (Tr.gravel[c.idx] === s) return 3;
   return 4;
@@ -1797,7 +1799,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ai26a');
+await loadCarModel('js/car.bin?v=pit26a');
 initMenu();
 requestAnimationFrame(frame);
 

@@ -18,7 +18,10 @@ export class Sound {
       this.engine = this.makeEngine(0.9);
       this.rival = this.makeEngine(0.35);
       this.rumble = this.makeNoise('lowpass', 160, 1.5); this.rumbleLfo = ctx.createOscillator(); this.rumbleLfo.type = 'square';
-      const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.5; this.rumbleLfo.connect(lfoGain); lfoGain.connect(this.rumble.g.gain); this.rumbleLfo.start();
+      // kerb rumble: the LFO chops a separate stage (0..1) AFTER the level gain, so at level 0 it is truly silent
+      // (it used to add straight onto the level, which left a buzz playing on the menu and everywhere else)
+      const chop = ctx.createGain(); chop.gain.value = 0.5; this.rumble.g.disconnect(); this.rumble.g.connect(chop); chop.connect(this.master);
+      const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.5; this.rumbleLfo.connect(lfoGain); lfoGain.connect(chop.gain); this.rumbleLfo.frequency.value = 10; this.rumbleLfo.start();
       this.squeal = this.makeNoise('bandpass', 1900, 9);
       this.wind = this.makeNoise('lowpass', 700, 0.7);
       this.rain = this.makeNoise('highpass', 2600, 0.5);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp } from './util.js?v=ai26a';
+import { clamp, smooth } from './util.js?v=pit26a';
 
 export const W = 7;        // road half-width (m)
 export const KERB = 1.4;   // kerb width (m)
@@ -353,6 +353,26 @@ export function bankH(T, i, lat) {
   return e + b * clamp(lat, -Wb, Wb) + Math.abs(b) * Wb;
 }
 export const elevAt = (T, i) => T.elev ? T.elev[i] : 0;
+/* pit entry and exit roads: at sample i, the unsigned lateral edges [a, b] of the slip road on the pit side
+   (null where there is none). It peels off the track edge before the entry, curves out to the fast lane,
+   and on exit curves back and merges onto the track. Shared by the renderer and the physics. */
+export function pitRoad(T, i) {
+  const P = T.pit; if (!P) return null;
+  const N = T.N, fu = Math.abs(P.fast), eu = W + 0.6, xu = W - 1.5;
+  let kk = (i - P.entry + N) % N; const before = (P.entry - i + N) % N;
+  if (before > 0 && before <= 30) kk = -before;
+  if (kk >= -30 && kk <= P.limIn + 2) {
+    const c = eu + (fu - eu) * smooth(0, P.limIn - 6, kk);
+    const b = kk < 0 ? W + 4.2 * smooth(-30, 0, kk) : c + 3.6;
+    return b - W < 0.15 ? null : { a: Math.max(W - 0.1, c - 3.6), b };
+  }
+  if (kk >= P.limOut - 2 && kk <= P.len + 30) {
+    const c = fu + (xu - fu) * smooth(P.limOut, P.len - 4, kk);
+    const b = Math.max(c + 3.6, W + 2.1 * (1 - smooth(P.len - 4, P.len + 30, kk)));
+    return b - W < 0.15 ? null : { a: Math.max(W - 0.1, c - 3.6), b };
+  }
+  return null;
+}
 
 export function locate(T, x, z, hint) {
   let best = hint, bd = Infinity;
