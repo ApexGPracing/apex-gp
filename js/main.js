@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=mp26a';
-import { World } from './world.js?v=mp26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=mp26a';
-import { Sound } from './audio.js?v=mp26a';
-import { Particles, Skids } from './fx.js?v=mp26a';
-import { Weather } from './weather.js?v=mp26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=mp26a';
-import { Net, newCode } from './net.js?v=mp26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=mp26a';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=mp26b';
+import { World } from './world.js?v=mp26b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=mp26b';
+import { Sound } from './audio.js?v=mp26b';
+import { Particles, Skids } from './fx.js?v=mp26b';
+import { Weather } from './weather.js?v=mp26b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=mp26b';
+import { Net, newCode } from './net.js?v=mp26b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=mp26b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1283,12 +1283,19 @@ function mpShareInfo() {
   if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ track: settings.track, laps: settings.laps, livery: settings.livery, name: mpName() }); }
 }
 async function mpEnter(code) {
-  if (!mpName() || mpName() === 'Driver') { mpStatus('Type your driver name first.'); $('mpName').focus(); return; }
-  mpStatus(code ? 'Joining ' + code + '…' : 'Creating room…');
+  if (!mpName() || mpName() === 'Driver') { mpStatus('Type your driver name in the box above first.'); $('mpName').focus(); $('mpName').classList.add('need'); return; }
+  $('mpName').classList.remove('need');
+  mpStatus(code ? 'Joining room ' + code + '…' : 'Creating room…');
   try {
     await net.join(code || newCode(), mpName(), { livery: settings.livery, track: settings.track, laps: settings.laps });
-    mpLastInfo = ''; mpStatus(''); renderRoom();
-  } catch (e) { mpStatus('Could not connect to the online service. Check the Realtime setup and try again.'); }
+    if (code) {
+      // joining: make sure somebody is actually in that room (a mistyped code would otherwise make a new, empty room)
+      const t0 = performance.now();
+      while (net.room.length < 2 && performance.now() - t0 < 6000) await new Promise(r => setTimeout(r, 250));
+      if (net.room.length < 2) { await net.leave(); renderRoom(); mpStatus('No room with code ' + code + ' was found. Check the code, and that the host still has the room open.'); return; }
+    }
+    mpLastInfo = ''; mpStatus(code ? '' : 'Room ready. Send the code to your friends.'); renderRoom();
+  } catch (e) { await net.leave(); renderRoom(); mpStatus('Could not connect to the online service (' + (e && e.message || 'error') + '). Check your internet and try again.'); }
 }
 net.on('room', () => renderRoom());
 net.on('peerLink', () => renderRoom());
@@ -1879,8 +1886,9 @@ function initMenu() {
   });
   $('startBtn').onclick = () => { if (settings.mode === 'mp') return mpHostStart(); withLoading(startWeekend); };
   { const inp = $('mpName'); inp.value = lbName(); inp.addEventListener('change', () => { const v = inp.value.replace(/[^\w .\-]/g, '').trim().slice(0, 16); inp.value = v; store.set('apexgp-name', v); $('lbNameIn').value = v; mpShareInfo(); renderRoom(); }); }
-  $('mpCreate').onclick = () => mpEnter(null);
-  $('mpJoin').onclick = () => { const c = $('mpCode').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length === 4) mpEnter(c); else mpStatus('Room codes are 4 letters or numbers.'); };
+  const takeName = () => { const v = $('mpName').value.replace(/[^\w .\-]/g, '').trim().slice(0, 16); if (v) { store.set('apexgp-name', v); $('lbNameIn').value = v; } };
+  $('mpCreate').onclick = () => { takeName(); mpEnter(null); };
+  $('mpJoin').onclick = () => { takeName(); const c = $('mpCode').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length === 4) mpEnter(c); else mpStatus('Room codes are 4 letters or numbers.'); };
   $('mpLeave').onclick = async () => { await net.leave(); renderRoom(); refreshStartBtn(); };
   $('newSeason').onclick = () => { store.del('apexgp3-season'); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
   for (let k = 0; k < 5; k++) { const pod = document.createElement('div'); pod.className = 'pod'; pod.innerHTML = '<i></i><i></i>'; $('startLights').appendChild(pod); }
@@ -1973,7 +1981,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=mp26a');
+await loadCarModel('js/car.bin?v=mp26b');
 initMenu();
 requestAnimationFrame(frame);
 
