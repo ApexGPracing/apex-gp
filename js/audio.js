@@ -8,7 +8,9 @@ export class Sound {
     if (this.ctx) { this.ctx.resume(); return; }
     try {
       const AC = window.AudioContext || window.webkitAudioContext, ctx = this.ctx = new AC();
-      this.master = ctx.createGain(); this.master.gain.value = 0.9; this.master.connect(ctx.destination);
+      this.master = ctx.createGain(); this.master.gain.value = 0.9;
+      const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 5; comp.attack.value = 0.004; comp.release.value = 0.15;
+      this.master.connect(comp); comp.connect(ctx.destination);
       // shared white-noise buffer
       const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = nb.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -44,10 +46,10 @@ export class Sound {
     const g1 = ctx.createGain(), g2 = ctx.createGain(); g1.gain.value = 0.55; g2.gain.value = 0.45;
     // subtle vibrato from uneven combustion
     const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); lfo.frequency.value = 23; lfoG.gain.value = 3; lfo.connect(lfoG); lfoG.connect(o1.frequency); lfoG.connect(o2.frequency); lfo.start();
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 140; hp.Q.value = 0.7;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 70; hp.Q.value = 0.7;
     const pres = ctx.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 2200; pres.Q.value = 1.1; pres.gain.value = 8;
     const shaper = ctx.createWaveShaper(), curve = new Float32Array(1024);
-    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 1.4) / Math.tanh(1.4); }
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 2.4) / Math.tanh(2.4); }
     shaper.curve = curve;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6000; lp.Q.value = 0.5;
     const out = ctx.createGain(); out.gain.value = 0;
@@ -59,7 +61,7 @@ export class Sound {
     // This is what makes a high-revving V8 sound like a V8 rather than a hum.
     const sc = ctx.createOscillator(); sc.type = 'sawtooth';
     const sc2 = ctx.createOscillator(); sc2.type = 'sawtooth';
-    const scBand = ctx.createBiquadFilter(); scBand.type = 'bandpass'; scBand.frequency.value = 3000; scBand.Q.value = 1.6;
+    const scBand = ctx.createBiquadFilter(); scBand.type = 'bandpass'; scBand.frequency.value = 3000; scBand.Q.value = 1.1;
     const scG = ctx.createGain(); scG.gain.value = 0;
     const sc2G = ctx.createGain(); sc2G.gain.value = 0.5;
     sc.connect(scBand); sc2.connect(sc2G); sc2G.connect(scBand); scBand.connect(scG); scG.connect(out);
@@ -75,26 +77,51 @@ export class Sound {
     const rasp = ctx.createGain(); rasp.gain.value = 0;
     nz.connect(nzBand); nzBand.connect(chop); chop.connect(rasp); rasp.connect(out);
     nz.start(); pulse.start(); pulseBias.start();
-    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand };
+    // ROAR layer: dense saw stack at the firing frequency, half order and its octave above, driven hard into
+    // a distortion stage (drive rises with throttle) and voiced with a chesty low-mid body. This is the
+    // full-throated bark under the scream.
+    const r1 = ctx.createOscillator(), r2 = ctx.createOscillator(), r3 = ctx.createOscillator();
+    r1.type = 'sawtooth'; r2.type = 'sawtooth'; r3.type = 'triangle';
+    const r2G = ctx.createGain(); r2G.gain.value = 0.7; const r3G = ctx.createGain(); r3G.gain.value = 0.5;
+    const rDrive = ctx.createGain(); rDrive.gain.value = 2;
+    const rShape = ctx.createWaveShaper(), rc = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; rc[i] = Math.sign(x) * (1 - Math.exp(-Math.abs(x) * 4)) / (1 - Math.exp(-4)); }
+    rShape.curve = rc; rShape.oversample = '2x';
+    const body = ctx.createBiquadFilter(); body.type = 'peaking'; body.frequency.value = 420; body.Q.value = 0.8; body.gain.value = 7;
+    const bite = ctx.createBiquadFilter(); bite.type = 'peaking'; bite.frequency.value = 1300; bite.Q.value = 1.2; bite.gain.value = 5;
+    const rLp = ctx.createBiquadFilter(); rLp.type = 'lowpass'; rLp.frequency.value = 3000; rLp.Q.value = 0.9;
+    const roarG = ctx.createGain(); roarG.gain.value = 0;
+    r1.connect(rDrive); r2.connect(r2G); r2G.connect(rDrive); r3.connect(r3G); r3G.connect(rDrive);
+    rDrive.connect(rShape); rShape.connect(body); body.connect(bite); bite.connect(rLp); rLp.connect(roarG); roarG.connect(out);
+    // a little noise in the roar too: combustion is never a clean tone
+    const rNz = ctx.createGain(); rNz.gain.value = 0.35; nzBand.connect(rNz); rNz.connect(rDrive);
+    r1.start(); r2.start(); r3.start();
+    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG };
   }
   setEngine(e, rpm, thr, gain, blow = 0) {
     // the game's rev range (4k-12.5k) is mapped onto a real high-revving V8 range (7k-18k)
     const t = this.ctx.currentTime, target = 7000 + Math.min(1, Math.max(0, (rpm - 4000) / 8500)) * 11000;
-    e.srpm += (target - e.srpm) * 0.35;
-    const fire = e.srpm / 60 * 4, base = fire / 2;
+    e.srpm += (target - e.srpm) * 0.22;
+    e.jit = (e.jit || 0) * 0.85 + (Math.random() - 0.5) * 0.0035;
+    const fire = e.srpm / 60 * 4 * (1 + e.jit), base = fire / 2;
     e.o1.frequency.setTargetAtTime(base, t, 0.015); e.o2.frequency.setTargetAtTime(base * 1.0035, t, 0.015);
     e.f1.frequency.setTargetAtTime(1600 + e.srpm * 0.08, t, 0.05);
     e.f2.frequency.setTargetAtTime(2500 + thr * 4500 + e.srpm * 0.15, t, 0.05);
     // scream gets stronger with revs and throttle; rasp is strongest on throttle
     const hi = Math.min(1, Math.max(0, (e.srpm - 9000) / 9000));
     e.sc.frequency.setTargetAtTime(fire, t, 0.015); e.sc2.frequency.setTargetAtTime(fire * 1.5, t, 0.015);
-    e.scBand.frequency.setTargetAtTime(1800 + e.srpm * 0.18, t, 0.05);
-    e.scG.gain.setTargetAtTime(0.25 + 0.75 * hi * (0.4 + 0.6 * thr), t, 0.04);
+    e.scBand.frequency.setTargetAtTime(1600 + e.srpm * 0.22, t, 0.05);
+    e.scG.gain.setTargetAtTime(0.3 + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);
     e.pulse.frequency.setTargetAtTime(fire, t, 0.015);
     e.nzBand.frequency.setTargetAtTime(1200 + e.srpm * 0.08, t, 0.05);
     // off-throttle hot blowing keeps the exhaust loud and raspy instead of letting the engine fall quiet
     e.rasp.gain.setTargetAtTime(0.15 + 0.45 * thr + 0.6 * blow, t, 0.04);
-    e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.07 + 0.13 * Math.max(thr, 0.75 * blow)), t, 0.04);
+    // roar: drive and brightness open up with throttle; stays meaty on hot-blown overrun
+    e.r1.frequency.setTargetAtTime(fire, t, 0.015); e.r2.frequency.setTargetAtTime(base * 1.004, t, 0.015); e.r3.frequency.setTargetAtTime(fire * 2, t, 0.015);
+    e.rDrive.gain.setTargetAtTime(1 + 2.8 * thr + 2 * blow, t, 0.04);
+    e.rLp.frequency.setTargetAtTime(1400 + thr * 3200 + e.srpm * 0.12, t, 0.05);
+    e.roarG.gain.setTargetAtTime(0.25 + 0.4 * thr + 0.3 * blow, t, 0.04);
+    e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.09 + 0.17 * Math.max(thr, 0.75 * blow)), t, 0.04);
   }
   burst(gain, dur, freq = 1500, q = 1) {
     if (!this.ctx || this.muted) return;
