@@ -1,12 +1,13 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=lb26b';
-import { World } from './world.js?v=lb26b';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=lb26b';
-import { Sound } from './audio.js?v=lb26b';
-import { Particles, Skids } from './fx.js?v=lb26b';
-import { Weather } from './weather.js?v=lb26b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=lb26b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=lb26b';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=mp26a';
+import { World } from './world.js?v=mp26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=mp26a';
+import { Sound } from './audio.js?v=mp26a';
+import { Particles, Skids } from './fx.js?v=mp26a';
+import { Weather } from './weather.js?v=mp26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=mp26a';
+import { Net, newCode } from './net.js?v=mp26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=mp26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -668,7 +669,7 @@ function serviceCar(c) {
 
 /* ---------------- Damage ---------------- */
 function damage(c, impact, where, scale = 1) {
-  if (settings.damage === 'off' || settings.mode === 'tt') return; // time trial: never any damage
+  if (settings.damage === 'off' || settings.mode === 'tt' || game.mp) return; // time trial: never any damage
   const k = (settings.damage === 'reduced' ? 0.5 : 1) * scale, d = c.dmg, before = { ...d };
   if (impact < 5 || k <= 0) return;
   if (where === 'front') d.fw = Math.min(1, d.fw + impact * k / 22);
@@ -826,6 +827,15 @@ function collide() {
     }
     if (!best) continue;
     const { d, dx, dz, oa, ob } = best, push = (2.15 - d) / 2;
+    if (A.remote || B.remote) {
+      // online: each player owns their own car, so only the local car is pushed, and gently (lag-friendly)
+      if ((A.remote && B.remote) || A.netPit || B.netPit) continue;
+      const L = A.remote ? B : A, sg = L === A ? -1 : 1;
+      L.x += sg * dx * push * 1.6; L.z += sg * dz * push * 1.6;
+      const vax2 = A.v * Math.sin(A.vh), vaz2 = A.v * Math.cos(A.vh), vbx2 = B.v * Math.sin(B.vh), vbz2 = B.v * Math.cos(B.vh), vn2 = (vbx2 - vax2) * dx + (vbz2 - vaz2) * dz;
+      if (vn2 < 0) { const j2 = -vn2 * 0.55; if (L === A) setVel(A, vax2 - j2 * dx, vaz2 - j2 * dz); else setVel(B, vbx2 + j2 * dx, vbz2 + j2 * dz); if (-vn2 > 4) game.player.impact = Math.min(0.6, -vn2 / 25); }
+      continue;
+    }
     A.x -= dx * push; A.z -= dz * push; B.x += dx * push; B.z += dz * push;
     const vax = A.v * Math.sin(A.vh), vaz = A.v * Math.cos(A.vh), vbx = B.v * Math.sin(B.vh), vbz = B.v * Math.cos(B.vh);
     const vn = (vbx - vax) * dx + (vbz - vaz) * dz;
@@ -1055,7 +1065,7 @@ function restartFromRed() {
   radio('Standing restart. ' + (game.laps - L) + ' laps to go. Fresh tyres fitted.', 'info', 6);
 }
 function incident(why) {
-  if (!racing()) return;
+  if (!racing() || game.mp) return;
   game.dnfTimes = (game.dnfTimes || []).filter(t => game.raceTime - t < 15); game.dnfTimes.push(game.raceTime);
   if (game.dnfTimes.length >= 3) return deployFlag('red', 'multiple cars crashed');
   if (game.flag) return;
@@ -1243,6 +1253,118 @@ async function refreshLeaderboard() {
   $('lbList').innerHTML = rows.length ? '<table class="lb">' + rows.map((r, k) => '<tr' + (r.name === me ? ' class="me"' : '') + '><td>' + (k + 1) + '</td><td>' + r.name.replace(/[<>&]/g, '') + '</td><td>' + fmt(r.time_ms / 1000) + '</td></tr>').join('') + '</table>' : '<small>No times yet. Set the first one!</small>';
 }
 
+/* ---------------- Online multiplayer ---------------- */
+const net = new Net({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+const carByNet = id => game.cars.find(c => c.netId === id);
+const mpName = () => lbName() || 'Driver';
+const mpCode3 = n => (n.replace(/[^A-Za-z]/g, '').toUpperCase() + 'XXX').slice(0, 3);
+let mpSeq = 0, mpSendT = 0, mpLastInfo = '';
+function mpStatus(t) { $('mpStatus').textContent = t || ''; }
+function renderRoom() {
+  const inRoom = !!net.code;
+  $('mpOut').classList.toggle('hidden', inRoom); $('mpIn').classList.toggle('hidden', !inRoom);
+  if (!inRoom) return;
+  $('mpCodeShow').textContent = net.code;
+  const links = net.linkInfo(), host = net.room[0];
+  $('mpPlayers').innerHTML = net.room.map((p, k) => '<div class="mpp"><i style="background:' + LIVERIES[p.livery || 0] + '"></i>' + String(p.name || 'Driver').replace(/[<>&]/g, '') +
+    (k === 0 ? ' <span class="tag">HOST</span>' : '') + (p.id === net.id ? ' <span class="tag you">YOU</span>' : ' <span class="tag ' + (links[p.id] ? 'ok' : '') + '">' + (links[p.id] ? 'DIRECT' : 'RELAY') + '</span>') + '</div>').join('');
+  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' : (net.isHost ? 'You are the host: pick the track and laps, then press Start.' : '');
+  refreshStartBtn();
+}
+function refreshStartBtn() {
+  if (settings.mode !== 'mp') return;
+  const b = $('startBtn');
+  b.textContent = !net.available ? 'Online needs the Supabase setup' : !net.code ? 'Create or join a room' : net.isHost ? (net.room.length > 1 ? 'Start online race (' + net.room.length + ' players)' : 'Start (waiting for players…)') : 'Waiting for the host to start';
+  b.disabled = !(net.code && net.isHost);
+}
+function mpShareInfo() {
+  if (!net.code) return;
+  const info = JSON.stringify([settings.track, settings.laps, settings.livery, mpName()]);
+  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ track: settings.track, laps: settings.laps, livery: settings.livery, name: mpName() }); }
+}
+async function mpEnter(code) {
+  if (!mpName() || mpName() === 'Driver') { mpStatus('Type your driver name first.'); $('mpName').focus(); return; }
+  mpStatus(code ? 'Joining ' + code + '…' : 'Creating room…');
+  try {
+    await net.join(code || newCode(), mpName(), { livery: settings.livery, track: settings.track, laps: settings.laps });
+    mpLastInfo = ''; mpStatus(''); renderRoom();
+  } catch (e) { mpStatus('Could not connect to the online service. Check the Realtime setup and try again.'); }
+}
+net.on('room', () => renderRoom());
+net.on('peerLink', () => renderRoom());
+net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp) { c.dnf = true; c.retire = 'left the race'; c.group.visible = false; radio(c.name + ' has left the race.', 'info', 4); } renderRoom(); });
+net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); });
+net.on('data', (id, d) => {
+  if (!d || d.k !== 's') return;
+  const c = carByNet(id); if (!c || !game.mp) return;
+  if (c.lastSeq !== undefined && d.n <= c.lastSeq && c.lastSeq - d.n < 1000) return; // late, out-of-order packet
+  c.lastSeq = d.n; d.tr = performance.now(); c.snaps.push(d); if (c.snaps.length > 40) c.snaps.shift();
+});
+function mpHostStart() {
+  if (!net.isHost) return;
+  const players = net.room.map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0 }));
+  const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
+  const cfg = { track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() };
+  net.broadcast('start', { cfg }); startMp(cfg);
+}
+function startMp(cfg) {
+  if (!cfg.players.some(p => p.id === net.id)) return;
+  settings.track = cfg.track;
+  withLoading(() => {
+    hideAllOverlays(); game.paused = false;
+    const Tr = game.T = buildTrack(cfg.track);
+    game.mp = cfg; game.laps = cfg.laps; game.skill = 50; game.season = null; game.q = null;
+    TEAM_MAP = shuffleTeams();
+    clearCars();
+    cfg.players.forEach((pl, k) => {
+      const colr = LIVERIES[pl.livery] || LIVERIES[0], acc = colr === '#111827' ? '#ffcc00' : '#111827', mine = pl.id === net.id;
+      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium' }),
+        { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
+          teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined });
+      game.cars.push(c); if (mine) game.player = c;
+    });
+    game.mate = null;
+    for (const c of game.cars) { resetState(c); c.stints = []; scene.add(c.group); }
+    game.player.steering.visible = true;
+    game.seed = 99; game.lapEst = estimateLap(Tr, aiPace(50), Tr.vprof); game.record = recordFor(Tr); game.fastest = Infinity; game.wxMode = 'dry';
+    $('menu').classList.add('hidden'); $('results').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden');
+    buildMinimap(Tr); audio.init();
+    game.grid = cfg.grid.map(carByNet).filter(Boolean);
+    game.session = 'race-prep'; weather.setup(Tr, 'dry', game.lapEst * game.laps, 99);
+    game.stratOpts = [{ name: 'Mediums', stints: [['medium', 0]] }]; game.stratPick = 0;
+    startRace(); game.goAt = cfg.goAt;
+    $('radio').innerHTML = '';
+    radio('Online race at ' + Tr.def.name + ', ' + game.laps + ' laps, ' + game.cars.length + ' drivers. You start P' + (game.grid.indexOf(game.player) + 1) + '.', 'info', 7);
+  });
+}
+/* remote cars: drawn ~120 ms in the past, smoothly between the two snapshots around that moment */
+function remoteStep(c, Tr) {
+  const S = c.snaps; if (!S.length) return;
+  const rt = performance.now() - 120;
+  while (S.length > 2 && S[1].tr <= rt) S.shift();
+  const a = S[0], b = S[1];
+  let x, z, h, vh, v, prog, lat, src;
+  if (b && rt >= a.tr && rt <= b.tr) {
+    const f = (rt - a.tr) / Math.max(1, b.tr - a.tr);
+    x = a.x + (b.x - a.x) * f; z = a.z + (b.z - a.z) * f; h = a.h + angDiff(b.h, a.h) * f; vh = a.vh + angDiff(b.vh, a.vh) * f;
+    v = a.v + (b.v - a.v) * f; prog = a.prog + (b.prog - a.prog) * f; lat = a.lat + (b.lat - a.lat) * f; src = f < 0.5 ? a : b;
+  } else {
+    src = S[S.length - 1]; const ex = clamp((rt - src.tr) / 1000, 0, 0.25);
+    x = src.x + Math.sin(src.vh) * src.v * ex; z = src.z + Math.cos(src.vh) * src.v * ex; h = src.h; vh = src.vh; v = src.v; prog = src.prog + src.v * ex / DS; lat = src.lat;
+  }
+  Object.assign(c, { x, z, h, vh, v, lat, steer: src.st });
+  c.prog = Math.max(c.prog, Math.round(prog)); c.idx = ((Math.round(prog) % Tr.N) + Tr.N) % Tr.N;
+  c.netPit = !!src.pit; c.inp = { throttle: src.thr, brake: src.br, steer: src.st };
+  if (src.cmp && c.tyre && c.tyre.comp !== src.cmp) setTyres(c, src.cmp);
+  if (performance.now() - S[S.length - 1].tr > 6000 && !c.dnf) { c.dnf = true; c.retire = 'connection lost'; c.group.visible = false; }
+}
+function mpSend(dt) {
+  mpSendT -= dt; if (mpSendT > 0) return; mpSendT = 1 / 15;
+  const p = game.player; if (!p) return;
+  net.sendFast({ k: 's', n: ++mpSeq, x: +p.x.toFixed(2), z: +p.z.toFixed(2), h: +p.h.toFixed(3), vh: +p.vh.toFixed(3), v: +p.v.toFixed(2), prog: +p.prog.toFixed(1), lat: +p.lat.toFixed(2),
+    st: +p.steer.toFixed(2), thr: p.inp.throttle, br: p.inp.brake, pit: !!p.pit, cmp: p.tyre && p.tyre.comp });
+}
+
 /* ---------------- Talk to the race engineer (R, then 1-8) ---------------- */
 const ENG = [
   { q: 'How are my tyres?', a: engTyres },
@@ -1391,9 +1513,10 @@ function update(dt) {
   if (game.raceTime > 1 && !$('startLights').classList.contains('hidden')) $('startLights').classList.add('hidden');
   computeTow();
   const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
+  if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr); mpSend(dt); }
   for (let s = 0; s < steps; s++) {
     for (const c of game.cars) {
-      if (!c.active) continue;
+      if (!c.active || c.remote) continue;
       let inp = (c.isPlayer && !c.autopilot) ? playerInput(c, h) : aiInput(c, h, Tr);
       if (c.startDelay > 0) { c.startDelay -= h; inp = { throttle: 0, brake: 0, steer: 0 }; }
       c.inp = inp;
@@ -1662,7 +1785,7 @@ function showQualiResults(name, ent, elim) {
 function showResults() {
   const Tr = game.T, champ = settings.mode === 'champ';
   // two-compound rule for dry races
-  if (game.laps >= 5) for (const c of game.cars) { const st = c.stints || []; if (!c.dnf && !st.some(x => !SLICK(x)) && new Set(st).size < 2 && !c.rulePen) { c.rulePen = true; c.penalty += 30; } }
+  if (game.laps >= 5 && !game.mp) for (const c of game.cars) { const st = c.stints || []; if (!c.dnf && !st.some(x => !SLICK(x)) && new Set(st).size < 2 && !c.rulePen) { c.rulePen = true; c.penalty += 30; } }
   const rows = game.cars.map(c => {
     let t = c.finishTime, est = false;
     if (!c.finished && !c.dnf) { t = game.raceTime + (game.laps * Tr.N - c.prog) * DS / Math.max(Math.abs(c.v), 30); est = true; }
@@ -1706,11 +1829,14 @@ function refreshMenu() {
   $('optQuali').style.opacity = mode === 'tt' ? 0.35 : 1; $('optWx').style.opacity = mode === 'tt' ? 0.35 : 1; $('optDmg').style.opacity = mode === 'tt' ? 0.35 : 1;
   $('seasonBox').classList.toggle('hidden', mode !== 'champ');
   refreshLeaderboard();
+  $('mpBox').classList.toggle('hidden', mode !== 'mp');
+  if (mode === 'mp') { ['optOpp', 'optDiff', 'optQuali', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = 0.35); $('optLaps').style.opacity = 1; mpShareInfo(); renderRoom(); }
   if (mode === 'champ') {
     if (s && !s.finished) { settings.track = s.round; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + TRACKS.length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
     else { settings.track = 0; $('seasonInfo').innerHTML = 'A 24-round season. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals and AI skill above. You get a teammate.</small>'; $('newSeason').classList.add('hidden'); }
   }
   $('startBtn').textContent = mode === 'tt' ? 'Start Time Trial' : mode === 'champ' ? (s && !s.finished ? 'Start Round ' + (s.round + 1) : 'Start Season') : 'Start Weekend';
+  $('startBtn').disabled = false; refreshStartBtn();
   document.querySelectorAll('#swatches button').forEach((b, k) => b.classList.toggle('on', k === settings.livery));
   $('aiSlider').value = settings.ai; $('aiVal').textContent = settings.ai; $('aiDesc').textContent = aiLabel(settings.ai);
   document.querySelectorAll('.tcard').forEach((c, k) => { c.classList.toggle('on', k === settings.track); c.classList.toggle('locked', mode === 'champ'); });
@@ -1751,7 +1877,11 @@ function initMenu() {
     el.onclick = () => selectTrack(i);
     $('trackList').appendChild(el);
   });
-  $('startBtn').onclick = () => withLoading(startWeekend);
+  $('startBtn').onclick = () => { if (settings.mode === 'mp') return mpHostStart(); withLoading(startWeekend); };
+  { const inp = $('mpName'); inp.value = lbName(); inp.addEventListener('change', () => { const v = inp.value.replace(/[^\w .\-]/g, '').trim().slice(0, 16); inp.value = v; store.set('apexgp-name', v); $('lbNameIn').value = v; mpShareInfo(); renderRoom(); }); }
+  $('mpCreate').onclick = () => mpEnter(null);
+  $('mpJoin').onclick = () => { const c = $('mpCode').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length === 4) mpEnter(c); else mpStatus('Room codes are 4 letters or numbers.'); };
+  $('mpLeave').onclick = async () => { await net.leave(); renderRoom(); refreshStartBtn(); };
   $('newSeason').onclick = () => { store.del('apexgp3-season'); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
   for (let k = 0; k < 5; k++) { const pod = document.createElement('div'); pod.className = 'pod'; pod.innerHTML = '<i></i><i></i>'; $('startLights').appendChild(pod); }
   for (let k = 0; k < 10; k++) $('shift').appendChild(document.createElement('i'));
@@ -1759,7 +1889,7 @@ function initMenu() {
   $('pRestart').onclick = () => { if (settings.mode === 'champ') return; withLoading(startWeekend); };
   $('pEnd').onclick = () => { togglePause(false); if (!isRace() && game.session !== 'tt') { game.player.lapInvalid = false; endQualiSession(); } };
   $('pQuit').onclick = toMenu; $('rMenu').onclick = toMenu;
-  $('rAgain').onclick = () => { if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del('apexgp3-season'); } withLoading(startWeekend); };
+  $('rAgain').onclick = () => { if (game.mp) return toMenu(); if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del('apexgp3-season'); } withLoading(startWeekend); };
   $('qNext').onclick = () => { $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
   $('stratGo').onclick = () => withLoading(startRace);
   $('leaveGarage').onclick = leaveGarage;
@@ -1769,7 +1899,7 @@ function initMenu() {
 function toMenu() {
   engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
-  game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear();
+  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear();
   weather.N = 0; weather.lines.visible = false; world.setWeather(0, 0);
   ['hud', 'pause', 'results', 'qres', 'strategy', 'garageBar'].forEach(id => $(id).classList.add('hidden')); $('menu').classList.remove('hidden');
   document.querySelectorAll('.tcard .st').forEach((el, i) => el.innerHTML = cardStats(i));
@@ -1779,7 +1909,7 @@ function togglePause(force) {
   if (game.state !== 'race' || !$('results').classList.contains('hidden') || !$('qres').classList.contains('hidden') || !$('strategy').classList.contains('hidden')) return;
   game.paused = typeof force === 'boolean' ? force : !game.paused;
   $('pause').classList.toggle('hidden', !game.paused);
-  $('pRestart').classList.toggle('hidden', settings.mode === 'champ');
+  $('pRestart').classList.toggle('hidden', settings.mode === 'champ' || !!game.mp);
   $('pEnd').classList.toggle('hidden', isRace() || game.session === 'tt');
   if (game.paused) audio.set(0, 0, false);
 }
@@ -1800,7 +1930,7 @@ addEventListener('keydown', e => {
 });
 $('engMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (b) engAsk(+b.dataset.k); });
 addEventListener('keyup', e => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'race' && (game.phase === 'race' || game.phase === 'run')) togglePause(true); });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'race' && !game.mp && (game.phase === 'race' || game.phase === 'run')) togglePause(true); });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 /* ---------------- Main loop ---------------- */
@@ -1818,7 +1948,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
   if (game.state === 'race' && game.player) {
-    if (!game.paused) {
+    if (!game.paused || game.mp) {
       update(dt); updateCarVisuals(dt);
       audio.set(game.player.rpm, game.phase === 'lights' ? (keys.w ? 1 : 0) : game.player.inp.throttle, game.phase !== 'idle');
     }
@@ -1843,7 +1973,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=lb26b');
+await loadCarModel('js/car.bin?v=mp26a');
 initMenu();
 requestAnimationFrame(frame);
 

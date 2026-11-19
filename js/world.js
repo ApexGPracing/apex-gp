@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=lb26b';
-import { AXLE_F, AXLE_R } from './car.js?v=lb26b';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=lb26b';
+import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=mp26a';
+import { AXLE_F, AXLE_R } from './car.js?v=mp26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=mp26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];

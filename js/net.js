@@ -1,0 +1,158 @@
+/* Online multiplayer networking.
+   - Rooms and signalling go through a Supabase Realtime channel ("apexgp-room-CODE"): presence says who is in
+     the room, broadcasts carry WebRTC offers/answers/ICE candidates and the race start.
+   - Car states then go straight between browsers over WebRTC data channels (unordered, no retransmits), so
+     they are fast and do not use up Supabase's message quota.
+   - If two players cannot connect directly (strict networks), their states are relayed over the Supabase
+     channel instead, at a lower rate.
+   For local testing, ?mplocal in the URL swaps Supabase for a BroadcastChannel between tabs of one browser. */
+
+const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+/* ---- signalling transports: Supabase Realtime, or BroadcastChannel for local tests ---- */
+let supaClient = null;
+async function supabaseTransport(url, key, code, me, onMsg, onPeers) {
+  if (!supaClient) {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');
+    supaClient = createClient(url, key, { realtime: { params: { eventsPerSecond: 40 } } });
+  }
+  const ch = supaClient.channel('apexgp-room-' + code, { config: { broadcast: { self: false, ack: false }, presence: { key: me.id } } });
+  ch.on('broadcast', { event: 'm' }, ({ payload }) => onMsg(payload));
+  ch.on('presence', { event: 'sync' }, () => {
+    const st = ch.presenceState(), list = [];
+    for (const k in st) { const p = st[k][0]; if (p) list.push(p); }
+    onPeers(list);
+  });
+  await new Promise((res, rej) => {
+    const to = setTimeout(() => rej(new Error('timeout')), 12000);
+    ch.subscribe(async status => {
+      if (status === 'SUBSCRIBED') { clearTimeout(to); await ch.track(me); res(); }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { clearTimeout(to); rej(new Error(status)); }
+    });
+  });
+  return {
+    send: payload => ch.send({ type: 'broadcast', event: 'm', payload }),
+    update: info => ch.track(info),
+    close: () => { try { ch.untrack(); supaClient.removeChannel(ch); } catch (e) { /* already gone */ } },
+  };
+}
+function localTransport(code, me, onMsg, onPeers) {
+  const bc = new BroadcastChannel('apexgp-room-' + code), peers = new Map();
+  let info = me;
+  const sync = () => onPeers([info, ...[...peers.values()].map(p => p.info)]);
+  bc.onmessage = e => {
+    const m = e.data;
+    if (m.kind === 'hello' || m.kind === 'here') { const known = peers.has(m.info.id); peers.set(m.info.id, { info: m.info, t: Date.now() }); if (m.kind === 'hello' || !known) bc.postMessage({ kind: 'here', info }); sync(); }
+    else if (m.kind === 'bye') { peers.delete(m.id); sync(); }
+    else if (m.kind === 'm') onMsg(m.payload);
+  };
+  bc.postMessage({ kind: 'hello', info }); setTimeout(sync, 50);
+  const beat = setInterval(() => { bc.postMessage({ kind: 'here', info }); const now = Date.now(); for (const [id, p] of peers) if (now - p.t > 6000) { peers.delete(id); sync(); } }, 2000);
+  return Promise.resolve({
+    send: payload => bc.postMessage({ kind: 'm', payload }),
+    update: i => { info = i; bc.postMessage({ kind: 'here', info }); sync(); },
+    close: () => { clearInterval(beat); bc.postMessage({ kind: 'bye', id: me.id }); bc.close(); },
+  });
+}
+
+export class Net {
+  constructor({ url, key }) {
+    this.url = url; this.key = key; this.local = /[?&]mplocal\b/.test(location.search);
+    this.available = this.local || !!(url && key);
+    this.id = rid(); this.code = null; this.room = []; this.peers = new Map(); this.tr = null;
+    this.handlers = {}; this.lastRelay = new Map();
+  }
+  on(ev, fn) { this.handlers[ev] = fn; }
+  emit(ev, ...a) { const f = this.handlers[ev]; if (f) f(...a); }
+
+  async join(code, name, extra = {}) {
+    await this.leave();
+    this.code = code.toUpperCase(); this.name = name;
+    this.me = { id: this.id, name, joined: Date.now(), ...extra };
+    const onMsg = m => this.onSignal(m), onPeers = list => this.onPeers(list);
+    this.tr = this.local ? await localTransport(this.code, this.me, onMsg, onPeers) : await supabaseTransport(this.url, this.key, this.code, this.me, onMsg, onPeers);
+    return this.code;
+  }
+  async leave() {
+    for (const p of this.peers.values()) { try { p.pc.close(); } catch (e) { /* closed */ } }
+    this.peers.clear();
+    if (this.tr) { this.tr.close(); this.tr = null; }
+    this.code = null; this.room = [];
+  }
+  setInfo(extra) { if (!this.tr) return; this.me = { ...this.me, ...extra }; this.tr.update(this.me); }
+  get isHost() { return this.room.length > 0 && this.room[0].id === this.id; }
+
+  onPeers(list) {
+    // host = whoever has been in the room longest
+    this.room = list.slice().sort((a, b) => a.joined - b.joined || (a.id < b.id ? -1 : 1));
+    const ids = new Set(this.room.map(p => p.id));
+    for (const [id, p] of this.peers) if (!ids.has(id)) { try { p.pc.close(); } catch (e) { /* closed */ } this.peers.delete(id); this.emit('peerLeft', id); }
+    for (const p of this.room) if (p.id !== this.id && !this.peers.has(p.id) && this.id < p.id) this.connect(p.id, true);
+    this.emit('room', this.room);
+  }
+
+  /* ---- WebRTC ---- */
+  makePeer(id) {
+    const pc = new RTCPeerConnection({ iceServers: ICE }), peer = { pc, dc: null, open: false };
+    this.peers.set(id, peer);
+    pc.onicecandidate = e => { if (e.candidate) this.signal(id, { ice: e.candidate.toJSON() }); };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { peer.open = false; this.emit('peerLink', id, false); } };
+    pc.ondatachannel = e => this.wireDC(id, peer, e.channel);
+    return peer;
+  }
+  wireDC(id, peer, dc) {
+    peer.dc = dc;
+    dc.onopen = () => { peer.open = true; this.emit('peerLink', id, true); };
+    dc.onclose = () => { peer.open = false; };
+    dc.onmessage = e => { try { this.emit('data', id, JSON.parse(e.data)); } catch (err) { /* bad packet */ } };
+  }
+  async connect(id) {
+    const peer = this.makePeer(id);
+    this.wireDC(id, peer, peer.pc.createDataChannel('game', { ordered: false, maxRetransmits: 0 }));
+    const offer = await peer.pc.createOffer(); await peer.pc.setLocalDescription(offer);
+    this.signal(id, { sdp: peer.pc.localDescription.toJSON() });
+  }
+  signal(to, data) { if (this.tr) this.tr.send({ t: 'sig', from: this.id, to, data }); }
+  async onSignal(m) {
+    if (m.to && m.to !== this.id) return;
+    if (m.t === 'sig') {
+      let peer = this.peers.get(m.from);
+      const { sdp, ice } = m.data;
+      try {
+        if (sdp) {
+          if (sdp.type === 'offer') {
+            if (peer) { try { peer.pc.close(); } catch (e) { /* closed */ } }
+            peer = this.makePeer(m.from);
+            await peer.pc.setRemoteDescription(sdp);
+            const ans = await peer.pc.createAnswer(); await peer.pc.setLocalDescription(ans);
+            this.signal(m.from, { sdp: peer.pc.localDescription.toJSON() });
+            for (const c of peer.pendingIce || []) await peer.pc.addIceCandidate(c);
+          } else if (peer) { await peer.pc.setRemoteDescription(sdp); for (const c of peer.pendingIce || []) await peer.pc.addIceCandidate(c); }
+        } else if (ice && peer) {
+          if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(ice); else (peer.pendingIce = peer.pendingIce || []).push(ice);
+        }
+      } catch (e) { /* negotiation hiccup: the relay still carries the data */ }
+    } else if (m.t === 'relay') this.emit('data', m.from, m.data);
+    else this.emit('msg', m);
+  }
+
+  /* ---- sending ---- */
+  // fast data (car states): direct where connected, otherwise relayed at up to 6 Hz per peer
+  sendFast(data) {
+    const s = JSON.stringify(data), now = performance.now();
+    let needRelay = false;
+    for (const p of this.room) {
+      if (p.id === this.id) continue;
+      const peer = this.peers.get(p.id);
+      if (peer && peer.open && peer.dc.readyState === 'open') { try { peer.dc.send(s); } catch (e) { needRelay = true; } }
+      else needRelay = true;
+    }
+    if (needRelay && this.tr && now - (this.lastRelay.get('all') || 0) > 160) { this.lastRelay.set('all', now); this.tr.send({ t: 'relay', from: this.id, data }); }
+  }
+  // reliable, rare messages (race start, results) always go over the signalling channel
+  broadcast(type, payload) { if (this.tr) this.tr.send({ t: type, from: this.id, ...payload }); }
+  linkInfo() { const out = {}; for (const [id, p] of this.peers) out[id] = p.open; return out; }
+}

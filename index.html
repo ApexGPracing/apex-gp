@@ -164,6 +164,10 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 .tag{color:var(--muted);font-size:18px;margin-top:4px}
 .opt{padding:11px 14px}
 .lb{width:100%;border-collapse:collapse;font-size:17px;margin-top:6px}.lb td{padding:2px 4px}.lb td:first-child{color:var(--muted);width:28px}.lb td:last-child{text-align:right;font-variant-numeric:tabular-nums}.lb tr.me td{color:#ffcc00;font-weight:700}
+.mprow{display:flex;gap:8px;margin-top:8px}.mprow .btn{flex:1}#mpCode{width:110px;text-transform:uppercase;letter-spacing:.2em;font-size:22px;font-weight:800;text-align:center;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;color:#fff;font-family:inherit}
+.mpcode{font-size:13px;letter-spacing:.14em;color:var(--muted);margin:6px 0}.mpcode b{display:block;font-size:44px;letter-spacing:.18em;color:#ffcc00;line-height:1.05}.mpcode small{letter-spacing:0;font-size:13px}
+.mpp{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600;padding:3px 0}.mpp i{width:14px;height:14px;border-radius:3px;display:inline-block}.mpp .tag{font-size:11px;letter-spacing:.1em;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.12);color:var(--muted)}.mpp .tag.ok{background:rgba(47,213,106,.2);color:#2fd56a}.mpp .tag.you{background:rgba(255,204,0,.2);color:#ffcc00}
+#mpHostInfo{font-size:14px;color:var(--muted);margin:6px 0}#mpStatus{font-size:14px;color:#ffb020;margin-top:6px}#startBtn:disabled{opacity:.5;cursor:default}
 .lbname{font-size:15px;color:var(--muted);display:flex;gap:8px;align-items:center}.lbname input{flex:1;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:6px;color:#fff;font:inherit;font-size:16px;padding:4px 8px}
 .opt h4{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;font-weight:600}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
@@ -240,7 +244,12 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 <div id="menu">
   <div class="left">
     <div><div class="logo">APEX<span>GP</span></div><div class="tag">Open-wheel racing · 24-round world championship</div></div>
-    <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button></div></div>
+    <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button><button data-v="mp">Online</button></div></div>
+    <div class="opt panel hidden" id="mpBox"><h4>Online race</h4>
+      <div class="lbname">Your driver name <input id="mpName" maxlength="16" placeholder="e.g. FastGuy44"></div>
+      <div id="mpOut"><div class="mprow"><button class="btn primary" id="mpCreate">Create room</button></div><div class="mprow"><input id="mpCode" maxlength="4" placeholder="CODE"><button class="btn" id="mpJoin">Join room</button></div></div>
+      <div id="mpIn" class="hidden"><div class="mpcode">ROOM CODE <b id="mpCodeShow"></b><small>Send this code to your friends</small></div><div id="mpPlayers"></div><div id="mpHostInfo"></div><button class="btn" id="mpLeave">Leave room</button></div>
+      <div id="mpStatus"></div></div>
     <div class="opt panel hidden" id="lbBox"><h4 id="lbTitle">Global leaderboard</h4><div class="lbname">Your driver name <input id="lbNameIn" maxlength="16" placeholder="e.g. FastGuy44"></div><div id="lbList"></div></div>
     <div class="opt panel hidden" id="seasonBox"><h4>Season</h4><div id="seasonInfo"></div><button class="btn" id="newSeason">Start a new season</button></div>
     <div class="opt panel" id="optLaps"><h4>Laps</h4><div class="seg" data-opt="laps"><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button></div></div>
@@ -291,6 +300,6 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=lb26b"></script>
+<script type="module" src="js/main.js?v=mp26a"></script>
 </body>
 </html>
