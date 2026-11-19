@@ -63,7 +63,7 @@ export class Net {
     this.url = url; this.key = key; this.local = /[?&]mplocal\b/.test(location.search);
     this.available = this.local || !!(url && key);
     this.id = rid(); this.code = null; this.room = []; this.peers = new Map(); this.tr = null;
-    this.handlers = {}; this.lastRelay = new Map();
+    this.handlers = {}; this.lastRelay = new Map(); this.lastRx = new Map();
   }
   on(ev, fn) { this.handlers[ev] = fn; }
   emit(ev, ...a) { const f = this.handlers[ev]; if (f) f(...a); }
@@ -107,7 +107,7 @@ export class Net {
     peer.dc = dc;
     dc.onopen = () => { peer.open = true; this.emit('peerLink', id, true); };
     dc.onclose = () => { peer.open = false; };
-    dc.onmessage = e => { try { this.emit('data', id, JSON.parse(e.data)); } catch (err) { /* bad packet */ } };
+    dc.onmessage = e => { try { this.lastRx.set(id, performance.now()); this.emit('data', id, JSON.parse(e.data)); } catch (err) { /* bad packet */ } };
   }
   async connect(id) {
     const peer = this.makePeer(id);
@@ -135,7 +135,7 @@ export class Net {
           if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(ice); else (peer.pendingIce = peer.pendingIce || []).push(ice);
         }
       } catch (e) { /* negotiation hiccup: the relay still carries the data */ }
-    } else if (m.t === 'relay') this.emit('data', m.from, m.data);
+    } else if (m.t === 'relay') { this.lastRx.set(m.from, performance.now()); this.emit('data', m.from, m.data); }
     else this.emit('msg', m);
   }
 
@@ -147,12 +147,13 @@ export class Net {
     for (const p of this.room) {
       if (p.id === this.id) continue;
       const peer = this.peers.get(p.id);
-      if (peer && peer.open && peer.dc.readyState === 'open') { try { peer.dc.send(s); } catch (e) { needRelay = true; } }
+      const fresh = now - (this.lastRx.get(p.id) || 0) < 1500;
+      if (peer && peer.open && peer.dc.readyState === 'open') { try { peer.dc.send(s); } catch (e) { needRelay = true; } if (!fresh) needRelay = true; }
       else needRelay = true;
     }
     if (needRelay && this.tr && now - (this.lastRelay.get('all') || 0) > 160) { this.lastRelay.set('all', now); this.tr.send({ t: 'relay', from: this.id, data }); }
   }
   // reliable, rare messages (race start, results) always go over the signalling channel
   broadcast(type, payload) { if (this.tr) this.tr.send({ t: type, from: this.id, ...payload }); }
-  linkInfo() { const out = {}; for (const [id, p] of this.peers) out[id] = p.open; return out; }
+  linkInfo() { const out = {}, now = performance.now(); for (const [id, p] of this.peers) out[id] = p.open && now - (this.lastRx.get(id) || 0) < 3000; return out; }
 }

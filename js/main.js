@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=mp26b';
-import { World } from './world.js?v=mp26b';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=mp26b';
-import { Sound } from './audio.js?v=mp26b';
-import { Particles, Skids } from './fx.js?v=mp26b';
-import { Weather } from './weather.js?v=mp26b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=mp26b';
-import { Net, newCode } from './net.js?v=mp26b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=mp26b';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=mp26c';
+import { World } from './world.js?v=mp26c';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=mp26c';
+import { Sound } from './audio.js?v=mp26c';
+import { Particles, Skids } from './fx.js?v=mp26c';
+import { Weather } from './weather.js?v=mp26c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=mp26c';
+import { Net, newCode } from './net.js?v=mp26c';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=mp26c';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -829,7 +829,7 @@ function collide() {
     const { d, dx, dz, oa, ob } = best, push = (2.15 - d) / 2;
     if (A.remote || B.remote) {
       // online: each player owns their own car, so only the local car is pushed, and gently (lag-friendly)
-      if ((A.remote && B.remote) || A.netPit || B.netPit) continue;
+      if ((A.remote && B.remote) || A.netPit || B.netPit || !A.group.visible || !B.group.visible) continue;
       const L = A.remote ? B : A, sg = L === A ? -1 : 1;
       L.x += sg * dx * push * 1.6; L.z += sg * dz * push * 1.6;
       const vax2 = A.v * Math.sin(A.vh), vaz2 = A.v * Math.cos(A.vh), vbx2 = B.v * Math.sin(B.vh), vbz2 = B.v * Math.cos(B.vh), vn2 = (vbx2 - vax2) * dx + (vbz2 - vaz2) * dz;
@@ -1299,13 +1299,14 @@ async function mpEnter(code) {
 }
 net.on('room', () => renderRoom());
 net.on('peerLink', () => renderRoom());
-net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp) { c.dnf = true; c.retire = 'left the race'; c.group.visible = false; radio(c.name + ' has left the race.', 'info', 4); } renderRoom(); });
+net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp && !c.netGone) { c.netGone = true; radio(c.name + ' has lost connection.', 'warn', 4); } renderRoom(); });
 net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); });
 net.on('data', (id, d) => {
   if (!d || d.k !== 's') return;
   const c = carByNet(id); if (!c || !game.mp) return;
   if (c.lastSeq !== undefined && d.n <= c.lastSeq && c.lastSeq - d.n < 1000) return; // late, out-of-order packet
   c.lastSeq = d.n; d.tr = performance.now(); c.snaps.push(d); if (c.snaps.length > 40) c.snaps.shift();
+  if (c.netGone || c.dnf) { c.netGone = false; c.dnf = false; c.retire = null; c.group.visible = true; }
 });
 function mpHostStart() {
   if (!net.isHost) return;
@@ -1313,9 +1314,11 @@ function mpHostStart() {
   const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
   const cfg = { track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() };
   net.broadcast('start', { cfg }); startMp(cfg);
+  setTimeout(() => net.broadcast('start', { cfg }), 1200); setTimeout(() => net.broadcast('start', { cfg }), 3500);
 }
 function startMp(cfg) {
   if (!cfg.players.some(p => p.id === net.id)) return;
+  if (game.mp && game.mp.race === cfg.race) return; // already racing this one (repeat of the start message)
   settings.track = cfg.track;
   withLoading(() => {
     hideAllOverlays(); game.paused = false;
@@ -1363,10 +1366,13 @@ function remoteStep(c, Tr) {
   c.prog = Math.max(c.prog, Math.round(prog)); c.idx = ((Math.round(prog) % Tr.N) + Tr.N) % Tr.N;
   c.netPit = !!src.pit; c.inp = { throttle: src.thr, brake: src.br, steer: src.st };
   if (src.cmp && c.tyre && c.tyre.comp !== src.cmp) setTyres(c, src.cmp);
-  if (performance.now() - S[S.length - 1].tr > 6000 && !c.dnf) { c.dnf = true; c.retire = 'connection lost'; c.group.visible = false; }
+  // silent for a while: hide the car (it comes back as soon as data arrives again); only after a long gap is it out
+  const quiet = performance.now() - S[S.length - 1].tr;
+  c.group.visible = quiet < 4000;
+  if (quiet > 45000 && !c.dnf) { c.dnf = true; c.retire = 'connection lost'; }
 }
-function mpSend(dt) {
-  mpSendT -= dt; if (mpSendT > 0) return; mpSendT = 1 / 15;
+setInterval(() => { if (game.mp && game.state === 'race') mpSend(); }, 1000 / 15);
+function mpSend() {
   const p = game.player; if (!p) return;
   net.sendFast({ k: 's', n: ++mpSeq, x: +p.x.toFixed(2), z: +p.z.toFixed(2), h: +p.h.toFixed(3), vh: +p.vh.toFixed(3), v: +p.v.toFixed(2), prog: +p.prog.toFixed(1), lat: +p.lat.toFixed(2),
     st: +p.steer.toFixed(2), thr: p.inp.throttle, br: p.inp.brake, pit: !!p.pit, cmp: p.tyre && p.tyre.comp });
@@ -1520,7 +1526,7 @@ function update(dt) {
   if (game.raceTime > 1 && !$('startLights').classList.contains('hidden')) $('startLights').classList.add('hidden');
   computeTow();
   const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
-  if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr); mpSend(dt); }
+  if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr); }
   for (let s = 0; s < steps; s++) {
     for (const c of game.cars) {
       if (!c.active || c.remote) continue;
@@ -1981,7 +1987,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=mp26b');
+await loadCarModel('js/car.bin?v=mp26c');
 initMenu();
 requestAnimationFrame(frame);
 
