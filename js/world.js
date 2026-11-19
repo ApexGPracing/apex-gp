@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=pit26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=pit26a';
+import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=gar26a';
+import { AXLE_F, AXLE_R } from './car.js?v=gar26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=gar26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -101,7 +102,7 @@ export class World {
     this.group = null;
   }
 
-  build(T, quality, teamColors) {
+  build(T, quality, teamColors, teamNames = []) {
     this.dispose();
     const tx = textures(), th = T.theme, N = T.N, q = quality;
     const G = this.group = new THREE.Group(); this.scene.add(G);
@@ -395,7 +396,6 @@ export class World {
       // pit-lane speed limit lines
       for (const k of [P.limIn, P.limOut]) add(ribbon(T, (P.entry + k) % N, 1, [() => [ps * (P.wall - 0.3), 0.021, 0], () => [ps * outer, 0.021, 1]], 2), new THREE.MeshStandardMaterial({ color: '#2563eb', roughness: 0.7 }));
       const conc = new THREE.MeshStandardMaterial({ color: '#c9cdd3', roughness: 0.85, side: THREE.DoubleSide });
-      add(ribbon(T, P.entry, range.length, [() => [ps * outer, 0, 0], () => [ps * outer, 1.1, 1]], 8, { up: false }), conc);
       // team boxes
       const boxMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.7 });
       const tc = new THREE.Color(), d = new THREE.Object3D();
@@ -406,18 +406,83 @@ export class World {
       }
       boxes.receiveShadow = true; G.add(boxes);
       const segs = range.filter((_, k) => k % 6 === 0 && k > 30 && k < range.length - 30);
-      const mkIM = (geo, mat) => { const im = new THREE.InstancedMesh(geo, mat, Math.max(1, segs.length)); im.castShadow = q > 0; im.receiveShadow = true; G.add(im); return im; };
-      const lower = mkIM(new THREE.BoxGeometry(14, 6, 12.4).translate(0, 3, 0), white);
-      const door = mkIM(new THREE.PlaneGeometry(10.5, 4.6).translate(0, 2.3, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 }));
+      const mkIM = (geo, mat, n = segs.length) => { const im = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); im.castShadow = q > 0; im.receiveShadow = true; G.add(im); return im; };
+      // pit building: garages along the front (6 m deep, open where a team has its box), offices behind,
+      // and the glass hospitality floor on top overhanging the garages
+      const lower = mkIM(new THREE.BoxGeometry(14, 6, 6.4).translate(0, 3, 0), white);
       const upper = mkIM(new THREE.BoxGeometry(14, 4, 12.4).translate(0, 8, 0), new THREE.MeshPhysicalMaterial({ color: '#1e2a38', roughness: 0.08, metalness: 0.5, emissive: th.night ? '#ffd9a0' : '#000000', emissiveIntensity: th.night ? 0.25 : 0 }));
       const roof = mkIM(new THREE.BoxGeometry(17, 0.5, 12.4).translate(0, 10.25, 0), white);
       segs.forEach((i, k) => {
-        const lat = ps * (outer + 6.3);
-        d.position.set(T.px[i] + T.nx[i] * lat, bankH(T, i, lat), T.pz[i] + T.nz[i] * lat); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]) + Math.PI / 2, 0); d.updateMatrix();
-        lower.setMatrixAt(k, d.matrix); upper.setMatrixAt(k, d.matrix); roof.setMatrixAt(k, d.matrix);
-        const dd = d.clone(); dd.translateX(-ps * 7.02); dd.rotateY(-ps * Math.PI / 2); dd.updateMatrix(); door.setMatrixAt(k, dd.matrix);
-        tc.set(teamColors[Math.floor(k / 2) % teamColors.length]); door.setColorAt(k, tc);
+        const lat = ps * (outer + 6.3), lat2 = ps * (outer + 9.3), hd = Math.atan2(T.tx[i], T.tz[i]) + Math.PI / 2;
+        d.position.set(T.px[i] + T.nx[i] * lat, bankH(T, i, lat), T.pz[i] + T.nz[i] * lat); d.rotation.set(0, hd, 0); d.updateMatrix();
+        upper.setMatrixAt(k, d.matrix); roof.setMatrixAt(k, d.matrix);
+        d.position.set(T.px[i] + T.nx[i] * lat2, bankH(T, i, lat2), T.pz[i] + T.nz[i] * lat2); d.updateMatrix(); lower.setMatrixAt(k, d.matrix);
       });
+      if (segs.length) {
+        const kA = Math.max(0, 30 + 6 - 4), kB = Math.min(range.length - 1, 30 + 6 * Math.floor((range.length - 31) / 6) + 3);
+        const F0 = outer + 0.1, F1 = outer + 6.1, wallMat = new THREE.MeshStandardMaterial({ color: '#eef0f2', roughness: 0.6, side: THREE.DoubleSide });
+        const nTeams = teamColors.length + 1, colOf = t => t === teamColors.length ? '#ffcc00' : teamColors[t];
+        const g = P.boxGap, bays = [];
+        for (let t = 0; t < nTeams; t++) { const kb = (P.boxStart + t * g - P.entry + N) % N, a = kb - Math.floor(g / 2); if (a > kA && a + g < kB) bays.push({ t, a, b: a + g, kb }); }
+        bays.sort((x, y) => x.a - y.a);
+        const at = k => (P.entry + k) % N;
+        // floor, lit ceiling and back wall run the whole length; only the bays are visible through the front
+        add(ribbon(T, at(kA), kB - kA, [() => [ps * F0, 0.03, 0], () => [ps * F1, 0.03, 1]], 4), new THREE.MeshStandardMaterial({ color: '#d5d8dd', roughness: 0.25, metalness: 0.1 }));
+        add(ribbon(T, at(kA), kB - kA, [() => [ps * F0, 4.8, 0], () => [ps * F1, 4.8, 1]], 4, { up: false }), new THREE.MeshStandardMaterial({ color: '#f4f5f7', emissive: '#ffffff', emissiveIntensity: 0.45, side: THREE.DoubleSide }));
+        add(ribbon(T, at(kA), kB - kA, [() => [ps * F1, 0, 0], () => [ps * F1, 4.8, 1]], 4, { up: false }), wallMat);
+        // front wall with openings at the team bays, and a lintel band above all of them
+        let k = kA;
+        for (const bay of bays) { if (bay.a > k) add(ribbon(T, at(k), bay.a - k, [() => [ps * F0, 0, 0], () => [ps * F0, 6, 1]], 4, { up: false }), wallMat); k = bay.b; }
+        if (kB > k) add(ribbon(T, at(k), kB - k, [() => [ps * F0, 0, 0], () => [ps * F0, 6, 1]], 4, { up: false }), wallMat);
+        add(ribbon(T, at(kA), kB - kA, [() => [ps * F0, 4.8, 0], () => [ps * F0, 6, 1]], 4, { up: false }), new THREE.MeshStandardMaterial({ color: '#20242b', roughness: 0.5, side: THREE.DoubleSide }));
+        // inside each bay: team-colour back wall, partition walls, tyre stacks, and the team name over the door
+        const part = mkIM(new THREE.BoxGeometry(6, 4.8, 0.2).translate(0, 2.4, 0), new THREE.MeshStandardMaterial({ color: '#e3e6ea', roughness: 0.6 }), bays.length * 2);
+        const tyres = mkIM(new THREE.CylinderGeometry(0.34, 0.34, 1.25, 16).translate(0, 0.63, 0), new THREE.MeshStandardMaterial({ color: '#141518', roughness: 0.85 }), bays.length * 4);
+        let pi = 0, ti = 0;
+        for (const bay of bays) {
+          const c0 = colOf(bay.t), cc = new THREE.Color(c0);
+          add(ribbon(T, at(bay.a), bay.b - bay.a, [() => [ps * (F1 - 0.05), 0, 0], () => [ps * (F1 - 0.05), 4.8, 1]], 8, { up: false }), new THREE.MeshStandardMaterial({ color: cc, emissive: cc, emissiveIntensity: 0.12, roughness: 0.5, side: THREE.DoubleSide }));
+          for (const e of [bay.a, bay.b]) { const i = at(e), lm = ps * (F0 + 3); d.position.set(T.px[i] + T.nx[i] * lm, bankH(T, i, lm), T.pz[i] + T.nz[i] * lm); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]) + Math.PI / 2, 0); d.updateMatrix(); part.setColorAt(pi, cc.clone().lerp(new THREE.Color('#ffffff'), 0.55)); part.setMatrixAt(pi++, d.matrix); }
+          for (const [e, f] of [[bay.a, 0.45], [bay.b, -0.45]]) for (const lm0 of [F1 - 0.6, F1 - 1.35]) { const i = at(e), lm = ps * lm0, dk = f * DS; d.position.set(T.px[i] + T.nx[i] * lm + T.tx[i] * dk, bankH(T, i, lm), T.pz[i] + T.nz[i] * lm + T.tz[i] * dk); d.rotation.set(0, 0, 0); d.updateMatrix(); tyres.setMatrixAt(ti++, d.matrix); }
+          const name = bay.t === teamColors.length ? 'YOUR TEAM' : (teamNames[bay.t] || '').toUpperCase();
+          const sign = canvasTex(512, 64, (g2, w, h) => { g2.fillStyle = '#16191f'; g2.fillRect(0, 0, w, h); g2.fillStyle = c0; g2.fillRect(0, h - 8, w, 8); g2.fillStyle = '#ffffff'; g2.font = '800 40px "Barlow Condensed", Arial'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText(name, w / 2, h / 2 - 3); });
+          const sm = new THREE.Mesh(new THREE.PlaneGeometry((bay.b - bay.a) * DS - 0.6, 0.85), new THREE.MeshBasicMaterial({ map: sign }));
+          const ic = at(bay.kb), lm = ps * (F0 - 0.04); sm.position.set(T.px[ic] + T.nx[ic] * lm, bankH(T, ic, lm) + 5.4, T.pz[ic] + T.nz[ic] * lm); sm.rotation.set(0, Math.atan2(T.tx[ic], T.tz[ic]) - ps * Math.PI / 2, 0); G.add(sm);
+        }
+        part.count = pi; tyres.count = ti;
+      }
+      // overhead wheel-gun gantry over every pit box: boom from the garage, H-frame over the car, air hoses
+      // dropping to each wheel, a light bar and the release traffic light
+      {
+        const s = ps, toWall = outer - Math.abs(P.lat), fx = AXLE_F, rx = AXLE_R;
+        const frameGeo = mergeGeometries([
+          new THREE.BoxGeometry(toWall + 1.3, 0.22, 0.22).translate(s * (toWall - (toWall + 1.3) / 2), 4.3, 0),
+          new THREE.BoxGeometry(0.16, 0.16, fx - rx + 1.2).translate(s * 0.95, 4.3, (fx + rx) / 2),
+          new THREE.BoxGeometry(0.16, 0.16, fx - rx + 1.2).translate(-s * 0.95, 4.3, (fx + rx) / 2),
+          new THREE.BoxGeometry(0.14, 0.14, 0.14).translate(s * 0.95, 4.15, fx), new THREE.BoxGeometry(0.14, 0.14, 0.14).translate(-s * 0.95, 4.15, fx),
+          new THREE.BoxGeometry(0.14, 0.14, 0.14).translate(s * 0.95, 4.15, rx), new THREE.BoxGeometry(0.14, 0.14, 0.14).translate(-s * 0.95, 4.15, rx),
+          new THREE.BoxGeometry(0.34, 0.75, 0.22).translate(-s * 1.25, 3.85, fx + 0.6),
+        ]);
+        const hoseGeo = mergeGeometries([[1, fx], [-1, fx], [1, rx], [-1, rx]].flatMap(([sx, z]) => [
+          new THREE.CylinderGeometry(0.022, 0.022, 2.3, 6).translate(sx * 1.0, 3.1, z),
+          new THREE.TorusGeometry(0.16, 0.022, 6, 12).rotateY(Math.PI / 2).translate(sx * 1.0, 3.9, z),
+          new THREE.BoxGeometry(0.1, 0.16, 0.26).translate(sx * 1.0, 1.9, z),
+        ]));
+        const lightGeo = mergeGeometries([
+          new THREE.BoxGeometry(0.12, 0.05, fx - rx).translate(s * 0.95, 4.2, (fx + rx) / 2), new THREE.BoxGeometry(0.12, 0.05, fx - rx).translate(-s * 0.95, 4.2, (fx + rx) / 2),
+        ]);
+        const relGeo = new THREE.CircleGeometry(0.1, 12).translate(0, 0, 0.115).translate(-s * 1.25, 4.05, fx + 0.6);
+        const nB = teamColors.length + 1;
+        const frame = mkIM(frameGeo, new THREE.MeshStandardMaterial({ color: '#2b2f36', roughness: 0.4, metalness: 0.6 }), nB);
+        const hoses = mkIM(hoseGeo, new THREE.MeshStandardMaterial({ color: '#0d0e10', roughness: 0.7 }), nB);
+        const lights = mkIM(lightGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 1.5 }), nB);
+        const rel = mkIM(relGeo, new THREE.MeshStandardMaterial({ color: '#30ff60', emissive: '#30ff60', emissiveIntensity: 2 }), nB);
+        for (let k = 0; k < nB; k++) {
+          const i = (P.boxStart + k * P.boxGap) % N; d.position.set(T.px[i] + T.nx[i] * P.lat, bankH(T, i, P.lat), T.pz[i] + T.nz[i] * P.lat); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); d.updateMatrix();
+          frame.setMatrixAt(k, d.matrix); hoses.setMatrixAt(k, d.matrix); lights.setMatrixAt(k, d.matrix); rel.setMatrixAt(k, d.matrix);
+        }
+        frame.castShadow = hoses.castShadow = false;
+      }
       const pitSide = ps;
       {
         const body = mergeGeometries([

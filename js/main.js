@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=pit26a';
-import { World } from './world.js?v=pit26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=pit26a';
-import { Sound } from './audio.js?v=pit26a';
-import { Particles, Skids } from './fx.js?v=pit26a';
-import { Weather } from './weather.js?v=pit26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=pit26a';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=gar26a';
+import { World } from './world.js?v=gar26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=gar26a';
+import { Sound } from './audio.js?v=gar26a';
+import { Particles, Skids } from './fx.js?v=gar26a';
+import { Weather } from './weather.js?v=gar26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=gar26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -105,7 +105,7 @@ let builtFor = null;
 function buildTrack(i) {
   if (builtFor === i) return getTrack(i);
   const T = getTrack(i);
-  world.build(T, 0, TEAMS.map(t => t.color));
+  world.build(T, 0, TEAMS.map(t => t.color), TEAMS.map(t => t.name));
   builtFor = i;
   smoke.clear(); sparks.clear(); skids.clear();
   return T;
@@ -667,7 +667,7 @@ function serviceCar(c) {
 
 /* ---------------- Damage ---------------- */
 function damage(c, impact, where, scale = 1) {
-  if (settings.damage === 'off') return;
+  if (settings.damage === 'off' || settings.mode === 'tt') return; // time trial: never any damage
   const k = (settings.damage === 'reduced' ? 0.5 : 1) * scale, d = c.dmg, before = { ...d };
   if (impact < 5 || k <= 0) return;
   if (where === 'front') d.fw = Math.min(1, d.fw + impact * k / 22);
@@ -1662,7 +1662,7 @@ function refreshMenu() {
   document.querySelectorAll('.seg').forEach(seg => { const k = seg.dataset.opt; seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(settings[k]) === b.dataset.v)); });
   const mode = settings.mode, s = loadSeason();
   ['optLaps', 'optOpp', 'optDiff'].forEach(id => $(id).style.opacity = mode === 'tt' || (mode === 'champ' && s && !s.finished) ? 0.35 : 1);
-  $('optQuali').style.opacity = mode === 'tt' ? 0.35 : 1; $('optWx').style.opacity = mode === 'tt' ? 0.35 : 1;
+  $('optQuali').style.opacity = mode === 'tt' ? 0.35 : 1; $('optWx').style.opacity = mode === 'tt' ? 0.35 : 1; $('optDmg').style.opacity = mode === 'tt' ? 0.35 : 1;
   $('seasonBox').classList.toggle('hidden', mode !== 'champ');
   if (mode === 'champ') {
     if (s && !s.finished) { settings.track = s.round; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + TRACKS.length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
@@ -1799,7 +1799,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=pit26a');
+await loadCarModel('js/car.bin?v=gar26a');
 initMenu();
 requestAnimationFrame(frame);
 
