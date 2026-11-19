@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=gar26a';
-import { World } from './world.js?v=gar26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=gar26a';
-import { Sound } from './audio.js?v=gar26a';
-import { Particles, Skids } from './fx.js?v=gar26a';
-import { Weather } from './weather.js?v=gar26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=gar26a';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=lb26a';
+import { World } from './world.js?v=lb26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=lb26a';
+import { Sound } from './audio.js?v=lb26a';
+import { Particles, Skids } from './fx.js?v=lb26a';
+import { Weather } from './weather.js?v=lb26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=lb26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=lb26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1091,6 +1092,10 @@ function checkLaps(c, Tr) {
     const notTimed = c.isPlayer && !isRace() && (c.pit || c.outLap);
     if (notTimed) { c.outLap = !!c.pit; c.lapTimes.pop(); if (c.bestLap === lt) c.bestLap = Math.min(Infinity, ...c.lapTimes); flashMsg(c.pit ? 'IN LAP' : 'FLYING LAP', 1.5); c.lapInvalid = false; }
     else if (c.isPlayer) {
+      if (valid && game.session === 'tt' && LB_ON && lt <= c.bestLap) {
+        if (!lbName()) radio('Set your driver name in the Time Trial menu to go on the global leaderboard.', 'info', 6);
+        else lbSubmit(Tr.def.id, lt).then(pos => { if (pos) radio('Lap ' + fmt(lt) + ' is P' + pos + ' on the global leaderboard!', pos <= 3 ? 'good' : 'info', 6); });
+      }
       if (valid && (!game.record || lt < game.record) && (game.session === 'tt' || !isRace())) { game.record = lt; store.set(bestKey(Tr), String(lt)); flashMsg('NEW RECORD', 2.5, fmt(lt)); }
       else if (!valid) flashMsg('LAP INVALID', 2, fmt(lt) + ' · track limits');
       else if (isRace() && done === game.laps - 1) flashMsg('FINAL LAP', 2, fmt(lt));
@@ -1200,6 +1205,41 @@ function teamOrders() {
   if (lapsLeft <= 1) { to.issued = 'hold'; radio('Team order: hold position. No racing your teammate.', 'warn'); return; }
   if (gap < 0 && m.lastLap && p.lastLap && m.lastLap < p.lastLap - 0.25) { to.issued = 'let'; to.deadline = t + 50; radio('Team order: ' + m.code + ' is faster. Let them through, please.', 'warn', 8); }
   else if (gap > 0 && m.lastLap && p.lastLap && p.lastLap < m.lastLap - 0.25) { to.issued = 'swap'; m.yieldT = 14; radio('We have told ' + m.code + ' to let you by. Get past on the next straight.', 'good', 7); }
+}
+
+/* ---------------- Global time-trial leaderboard (Supabase REST) ---------------- */
+const LB_ON = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+const lbHeaders = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+const lbName = () => (store.get('apexgp-name') || '').trim();
+async function lbFetch(trackId, limit = 10) {
+  if (!LB_ON) return null;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/best_laps?select=name,time_ms&track=eq.' + encodeURIComponent(trackId) + '&order=time_ms.asc&limit=' + limit, { headers: lbHeaders });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+async function lbSubmit(trackId, secs) {
+  const name = lbName(); if (!LB_ON || !name) return null;
+  const time_ms = Math.round(secs * 1000);
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/laptimes', { method: 'POST', headers: { ...lbHeaders, Prefer: 'return=minimal' }, body: JSON.stringify({ track: trackId, name, time_ms }) });
+    if (!r.ok) return null;
+    const c = await fetch(SUPABASE_URL + '/rest/v1/best_laps?select=name&track=eq.' + encodeURIComponent(trackId) + '&time_ms=lt.' + time_ms, { headers: { ...lbHeaders, Prefer: 'count=exact' } });
+    const range = c.headers.get('content-range') || '', total = parseInt(range.split('/')[1], 10);
+    return isFinite(total) ? total + 1 : null;
+  } catch (e) { return null; }
+}
+let lbReq = 0;
+async function refreshLeaderboard() {
+  const box = $('lbBox'); if (!box) return;
+  const show = settings.mode === 'tt'; box.classList.toggle('hidden', !show); if (!show) return;
+  if (!LB_ON) { $('lbList').innerHTML = '<small>The global leaderboard is not switched on yet.</small>'; return; }
+  const id = TRACKS[settings.track].id, req = ++lbReq; $('lbTitle').textContent = 'Global leaderboard · ' + TRACKS[settings.track].name;
+  $('lbList').innerHTML = '<small>Loading…</small>';
+  const rows = await lbFetch(id); if (req !== lbReq) return;
+  if (!rows) { $('lbList').innerHTML = '<small>Could not reach the leaderboard.</small>'; return; }
+  const me = lbName();
+  $('lbList').innerHTML = rows.length ? '<table class="lb">' + rows.map((r, k) => '<tr' + (r.name === me ? ' class="me"' : '') + '><td>' + (k + 1) + '</td><td>' + r.name.replace(/[<>&]/g, '') + '</td><td>' + fmt(r.time_ms / 1000) + '</td></tr>').join('') + '</table>' : '<small>No times yet. Set the first one!</small>';
 }
 
 /* ---------------- Talk to the race engineer (R, then 1-8) ---------------- */
@@ -1664,6 +1704,7 @@ function refreshMenu() {
   ['optLaps', 'optOpp', 'optDiff'].forEach(id => $(id).style.opacity = mode === 'tt' || (mode === 'champ' && s && !s.finished) ? 0.35 : 1);
   $('optQuali').style.opacity = mode === 'tt' ? 0.35 : 1; $('optWx').style.opacity = mode === 'tt' ? 0.35 : 1; $('optDmg').style.opacity = mode === 'tt' ? 0.35 : 1;
   $('seasonBox').classList.toggle('hidden', mode !== 'champ');
+  refreshLeaderboard();
   if (mode === 'champ') {
     if (s && !s.finished) { settings.track = s.round; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + TRACKS.length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
     else { settings.track = 0; $('seasonInfo').innerHTML = 'A 24-round season. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals and AI skill above. You get a teammate.</small>'; $('newSeason').classList.add('hidden'); }
@@ -1685,6 +1726,7 @@ function cardStats(i) {
   return '<b>' + (pv.length / 1000).toFixed(2) + ' km</b> · ' + (d.type === 'street' ? 'Street' : 'Circuit') + (isFinite(rec) ? ' · <b>' + fmt(rec) + '</b>' : '');
 }
 function initMenu() {
+  { const inp = $('lbNameIn'); inp.value = lbName(); inp.addEventListener('change', () => { const v = inp.value.replace(/[^\w .\-]/g, '').trim().slice(0, 16); inp.value = v; store.set('apexgp-name', v); refreshLeaderboard(); }); }
   document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const k = seg.dataset.opt, v = b.dataset.v;
@@ -1743,6 +1785,7 @@ function togglePause(force) {
 
 /* ---------------- Input ---------------- */
 addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   if (k === 'w' || k === 'a' || k === 's' || k === 'd') { keys[k] = true; e.preventDefault(); }
   if (e.repeat) return;
@@ -1799,7 +1842,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=gar26a');
+await loadCarModel('js/car.bin?v=lb26a');
 initMenu();
 requestAnimationFrame(frame);
 
