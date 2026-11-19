@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { clamp, smooth } from './util.js?v=mp26c';
+import { clamp, smooth } from './util.js?v=ai26c';
 
 export const W = 7;        // road half-width (m)
 export const KERB = 1.4;   // kerb width (m)
 export const DS = 2;       // sample spacing (m)
+export const AI_GRIP = 1.1; // AI cars' grip (cornering speeds below are built for it)
 
 /* ------------------------------------------------------------------
    Environment themes
@@ -237,8 +238,9 @@ function buildTrackData(def) {
   const vcorner = F();
   for (let i = 0; i < N; i++) {
     let k = 0; for (let j = -1; j <= 1; j++) k = Math.max(k, kr[(i + j + N) % N]);
-    const Ab = 18 + 9.81 * T.bankSin[i] * 1.6;
-    vcorner[i] = k > 1e-5 ? Math.min(95, (0.25 + Math.sqrt(0.0625 + 4 * k * Ab)) / (2 * k)) : 95;
+    // lateral grip: AI_GRIP * (18 + 0.25 v) (downforce grows with speed) plus banking
+    const G = AI_GRIP, Ab = 18 * G + 9.81 * T.bankSin[i] * 1.6, b = 0.25 * G;
+    vcorner[i] = k > 1e-5 ? Math.min(95, (b + Math.sqrt(b * b + 4 * k * Ab)) / (2 * k)) : 95;
   }
   // braking profiles: cautious (most AI) and late-braking (top-level AI)
   const brakeProfile = brk => {
@@ -249,8 +251,8 @@ function buildTrackData(def) {
     }
     return v;
   };
-  T.vprof = brakeProfile(24);
-  T.vprof2 = brakeProfile(34.5);
+  T.vprof = brakeProfile(27);
+  T.vprof2 = brakeProfile(35);
 
   // DRS: every long flat-out section (including gently curving straights), detection 150 m before
   {

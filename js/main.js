@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=mp26c';
-import { World } from './world.js?v=mp26c';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=mp26c';
-import { Sound } from './audio.js?v=mp26c';
-import { Particles, Skids } from './fx.js?v=mp26c';
-import { Weather } from './weather.js?v=mp26c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=mp26c';
-import { Net, newCode } from './net.js?v=mp26c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=mp26c';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=ai26c';
+import { World } from './world.js?v=ai26c';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=ai26c';
+import { Sound } from './audio.js?v=ai26c';
+import { Particles, Skids } from './fx.js?v=ai26c';
+import { Weather } from './weather.js?v=ai26c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ai26c';
+import { Net, newCode } from './net.js?v=ai26c';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ai26c';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -419,7 +419,7 @@ function stepCar(c, inp, dt, Tr) {
   const tg = tyreGrip(c.tyre.comp, c.tyre.wear, wet), d = c.dmg;
   const dmgF = 1 - 0.2 * d.fw - 0.1 * d.susp - (d.punct ? 0.3 : 0);
   const boost = c.boost || 1;
-  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : 1);
+  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : AI_GRIP);
   c.gripTD = tg * dmgF;
   let v = c.v;
   const vm = VMAX * (c.drsOpen ? 1.08 : 1) * (1 + 0.04 * (c.tow || 0)) * (1 - 0.05 * d.rw) * (d.punct ? 0.35 : 1) * Math.sqrt(boost);
@@ -707,35 +707,48 @@ function aiInput(c, dt, Tr) {
   c.blockT -= dt; c.yieldT -= dt; c.attackT = (c.attackT || 0) - dt; c.defT = (c.defT || 0) - dt; c.mistT = (c.mistT || 0) - dt;
   if (c.blockT <= 0) c.laneTarget *= Math.pow(0.5, dt);
   const per = c.per || personaOf(c.code), straight = Math.abs(Tr.curv[c.idx]) < 0.004;
+  const flagged = !!(game.flag && (game.flag.type === 'sc' || game.flag.type === 'vsc') && racing());
+  // only start an overtaking move when there is a straight ahead, not into or through a corner
+  let clearRun = true; for (let k = 0; k < 30; k += 3) if (Math.abs(Tr.curv[(c.idx + k) % N]) > 0.006) { clearRun = false; break; }
   let follow = Infinity, pressure = false;
   for (const o of game.cars) {
     if (o === c || !o.active || o.pit) continue;
     const dp = o.prog - c.prog;
+    if (flagged) {
+      // Safety Car / VSC: no overtaking at all; hold station behind whoever is ahead
+      // (the Safety Car queue itself is handled by flagSpeed; this only stops anyone driving into/past the car ahead)
+      if (dp > 0 && !o.dnf && !o.inPitRoad && (dp < 5 || (game.flag.type === 'vsc' && dp < 10))) follow = Math.min(follow, Math.max(0, o.v - (dp < 4 ? 2.5 : 0.3)));
+      continue;
+    }
     if (Math.abs(dp) <= 3 && Math.abs(o.lat - c.lat) < 3.6) {
       const want = clamp(o.lat + (c.lat >= o.lat ? 3.8 : -3.8), -(W - 1.2), W - 1.2);
       if (Math.abs(want - o.lat) >= 3) { c.laneTarget = want - Tr.race[c.idx]; c.blockT = Math.max(c.blockT, 0.8); }
     }
     if (dp > 0 && dp < 10 + 10 * per.agg && Math.abs(o.lat - c.lat) < 2.6) {
-      if (c.v > o.v - 0.5 || o.dnf) {
+      if ((c.v > o.v - 0.5 && (clearRun || dp < 4)) || o.dnf) {
         const leftRoom = W - 1.4 - o.lat, rightRoom = o.lat + W - 1.4;
         c.laneTarget = clamp((leftRoom > rightRoom ? o.lat + 3.0 : o.lat - 3.0) - Tr.race[c.idx], -2 * W, 2 * W); c.blockT = 1.6;
         if (!o.dnf) c.attackT = 1.2;
       }
-      if (dp < 5 && !o.dnf) follow = Math.min(follow, o.v - 0.5);
+    }
+    // car-following: in line with a car ahead, keep a speed-dependent gap (brake early, not into its gearbox)
+    if (dp > 0 && dp < 16 && !o.dnf && Math.abs(o.lat - c.lat) < 2.4) {
+      const gap = dp * DS - 2.5, want = 6 + o.v * 0.12;
+      follow = Math.min(follow, o.v + (gap - want) * 0.7);
     }
     // defending: a faster car close behind on a straight gets one move to cover the inside
     if (dp < -2 && dp > -14 && !o.dnf && !o.finished) {
       pressure = true;
       if (racing() && straight && c.defT <= 0 && c.yieldT <= 0 && !game.flag && !(c.mate && o.isPlayer) && o.v > c.v - 1) {
-        c.defT = 3.5;
-        if (Math.random() < per.def) { c.laneTarget = clamp(c.lat + (o.lat - c.lat) * 0.85, -(W - 1.4), W - 1.4) - Tr.race[c.idx]; c.blockT = 1.4; }
+        c.defT = 6;
+        if (Math.random() < per.def * 0.6) { c.laneTarget = clamp(c.lat + (o.lat - c.lat) * 0.6, -(W - 1.4), W - 1.4) - Tr.race[c.idx]; c.blockT = 1.2; }
       }
     }
   }
   const P = Tr.pit, toEntry = (P.entry - c.idx + N) % N, inEntryRoad = ((c.idx - P.entry + N) % N) < P.limIn + 2;
   const pitting = c.pitReq && !c.pit && ((toEntry < 140 && toEntry > 0) || inEntryRoad);
   if (c.yieldT > 0) { c.laneTarget = clamp((c.lat >= 0 ? W - 1.6 : -(W - 1.6)) - Tr.race[c.idx], -2 * W, 2 * W); c.blockT = 0.5; }
-  if (game.flag && game.flag.type === 'sc') { c.laneTarget = 0; c.blockT = 0; }
+  if (flagged) { c.laneTarget = 0; c.blockT = 0; }
   c.laneOff += (c.laneTarget - c.laneOff) * Math.min(1, dt * 1.6);
   // precise line following: short look-ahead + feed-forward of the line's curvature + lateral error correction
   const sp0 = Math.max(Math.abs(c.v), 5);
@@ -764,17 +777,18 @@ function aiInput(c, dt, Tr) {
   const pace = c.pace > 1 ? 1 + (c.pace - 1) * clamp((72 - target) / 30, 0, 1) : c.pace;
   target = Math.min(target * pace * Math.sqrt(Math.min(1.04, c.gripTD || 1) * (c.boost || 1)) * (c.yieldT > 0 ? 0.9 : 1), follow);
   // aggressive drivers brake later when they are attacking
-  if (c.attackT > 0) target *= 1 + 0.025 * per.agg;
+  if (c.attackT > 0 && clearRun) target *= 1 + 0.012 * per.agg;
+  if (racing() && c.maxDone < 0 && game.raceTime < 40 && !clearRun) target *= 0.96;
   // mistakes: lock-ups and running wide, more likely in the wet and under pressure
   if (racing() && !game.flag && c.mistT <= -4 && c.v > 30 && c.v > target + 4) {
-    const rate = (1 - per.cons) * 0.02 * (weather.wetAt(c.idx) > 0.3 ? 2.5 : 1) * (pressure ? 1.8 : 1);
+    const rate = (1 - per.cons) * 0.008 * (weather.wetAt(c.idx) > 0.3 ? 2.5 : 1) * (pressure ? 1.8 : 1);
     if (Math.random() < rate * dt) {
       c.mistT = 1.1; c.lockFx = 0.45;
       const p = game.player;
       if (p && !p.dnf && Math.abs(c.prog - p.prog) < 350 && clock - (game.mistSaid || -99) > 12) { game.mistSaid = clock; radio(c.code + (Math.random() < 0.5 ? ' has locked up and gone wide!' : ' has made a mistake, run wide!'), 'good', 4); }
     }
   }
-  if (c.mistT > 0) target *= 1.1;
+  if (c.mistT > 0) target *= 1.06;
   if (c.lockFx > 0) c.lockFx -= dt;
   if (wide > 0) target = Math.min(target, c.v * (1 - Math.min(0.08, wide * 0.03)));
   if (c.surf >= 3) target = Math.min(target, 35);
@@ -1987,7 +2001,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=mp26c');
+await loadCarModel('js/car.bin?v=ai26c');
 initMenu();
 requestAnimationFrame(frame);
 
