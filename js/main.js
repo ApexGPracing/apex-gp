@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=lb26a';
-import { World } from './world.js?v=lb26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=lb26a';
-import { Sound } from './audio.js?v=lb26a';
-import { Particles, Skids } from './fx.js?v=lb26a';
-import { Weather } from './weather.js?v=lb26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=lb26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=lb26a';
+import { W, KERB, DS, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=lb26b';
+import { World } from './world.js?v=lb26b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=lb26b';
+import { Sound } from './audio.js?v=lb26b';
+import { Particles, Skids } from './fx.js?v=lb26b';
+import { Weather } from './weather.js?v=lb26b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=lb26b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=lb26b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1209,7 +1209,8 @@ function teamOrders() {
 
 /* ---------------- Global time-trial leaderboard (Supabase REST) ---------------- */
 const LB_ON = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
-const lbHeaders = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+// new-style publishable keys (sb_publishable_...) go only in the apikey header; old anon JWTs also as a Bearer token
+const lbHeaders = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json', ...(SUPABASE_ANON_KEY.startsWith('eyJ') ? { Authorization: 'Bearer ' + SUPABASE_ANON_KEY } : {}) };
 const lbName = () => (store.get('apexgp-name') || '').trim();
 async function lbFetch(trackId, limit = 10) {
   if (!LB_ON) return null;
@@ -1842,7 +1843,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=lb26a');
+await loadCarModel('js/car.bin?v=lb26b');
 initMenu();
 requestAnimationFrame(frame);
 
