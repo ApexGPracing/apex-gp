@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=net26b';
-import { World } from './world.js?v=net26b';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=net26b';
-import { Sound } from './audio.js?v=net26b';
-import { Particles, Skids } from './fx.js?v=net26b';
-import { Weather } from './weather.js?v=net26b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=net26b';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=net26b';
-import { Net, newCode } from './net.js?v=net26b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=net26b';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=net26c';
+import { World } from './world.js?v=net26c';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=net26c';
+import { Sound } from './audio.js?v=net26c';
+import { Particles, Skids } from './fx.js?v=net26c';
+import { Weather } from './weather.js?v=net26c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=net26c';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=net26c';
+import { Net, newCode, loadTurn } from './net.js?v=net26c';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=net26c';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1367,6 +1367,7 @@ function mpShareInfo() {
   if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, livery: settings.livery, name: mpName() }); }
 }
 async function mpEnter(code) {
+  await loadTurn(METERED_APP, METERED_KEY);
   if (!mpName() || mpName() === 'Driver') { mpStatus('Type your driver name in the box above first.'); $('mpName').focus(); $('mpName').classList.add('need'); return; }
   $('mpName').classList.remove('need');
   mpStatus(code ? 'Joining room ' + code + '…' : 'Creating room…');
@@ -2143,7 +2144,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=net26b');
+await loadCarModel('js/car.bin?v=net26c');
 initMenu();
 requestAnimationFrame(frame);
 

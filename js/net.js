@@ -7,7 +7,16 @@
      channel instead, at a lower rate.
    For local testing, ?mplocal in the URL swaps Supabase for a BroadcastChannel between tabs of one browser. */
 
-const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
+let ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
+/* TURN relay (Metered / Open Relay): lets players connect even when a direct link is impossible (mobile data,
+   strict routers). Credentials are fetched once from the app's Metered API key if one is configured. */
+let turnLoaded = null;
+export function loadTurn(app, key) {
+  if (!app || !key || turnLoaded) return turnLoaded;
+  turnLoaded = fetch('https://' + app + '.metered.live/api/v1/turn/credentials?apiKey=' + encodeURIComponent(key))
+    .then(r => r.ok ? r.json() : []).then(list => { if (Array.isArray(list) && list.length) ICE = ICE.concat(list); }).catch(() => {});
+  return turnLoaded;
+}
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -99,15 +108,25 @@ export class Net {
     const pc = new RTCPeerConnection({ iceServers: ICE }), peer = { pc, dc: null, open: false };
     this.peers.set(id, peer);
     pc.onicecandidate = e => { if (e.candidate) this.signal(id, { ice: e.candidate.toJSON() }); };
-    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { peer.open = false; this.emit('peerLink', id, false); } };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { peer.open = false; this.emit('peerLink', id, false); this.retry(id); } };
+    peer.timer = setTimeout(() => { if (!peer.open) this.retry(id); }, 9000);
     pc.ondatachannel = e => this.wireDC(id, peer, e.channel);
     return peer;
   }
   wireDC(id, peer, dc) {
     peer.dc = dc;
-    dc.onopen = () => { peer.open = true; this.emit('peerLink', id, true); };
+    dc.onopen = () => { peer.open = true; clearTimeout(peer.timer); this.emit('peerLink', id, true); };
     dc.onclose = () => { peer.open = false; };
     dc.onmessage = e => { try { this.lastRx.set(id, performance.now()); this.emit('data', id, JSON.parse(e.data)); } catch (err) { /* bad packet */ } };
+  }
+  retry(id) {
+    const old = this.peers.get(id); if (!old || old.open) return;
+    const n = (old.tries || 0) + 1; if (n > 4 || !this.room.some(p => p.id === id)) return;
+    clearTimeout(old.timer); try { old.pc.close(); } catch (e) { /* closed */ }
+    this.peers.delete(id);
+    // the side with the lower id makes the offer; the other side asks it to
+    if (this.id < id) this.connect(id).then(() => { const p = this.peers.get(id); if (p) p.tries = n; });
+    else this.signal(id, { again: n });
   }
   async connect(id) {
     const peer = this.makePeer(id);
@@ -120,7 +139,8 @@ export class Net {
     if (m.to && m.to !== this.id) return;
     if (m.t === 'sig') {
       let peer = this.peers.get(m.from);
-      const { sdp, ice } = m.data;
+      const { sdp, ice, again } = m.data;
+      if (again && this.id < m.from) { const p0 = this.peers.get(m.from); if (p0) { clearTimeout(p0.timer); try { p0.pc.close(); } catch (e) { /* closed */ } this.peers.delete(m.from); } await this.connect(m.from); const p1 = this.peers.get(m.from); if (p1) p1.tries = again; return; }
       try {
         if (sdp) {
           if (sdp.type === 'offer') {

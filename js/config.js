@@ -3,3 +3,8 @@
    (reading the leaderboard and adding lap times). Leave empty to turn the leaderboard off. */
 export const SUPABASE_URL = 'https://zhlmkzfowjzarurkyjvf.supabase.co';      // e.g. 'https://abcdefgh.supabase.co'
 export const SUPABASE_ANON_KEY = 'sb_publishable_ttmlAv9wIxBIMh6E96UA7w_Pe48KVQP'; // the long 'anon' 'public' key
+
+/* Optional TURN relay for online races (free Metered / Open Relay account): the app name (the part before
+   .metered.live) and its API key. Leave empty to use direct connections and the Supabase relay only. */
+export const METERED_APP = '';
+export const METERED_KEY = '';
