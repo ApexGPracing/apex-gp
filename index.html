@@ -163,6 +163,7 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 .logo span{color:var(--acc)}
 .tag{color:var(--muted);font-size:18px;margin-top:4px}
 .opt{padding:11px 14px}
+i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radius:3px;margin-left:4px;background:#e11d48;color:#fff}i.cls.gt3{background:#16a34a}
 .lb{width:100%;border-collapse:collapse;font-size:17px;margin-top:6px}.lb td{padding:2px 4px}.lb td:first-child{color:var(--muted);width:28px}.lb td:last-child{text-align:right;font-variant-numeric:tabular-nums}.lb tr.me td{color:#ffcc00;font-weight:700}
 .mprow{display:flex;gap:8px;margin-top:8px}.mprow .btn{flex:1}#mpCode{width:110px;text-transform:uppercase;letter-spacing:.2em;font-size:22px;font-weight:800;text-align:center;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;color:#fff;font-family:inherit}
 .mpcode{font-size:13px;letter-spacing:.14em;color:var(--muted);margin:6px 0}.mpcode b{display:block;font-size:44px;letter-spacing:.18em;color:#ffcc00;line-height:1.05}.mpcode small{letter-spacing:0;font-size:13px}
@@ -245,7 +246,9 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 
 <div id="menu">
   <div class="left">
-    <div><div class="logo">APEX<span>GP</span></div><div class="tag">Open-wheel racing · 24-round world championship</div></div>
+    <div><div class="logo">APEX<span>GP</span></div><div class="tag" id="menuSub">Formula 1 · 24-round championship</div></div>
+    <div class="opt panel"><h4>Series</h4><div class="seg" data-opt="series"><button data-v="f1">F1</button><button data-v="f2">F2</button><button data-v="indy">IndyCar</button><button data-v="gt3">GT3</button><button data-v="lemans">Le Mans</button></div></div>
+    <div class="opt panel hidden" id="optLmClass"><h4>Your Le Mans car</h4><div class="seg" data-opt="lmClass"><button data-v="hyper">Hypercar</button><button data-v="gt3">GT3</button></div></div>
     <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button><button data-v="mp">Online</button></div></div>
     <div class="opt panel hidden" id="mpBox"><h4>Online race</h4>
       <div class="lbname">Your driver name <input id="mpName" maxlength="16" placeholder="e.g. FastGuy44"></div>
@@ -290,7 +293,7 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 
 <div id="loading" class="hidden"><span>LOADING CIRCUIT</span></div>
 
-<div id="verTag">build 2026-11-19 · online 3 · ai 2</div>
+<div id="verTag">build 2026-11-19 · online 3 · ai 2 · series 1</div>
 <div id="splash">
   <div class="logo">APEX<span>GP</span></div>
   <div class="warn">THIS GAME IS FOR<br>BREAK TIME ONLY</div>
@@ -303,6 +306,6 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=ai26c"></script>
+<script type="module" src="js/main.js?v=ser26a"></script>
 </body>
 </html>

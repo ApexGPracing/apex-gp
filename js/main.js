@@ -1,20 +1,21 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad } from './tracks.js?v=ai26c';
-import { World } from './world.js?v=ai26c';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=ai26c';
-import { Sound } from './audio.js?v=ai26c';
-import { Particles, Skids } from './fx.js?v=ai26c';
-import { Weather } from './weather.js?v=ai26c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ai26c';
-import { Net, newCode } from './net.js?v=ai26c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ai26c';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ser26a';
+import { World } from './world.js?v=ser26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=ser26a';
+import { Sound } from './audio.js?v=ser26a';
+import { Particles, Skids } from './fx.js?v=ser26a';
+import { Weather } from './weather.js?v=ser26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ser26a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ser26a';
+import { Net, newCode } from './net.js?v=ser26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ser26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
 
 /* ---------------- Teams, drivers, tyres ---------------- */
 // the 2026 grid: 11 teams, 2 drivers each (DRIVERS lists them in team order)
-const TEAMS = [
+let TEAMS = [
   { name: 'McLaren', color: '#ff8000', accent: '#111111' },
   { name: 'Ferrari', color: '#dc0000', accent: '#fff200' },
   { name: 'Red Bull Racing', color: '#1e2a5a', accent: '#e10600' },
@@ -27,7 +28,7 @@ const TEAMS = [
   { name: 'Haas', color: '#b6babd', accent: '#e10600' },
   { name: 'Cadillac', color: '#111111', accent: '#e5e5e5' },
 ];
-const DRIVERS = [
+let DRIVERS = [
   ['Lando Norris', 'NOR'], ['Oscar Piastri', 'PIA'],
   ['Charles Leclerc', 'LEC'], ['Lewis Hamilton', 'HAM'],
   ['Max Verstappen', 'VER'], ['Isack Hadjar', 'HAD'],
@@ -50,13 +51,35 @@ const PERSONA = {
   HUL: [0.83, 0.6, 0.8, 0.9, 0.95], BOR: [0.8, 0.65, 0.6, 0.78, 1.0], OCO: [0.82, 0.7, 0.9, 0.85, 0.95], BEA: [0.81, 0.8, 0.6, 0.75, 1.0],
   PER: [0.84, 0.6, 0.75, 0.82, 0.85], BOT: [0.83, 0.5, 0.7, 0.88, 0.95],
 };
-const personaOf = code => { const a = PERSONA[code] || [0.85, 0.7, 0.7, 0.85, 1]; return { skill: a[0], agg: a[1], def: a[2], cons: a[3], tyre: a[4] }; };
-const CAR_NUMS = [4, 81, 16, 44, 3, 6, 63, 12, 14, 18, 10, 43, 23, 55, 30, 41, 27, 5, 31, 87, 11, 77];
+let SERIES_PERSONA = {};
+const personaOf = code => { const a = PERSONA[code] || SERIES_PERSONA[code] || [0.85, 0.7, 0.7, 0.85, 1]; return { skill: a[0], agg: a[1], def: a[2], cons: a[3], tyre: a[4] }; };
+let CAR_NUMS = [4, 81, 16, 44, 3, 6, 63, 12, 14, 18, 10, 43, 23, 55, 30, 41, 27, 5, 31, 87, 11, 77];
 let TEAM_MAP = DRIVERS.map((_, i) => Math.floor(i / 2));
 const teamIdxOf = di => TEAM_MAP[di];
 /* fixed line-ups: each driver always drives for their own team */
-const FIXED_TEAMS = DRIVERS.map((_, i) => Math.floor(i / 2));
+let FIXED_TEAMS = DRIVERS.map((_, i) => Math.floor(i / 2));
 function shuffleTeams() { return FIXED_TEAMS.slice(); }
+/* ---------------- Racing series ---------------- */
+const F1_GRID = { teams: TEAMS, drivers: DRIVERS, nums: CAR_NUMS };
+let SER = SERIES.f1;
+const calIdx = () => SER.calendar.map(id => TRACKS.findIndex(t => t.id === id)).filter(i => i >= 0);
+function applySeries(id) {
+  SER = SERIES[id] || SERIES.f1;
+  if (SER.id === 'f1') { TEAMS = F1_GRID.teams; DRIVERS = F1_GRID.drivers; CAR_NUMS = F1_GRID.nums; SERIES_PERSONA = {}; }
+  else {
+    TEAMS = SER.teams; DRIVERS = SER.drivers.map(d => [d[0], d[1]]);
+    CAR_NUMS = DRIVERS.map((_, i) => [2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 17, 18, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 33][i] || i + 2);
+    SERIES_PERSONA = Object.fromEntries(SER.drivers.map(d => [d[1], d[2]]));
+  }
+  FIXED_TEAMS = DRIVERS.map((_, i) => Math.floor(i / 2)); TEAM_MAP = FIXED_TEAMS.slice();
+  builtFor = -1;
+  const cal = calIdx(); if (!cal.includes(settings.track)) settings.track = cal[0];
+}
+// the class (physics, model, sound) a car races in
+function classFor(teamIdx, isMine) {
+  if (SER.multiClass) { if (isMine) return settings.lmClass === 'gt3' ? 'gt3' : 'hyper'; return (TEAMS[teamIdx] && TEAMS[teamIdx].cls) || SER.cls; }
+  return SER.cls;
+}
 const LIVERIES = ['#ffcc00', '#f8fafc', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#111827'];
 const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 // 100 = right on the limit and slightly over it (they rely on kerbs and run-off); 75 ≈ old Hard
@@ -97,7 +120,7 @@ const smoke = new Particles(scene, 1600, false);
 const sparks = new Particles(scene, 500, true);
 const skids = new Skids(scene);
 
-const settings = Object.assign({ track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim' }, store.json('apexgp2-settings', {}));
+const settings = Object.assign({ series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim' }, store.json('apexgp2-settings', {}));
 if (settings.track >= TRACKS.length) settings.track = 0;
 if (typeof settings.diff === 'string') { settings.ai = { easy: 25, medium: 50, hard: 72 }[settings.diff] ?? 50; delete settings.diff; }
 delete settings.gfx;
@@ -119,8 +142,9 @@ sound.muted = store.get('apexgp-muted') === '1';
 const audio = { init() { sound.init(); }, set() {}, get muted() { return sound.muted; }, set muted(v) { sound.muted = v; } };
 
 /* ---------------- Championship ---------------- */
-const loadSeason = () => store.json('apexgp3-season', null);
-const saveSeason = s => store.set('apexgp3-season', JSON.stringify(s));
+const seasonKey = () => 'apexgp3-season' + (SER.id === 'f1' ? '' : '-' + SER.id);
+const loadSeason = () => store.json(seasonKey(), null);
+const saveSeason = s => store.set(seasonKey(), JSON.stringify(s));
 function newSeason() {
   const r = rng(Date.now() & 0xfffff);
   const order = DRIVERS.map((d, i) => i).sort(() => r() - 0.5).slice(0, settings.opp);
@@ -134,7 +158,8 @@ function newSeason() {
 const game = { state: 'menu', T: null, cars: [], player: null, mate: null, session: null, phase: 'idle', lightsT: 0, goAt: 0, raceTime: 0, camMode: 2, paused: false, finishCount: 0, orbit: 0, resultsAt: 0, season: null, laps: 5, skill: 50, q: null, grid: null, wx: {}, to: null, fastest: Infinity };
 const cm = parseInt(store.get('apexgp-cam'), 10); if (cm >= 0 && cm < 3) game.camMode = cm;
 const keys = {};
-const bestKey = T => 'apexgp2-best-' + T.def.id;
+const serKey = id => (SER.id === 'f1' ? '' : SER.id + '-') + id;
+const bestKey = T => 'apexgp2-best-' + serKey(T.def.id);
 const recordFor = T => { const v = parseFloat(store.get(bestKey(T))); return isFinite(v) ? v : 0; };
 const T = () => game.T;
 const isRace = () => game.session === 'race';
@@ -159,12 +184,13 @@ function setTyres(c, comp) { c.tyre = { comp, wear: 0 }; c.tyreLap = Math.max(1,
 function makeField(lineup, skill) {
   clearCars();
   const colr = LIVERIES[settings.livery], acc = colr === '#111827' ? '#ffcc00' : '#111827';
-  const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: 1, compound: 'medium' }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length });
+  const pcls = classFor(TEAMS.length, true);
+  const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: 1, compound: 'medium', model: CLASSES[pcls].model }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
   game.cars.push(p); game.player = p;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
-    const tm = TEAMS[teamIdxOf(di)];
-    const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium' }),
+    const tm = TEAMS[teamIdxOf(di)], cls = mate ? pcls : classFor(teamIdxOf(di), false);
+    const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium', model: CLASSES[cls].model }), { cls, spec: CLASSES[cls] },
       { name: DRIVERS[di][0], code: DRIVERS[di][1], team: mate ? 'Your Team' : tm.name, color: mate ? colr : tm.color, isPlayer: false, mate, teamIdx: mate ? TEAMS.length : teamIdxOf(di),
         per: personaOf(DRIVERS[di][1]), pace: Math.min(1.035, aiPace(skill) * L.rating * (1 + (personaOf(DRIVERS[di][1]).skill - 0.86) * 0.03)), lateBrake: skill >= 70, rating: L.rating, boost: aiBoost(skill) });
     game.cars.push(c); if (mate) game.mate = c;
@@ -193,16 +219,18 @@ function placeGarage(c, Tr) {
 
 /* ---------------- Weekend flow ---------------- */
 let lapEstCache = null;
-function estimateLap(Tr, pace, prof, boost = 1) {
-  const vm = VMAX * Math.sqrt(boost), sp = pace * Math.sqrt(boost);
+const profOf = (c, Tr) => speedProfiles(Tr, c.spec || CLASSES.f1)[c.lateBrake ? 1 : 0];
+function estimateLap(Tr, pace, prof, boost = 1, spec = CLASSES.f1) {
+  if (prof === null) { const pp = speedProfiles(Tr, spec); prof = pp[0]; }
+  const vm = VMAX * spec.vmax * Math.sqrt(boost), sp = pace * Math.sqrt(boost);
   let v = prof[0] * sp, t = 0;
-  for (let pass = 0; pass < 2; pass++) { t = 0; for (let i = 0; i < Tr.N; i++) { const lim = prof[(i + 1) % Tr.N] * sp, a = 11.5 * boost * (1 - (v / vm) ** 2) - (0.3 + 0.00028 * v * v); const nv = Math.min(lim, Math.sqrt(Math.max(1, v * v + 2 * a * DS))); t += DS / ((v + nv) / 2); v = nv; } }
+  for (let pass = 0; pass < 2; pass++) { t = 0; for (let i = 0; i < Tr.N; i++) { const lim = prof[(i + 1) % Tr.N] * sp, a = 11.5 * boost * spec.power * (1 - (v / vm) ** 2) - (0.3 + 0.00028 * (spec.drag || 1) * v * v); const nv = Math.min(lim, Math.sqrt(Math.max(1, v * v + 2 * a * DS))); t += DS / ((v + nv) / 2); v = nv; } }
   return t * 1.002; // AI drive almost exactly on the profile
 }
 
 function startWeekend() {
   const champ = settings.mode === 'champ', tt = settings.mode === 'tt';
-  if (champ) { game.season = loadSeason() || newSeason(); settings.track = game.season.round; }
+  if (champ) { game.season = loadSeason() || newSeason(); settings.track = calIdx()[game.season.round] ?? calIdx()[0]; }
   const Tr = game.T = buildTrack(settings.track);
   game.laps = tt ? Infinity : (champ ? game.season.laps : settings.laps);
   game.skill = champ ? (game.season.ai ?? 50) : settings.ai;
@@ -214,7 +242,7 @@ function startWeekend() {
   if (!champ && !tt) TEAM_MAP = shuffleTeams(r, lineup.slice(1).map(l => l.di));
   makeField(lineup, game.skill);
   game.seed = (Date.now() & 0xfffff) + 3;
-  game.lapEst = estimateLap(Tr, aiPace(game.skill), Tr.vprof);
+  game.lapEst = estimateLap(Tr, aiPace(game.skill), null, 1, CLASSES[SER.cls]);
   game.record = recordFor(Tr); game.fastest = Infinity;
   game.wxMode = tt ? 'dry' : settings.weather;
   $('menu').classList.add('hidden'); $('results').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden');
@@ -228,8 +256,10 @@ function startWeekend() {
     return startSession(game.q.stages[0]);
   }
   // no qualifying: grid by pace (with a little randomness), player mid-field
-  const order = game.cars.filter(c => !c.isPlayer).map(c => [c, c.pace * (1 + (r() - 0.5) * 0.006)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
-  order.splice(Math.floor(game.cars.length * 0.55), 0, game.player);
+  const order = game.cars.filter(c => !c.isPlayer).map(c => [c, c.pace * ((c.spec && c.spec.vmax) || 1) * (1 + (r() - 0.5) * 0.006)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  // player mid-field (within their own class in multi-class races)
+  const same = order.filter(c => c.cls === game.player.cls), at = same.length ? order.indexOf(same[Math.floor(same.length * 0.55)] || same[same.length - 1]) : Math.floor(game.cars.length * 0.55);
+  order.splice(at, 0, game.player);
   game.grid = order;
   showStrategy();
 }
@@ -257,7 +287,7 @@ function startSession(kind) {
     const factor = { Q1: 1, Q2: 0.998, Q3: 0.996, Q: 1 }[kind];
     for (const c of entrants) {
       if (c.isPlayer) continue;
-      const base = estimateLap(Tr, Math.min(1.04, c.pace), c.lateBrake ? Tr.vprof2 : Tr.vprof, c.boost || 1) * factor * 1.012;
+      const base = estimateLap(Tr, Math.min(1.04, c.pace), profOf(c, Tr), c.boost || 1, c.spec || CLASSES.f1) * factor * 1.012;
       const wetPen = 1 + 0.16 * weather.average();
       const t = base * wetPen * (1 + (Math.random() - 0.5) * 0.006);
       sess.reveal.push({ c, t, at: 25 + Math.random() * (dur - 30) });
@@ -299,7 +329,7 @@ function nextQualiStep() {
   // simulate remaining sessions without the player
   while (q.idx < q.stages.length) {
     const name = q.stages[q.idx], f = { Q2: 0.998, Q3: 0.996 }[name] || 1;
-    const times = {}; q.entrants.forEach(c => times[c.code] = estimateLap(game.T, Math.min(1.04, c.pace), c.lateBrake ? game.T.vprof2 : game.T.vprof, c.boost || 1) * f * 1.012 * (1 + (Math.random() - 0.5) * 0.006));
+    const times = {}; q.entrants.forEach(c => times[c.code] = estimateLap(game.T, Math.min(1.04, c.pace), profOf(c, game.T), c.boost || 1, c.spec || CLASSES.f1) * f * 1.012 * (1 + (Math.random() - 0.5) * 0.006));
     const ent = q.entrants.slice().sort((a, b) => times[a.code] - times[b.code]), elim = q.elim[name] || 0;
     q.results[name] = ent.map(c => ({ c, t: times[c.code] }));
     q.out = ent.slice(ent.length - elim).concat(q.out); q.entrants = ent.slice(0, ent.length - elim);
@@ -419,10 +449,11 @@ function stepCar(c, inp, dt, Tr) {
   const tg = tyreGrip(c.tyre.comp, c.tyre.wear, wet), d = c.dmg;
   const dmgF = 1 - 0.2 * d.fw - 0.1 * d.susp - (d.punct ? 0.3 : 0);
   const boost = c.boost || 1;
-  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : AI_GRIP);
+  const spec = c.spec || CLASSES.f1;
+  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * spec.grip * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : AI_GRIP);
   c.gripTD = tg * dmgF;
   let v = c.v;
-  const vm = VMAX * (c.drsOpen ? 1.08 : 1) * (1 + 0.04 * (c.tow || 0)) * (1 - 0.05 * d.rw) * (d.punct ? 0.35 : 1) * Math.sqrt(boost);
+  const vm = VMAX * spec.vmax * (c.drsOpen ? 1.08 : 1) * (1 + 0.04 * (c.tow || 0)) * (1 - 0.05 * d.rw) * (d.punct ? 0.35 : 1) * Math.sqrt(boost);
   let yaw, slip;
   if ((c.isPlayer && !c.autopilot) || c.dynamic) {
     // the player's car uses a proper chassis/tyre model
@@ -433,10 +464,10 @@ function stepCar(c, inp, dt, Tr) {
   } else {
   if (inp.throttle > 0) {
     if (v < -0.2) v += 28 * dt * inp.throttle;
-    else { const f = 1 - Math.pow(Math.max(v, 0) / vm, 2); v += 11.5 * boost * inp.throttle * Math.max(f, 0) * (surf >= 3 ? 0.55 : 1) * Math.min(1, 0.45 + 0.6 * grip) * dt; }
+    else { const f = 1 - Math.pow(Math.max(v, 0) / vm, 2); v += 11.5 * boost * spec.power * inp.throttle * Math.max(f, 0) * (surf >= 3 ? 0.55 : 1) * Math.min(1, 0.45 + 0.6 * grip) * dt; }
   }
   if (inp.brake > 0) {
-    if (v > 0.4) v = Math.max(0, v - 36 * grip * inp.brake * dt);
+    if (v > 0.4) v = Math.max(0, v - 36 * grip * spec.brake * inp.brake * dt);
     else if (inp.throttle === 0) v = Math.max(v - 7 * dt, -12);
   }
   const dec = (0.3 + dragK(c) * v * v + (inp.throttle === 0 ? 1.2 : 0) + DRAG[surf] * Math.abs(v) + (d.punct ? 0.05 * Math.abs(v) : 0)) * dt;
@@ -490,7 +521,7 @@ function stepCar(c, inp, dt, Tr) {
    envelope matches the AI's (18 + 0.25 v) m/s², so racing stays fair. Forces are per unit mass. */
 // rearGrip > 1 gives the slight stability bias real cars run; muX = tyres grip harder in a straight line than sideways
 // air drag: DRS opens the rear wing (big cut), a tow behind another car cuts it further
-const dragK = c => 0.00028 * (c.drsOpen ? 0.58 : 1) * (1 - 0.35 * (c.tow || 0));
+const dragK = c => 0.00028 * ((c.spec && c.spec.drag) || 1) * (c.drsOpen ? 0.58 : 1) * (1 - 0.35 * (c.tow || 0));
 const DYN = { L: 3.6, a: 1.98, b: 1.62, h: 0.3, k2: 2.0, B: 16.7, C: 1.6, brakeF: 0.6, rearGrip: 1.1, muX: 1.35 };
 const tyreCurve = a => Math.sin(DYN.C * Math.atan(DYN.B * a));
 function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
@@ -513,9 +544,9 @@ function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
     const n = Math.min(10, Math.max(1, Math.ceil(dt / (0.7 * u / Cfast))));
     const h = dt / n;
     for (let k = 0; k < n; k++) {
-      const drive = inp.throttle > 0 ? 11.5 * (c.boost || 1) * inp.throttle * Math.max(0, 1 - (u / vm) ** 2) * (surf >= 3 ? 0.55 : 1) : 0;
+      const drive = inp.throttle > 0 ? 11.5 * (c.boost || 1) * (c.spec ? c.spec.power : 1) * inp.throttle * Math.max(0, 1 - (u / vm) ** 2) * (surf >= 3 ? 0.55 : 1) : 0;
       // braking is the original strong, consistent braking (no lock-ups)
-      const brake = inp.brake > 0 ? 36 * grip * inp.brake : 0;
+      const brake = inp.brake > 0 ? 36 * grip * (c.spec ? c.spec.brake : 1) * inp.brake : 0;
       const drag = 0.3 + dragK(c) * u * u + (inp.throttle === 0 ? 1.2 : 0) + DRAG[surf] * u + (d.punct ? 0.05 * u : 0);
       // longitudinal weight transfer: braking loads the front, acceleration loads the rear
       const dN = clamp((drive - drag) * P.h / P.L, -4, 4);
@@ -705,7 +736,9 @@ function playerInput(c, dt) {
 function aiInput(c, dt, Tr) {
   const N = Tr.N;
   c.blockT -= dt; c.yieldT -= dt; c.attackT = (c.attackT || 0) - dt; c.defT = (c.defT || 0) - dt; c.mistT = (c.mistT || 0) - dt;
-  if (c.blockT <= 0) c.laneTarget *= Math.pow(0.5, dt);
+  // ovals: cars hold their lane (packs run two and three wide); road courses: drift back to the racing line
+  const oval = !!Tr.def.oval;
+  if (c.blockT <= 0) c.laneTarget *= Math.pow(oval ? 0.93 : 0.5, dt);
   const per = c.per || personaOf(c.code), straight = Math.abs(Tr.curv[c.idx]) < 0.004;
   const flagged = !!(game.flag && (game.flag.type === 'sc' || game.flag.type === 'vsc') && racing());
   // only start an overtaking move when there is a straight ahead, not into or through a corner
@@ -732,9 +765,13 @@ function aiInput(c, dt, Tr) {
       }
     }
     // car-following: in line with a car ahead, keep a speed-dependent gap (brake early, not into its gearbox)
-    if (dp > 0 && dp < 16 && !o.dnf && Math.abs(o.lat - c.lat) < 2.4) {
-      const gap = dp * DS - 2.5, want = 6 + o.v * 0.12;
+    if (dp > 0 && dp < (oval ? 24 : 16) && !o.dnf && Math.abs(o.lat - c.lat) < (oval ? 3.2 : 2.4)) {
+      const gap = dp * DS - 2.5, want = (oval ? 9 : 6) + o.v * (oval ? 0.16 : 0.12);
       follow = Math.min(follow, o.v + (gap - want) * 0.7);
+    }
+    // multi-class (Le Mans): a car from a faster class closing in behind gets waved through
+    if (dp < -1 && dp > -18 && !o.dnf && o.spec && c.spec && o.spec.vmax > c.spec.vmax + 0.05) {
+      c.laneTarget = clamp((o.lat >= c.lat ? -1 : 1) * (W - 1.6) - Tr.race[c.idx], -2 * W, 2 * W); c.blockT = 0.8; continue;
     }
     // defending: a faster car close behind on a straight gets one move to cover the inside
     if (dp < -2 && dp > -14 && !o.dnf && !o.finished) {
@@ -771,7 +808,7 @@ function aiInput(c, dt, Tr) {
   const want = clamp(ff + err * 2.2 + latErr * (pathHere !== null ? 0.12 : 0.05), -1, 1);
   c.steer += clamp(want - c.steer, -10 * dt, 10 * dt);
   let target = Infinity;
-  const prof = c.lateBrake ? Tr.vprof2 : Tr.vprof;
+  const pp = speedProfiles(Tr, c.spec || CLASSES.f1), prof = c.lateBrake ? pp[1] : pp[0];
   for (let k = 1; k <= 6; k++) target = Math.min(target, prof[(c.idx + k) % N]);
   // going over the limit only pays in slow corners; in fast sweepers the best AI drive exactly on it
   const pace = c.pace > 1 ? 1 + (c.pace - 1) * clamp((72 - target) / 30, 0, 1) : c.pace;
@@ -779,6 +816,7 @@ function aiInput(c, dt, Tr) {
   // aggressive drivers brake later when they are attacking
   if (c.attackT > 0 && clearRun) target *= 1 + 0.012 * per.agg;
   if (racing() && c.maxDone < 0 && game.raceTime < 40 && !clearRun) target *= 0.96;
+  if (oval && !clearRun) target *= 0.975; // a little margin into oval turns, where everyone is close together
   // mistakes: lock-ups and running wide, more likely in the wet and under pressure
   if (racing() && !game.flag && c.mistT <= -4 && c.v > 30 && c.v > target + 4) {
     const rate = (1 - per.cons) * 0.008 * (weather.wetAt(c.idx) > 0.3 ? 2.5 : 1) * (pressure ? 1.8 : 1);
@@ -917,7 +955,7 @@ function carAhead(c) {
 const freeDrs = () => !isRace() && weather.average() < 0.25;
 const drsEnabled = c => freeDrs() || (racing() && !game.flag && c.maxDone >= 1 && c.maxDone >= (game.drsHoldLap || 0) && weather.average() < 0.25);
 function drsLogic(c, prevIdx, Tr) {
-  if (c.pit || c.dnf) { c.drsOpen = false; return; }
+  if (c.pit || c.dnf || (c.spec && !c.spec.drs)) { c.drsOpen = false; return; }
   const N = Tr.N;
   Tr.drs.forEach((z, k) => {
     if (crossed(N, prevIdx, c.idx, z.detect)) {
@@ -1118,7 +1156,7 @@ function checkLaps(c, Tr) {
     else if (c.isPlayer) {
       if (valid && game.session === 'tt' && LB_ON && lt <= c.bestLap) {
         if (!lbName()) radio('Set your driver name in the Time Trial menu to go on the global leaderboard.', 'info', 6);
-        else lbSubmit(Tr.def.id, lt).then(pos => { if (pos) radio('Lap ' + fmt(lt) + ' is P' + pos + ' on the global leaderboard!', pos <= 3 ? 'good' : 'info', 6); });
+        else lbSubmit(serKey(Tr.def.id), lt).then(pos => { if (pos) radio('Lap ' + fmt(lt) + ' is P' + pos + ' on the global leaderboard!', pos <= 3 ? 'good' : 'info', 6); });
       }
       if (valid && (!game.record || lt < game.record) && (game.session === 'tt' || !isRace())) { game.record = lt; store.set(bestKey(Tr), String(lt)); flashMsg('NEW RECORD', 2.5, fmt(lt)); }
       else if (!valid) flashMsg('LAP INVALID', 2, fmt(lt) + ' · track limits');
@@ -1259,7 +1297,7 @@ async function refreshLeaderboard() {
   const box = $('lbBox'); if (!box) return;
   const show = settings.mode === 'tt'; box.classList.toggle('hidden', !show); if (!show) return;
   if (!LB_ON) { $('lbList').innerHTML = '<small>The global leaderboard is not switched on yet.</small>'; return; }
-  const id = TRACKS[settings.track].id, req = ++lbReq; $('lbTitle').textContent = 'Global leaderboard · ' + TRACKS[settings.track].name;
+  const id = serKey(TRACKS[settings.track].id), req = ++lbReq; $('lbTitle').textContent = 'Global leaderboard · ' + SER.short + ' · ' + TRACKS[settings.track].name;
   $('lbList').innerHTML = '<small>Loading…</small>';
   const rows = await lbFetch(id); if (req !== lbReq) return;
   if (!rows) { $('lbList').innerHTML = '<small>Could not reach the leaderboard.</small>'; return; }
@@ -1282,7 +1320,7 @@ function renderRoom() {
   const links = net.linkInfo(), host = net.room[0];
   $('mpPlayers').innerHTML = net.room.map((p, k) => '<div class="mpp"><i style="background:' + LIVERIES[p.livery || 0] + '"></i>' + String(p.name || 'Driver').replace(/[<>&]/g, '') +
     (k === 0 ? ' <span class="tag">HOST</span>' : '') + (p.id === net.id ? ' <span class="tag you">YOU</span>' : ' <span class="tag ' + (links[p.id] ? 'ok' : '') + '">' + (links[p.id] ? 'DIRECT' : 'RELAY') + '</span>') + '</div>').join('');
-  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' : (net.isHost ? 'You are the host: pick the track and laps, then press Start.' : '');
+  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + (SERIES[host.series] || SER).name + ' · ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' : (net.isHost ? 'You are the host: pick the track and laps, then press Start.' : '');
   refreshStartBtn();
 }
 function refreshStartBtn() {
@@ -1293,8 +1331,8 @@ function refreshStartBtn() {
 }
 function mpShareInfo() {
   if (!net.code) return;
-  const info = JSON.stringify([settings.track, settings.laps, settings.livery, mpName()]);
-  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ track: settings.track, laps: settings.laps, livery: settings.livery, name: mpName() }); }
+  const info = JSON.stringify([SER.id, settings.track, settings.laps, settings.livery, mpName()]);
+  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, livery: settings.livery, name: mpName() }); }
 }
 async function mpEnter(code) {
   if (!mpName() || mpName() === 'Driver') { mpStatus('Type your driver name in the box above first.'); $('mpName').focus(); $('mpName').classList.add('need'); return; }
@@ -1326,13 +1364,14 @@ function mpHostStart() {
   if (!net.isHost) return;
   const players = net.room.map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0 }));
   const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
-  const cfg = { track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() };
+  const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() };
   net.broadcast('start', { cfg }); startMp(cfg);
   setTimeout(() => net.broadcast('start', { cfg }), 1200); setTimeout(() => net.broadcast('start', { cfg }), 3500);
 }
 function startMp(cfg) {
   if (!cfg.players.some(p => p.id === net.id)) return;
   if (game.mp && game.mp.race === cfg.race) return; // already racing this one (repeat of the start message)
+  if (cfg.series && cfg.series !== SER.id) { settings.series = cfg.series; applySeries(cfg.series); }
   settings.track = cfg.track;
   withLoading(() => {
     hideAllOverlays(); game.paused = false;
@@ -1342,7 +1381,8 @@ function startMp(cfg) {
     clearCars();
     cfg.players.forEach((pl, k) => {
       const colr = LIVERIES[pl.livery] || LIVERIES[0], acc = colr === '#111827' ? '#ffcc00' : '#111827', mine = pl.id === net.id;
-      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium' }),
+      const mcls = SER.multiClass ? 'hyper' : SER.cls;
+      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium', model: CLASSES[mcls].model }), { cls: mcls, spec: CLASSES[mcls] },
         { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
           teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined });
       game.cars.push(c); if (mine) game.player = c;
@@ -1350,7 +1390,7 @@ function startMp(cfg) {
     game.mate = null;
     for (const c of game.cars) { resetState(c); c.stints = []; scene.add(c.group); }
     game.player.steering.visible = true;
-    game.seed = 99; game.lapEst = estimateLap(Tr, aiPace(50), Tr.vprof); game.record = recordFor(Tr); game.fastest = Infinity; game.wxMode = 'dry';
+    game.seed = 99; game.lapEst = estimateLap(Tr, aiPace(50), null, 1, CLASSES[SER.cls]); game.record = recordFor(Tr); game.fastest = Infinity; game.wxMode = 'dry';
     $('menu').classList.add('hidden'); $('results').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden');
     buildMinimap(Tr); audio.init();
     game.grid = cfg.grid.map(carByNet).filter(Boolean);
@@ -1594,10 +1634,11 @@ function updateCarVisuals(dt) {
     const sp = Math.abs(c.v);
     if (c.v < -0.5) { c.gear = -1; c.rpm = 4500 + sp * 400; }
     else {
-      let g = 1; while (g < 8 && sp > GEARS[g]) g++;
-      c.gear = sp < 0.3 ? 0 : g;
-      const lo = GEARS[g - 1], hi = GEARS[g] === 200 ? 95 : GEARS[g];
-      c.rpm = c.gear === 0 ? 4000 : 5200 + clamp((sp - lo) / (hi - lo), 0, 1) * 6800;
+      const spV = sp / ((c.spec && c.spec.vmax) || 1);
+      let g = 1; while (g < 8 && spV > GEARS[g]) g++;
+      c.gear = spV < 0.3 ? 0 : g;
+      const lo = GEARS[g - 1], hi = GEARS[g] === 200 ? 91 : GEARS[g];
+      c.rpm = c.gear === 0 ? 4000 : 5200 + clamp((spV - lo) / (hi - lo), 0, 1) * 6800;
     }
     if (game.phase !== 'lights' && game.phase !== 'garage') carEffects(c, dt);
   }
@@ -1781,7 +1822,7 @@ function raceBoard() {
     else if (c.finished && L.finished) gap = '+' + (c.finishTime - L.finishTime).toFixed(1);
     else if (L.prog - c.prog >= Tr.N) gap = '+' + Math.floor((L.prog - c.prog) / Tr.N) + ' LAP';
     else { const b = c.lastBucket, tl = L.splits[b], tc = c.splits[b]; gap = (tl !== undefined && tc !== undefined) ? '+' + Math.max(0, tc - tl).toFixed(1) : '—'; }
-    html += '<div class="r' + (c.isPlayer ? ' me' : '') + (c.mate ? ' mate' : '') + (c.dnf ? ' out' : '') + '"><span class="p">' + (k + 1) + '</span><span class="c" style="background:' + c.color + '"></span><span class="n">' + c.code + '<i class="ty" style="--tc:' + COMP[c.tyre.comp].color + '">' + COMP[c.tyre.comp].s + '</i>' + (c.drsOpen ? '<i class="d">DRS</i>' : '') + (c.penalty ? '<i class="pen">+' + c.penalty + '</i>' : '') + '</span><span class="g">' + gap + '</span></div>';
+    html += '<div class="r' + (c.isPlayer ? ' me' : '') + (c.mate ? ' mate' : '') + (c.dnf ? ' out' : '') + '"><span class="p">' + (k + 1) + '</span><span class="c" style="background:' + c.color + '"></span><span class="n">' + c.code + (SER.multiClass && c.spec ? '<i class="cls ' + c.cls + '">' + (c.cls === 'gt3' ? 'GT3' : 'HY') + '</i>' : '') + '<i class="ty" style="--tc:' + COMP[c.tyre.comp].color + '">' + COMP[c.tyre.comp].s + '</i>' + (c.drsOpen ? '<i class="d">DRS</i>' : '') + (c.penalty ? '<i class="pen">+' + c.penalty + '</i>' : '') + '</span><span class="g">' + gap + '</span></div>';
   });
   $('board').innerHTML = html;
 }
@@ -1821,7 +1862,7 @@ function showResults() {
   let fl = Infinity; rows.forEach(r => fl = Math.min(fl, r.c.bestLap));
   const pIdx = rows.findIndex(r => r.c.isPlayer) + 1, pr = rows[pIdx - 1];
   $('resTitle').textContent = pr.c.dnf ? 'Retired' : pIdx === 1 ? 'Victory!' : 'Finished P' + pIdx;
-  $('resSub').textContent = (champ ? 'Round ' + (settings.track + 1) + ' of ' + TRACKS.length + ' · ' : '') + Tr.def.name + ' · ' + game.laps + ' laps';
+  $('resSub').textContent = (champ ? 'Round ' + (calIdx().indexOf(settings.track) + 1) + ' of ' + calIdx().length + ' · ' : '') + Tr.def.name + ' · ' + game.laps + ' laps';
   let html = '<tr><th>Pos</th><th>Driver</th><th>Team</th><th>Time</th><th>Best lap</th><th>Tyres</th>' + (champ ? '<th>Pts</th>' : '') + '</tr>';
   rows.forEach((r, k) => {
     const time = r.c.dnf ? 'DNF' : k === 0 ? fmt(r.t) : '+' + (r.t - rows[0].t).toFixed(3) + (r.est ? '*' : '');
@@ -1835,7 +1876,7 @@ function showResults() {
   if (champ) {
     const s = game.season;
     rows.forEach(r => { s.pts[r.c.code] = (s.pts[r.c.code] || 0) + r.pts; });
-    s.round++; s.finished = s.round >= TRACKS.length; saveSeason(s);
+    s.round++; s.finished = s.round >= calIdx().length; saveSeason(s);
     const names = { YOU: ['You', LIVERIES[settings.livery]] };
     s.lineup.forEach((l, k) => { names[DRIVERS[l.di][1]] = [DRIVERS[l.di][0], k === 0 ? LIVERIES[settings.livery] : TEAMS[teamIdxOf(l.di)].color]; });
     const tab = Object.entries(s.pts).sort((a, b) => b[1] - a[1]);
@@ -1843,13 +1884,19 @@ function showResults() {
     $('champTitle').textContent = s.finished ? (myPos === 1 ? 'You are World Champion!' : 'Season complete: P' + myPos) : 'Championship after round ' + s.round;
     $('champTable').innerHTML = tab.slice(0, 10).map((e, k) => '<tr class="' + (e[0] === 'YOU' ? 'me' : '') + '"><td>' + (k + 1) + '</td><td><span class="sw" style="background:' + names[e[0]][1] + '"></span>' + names[e[0]][0] + '</td><td><b>' + e[1] + '</b></td></tr>').join('') + (myPos > 10 ? '<tr class="me"><td>' + myPos + '</td><td>You</td><td><b>' + s.pts.YOU + '</b></td></tr>' : '');
     $('champBox').classList.remove('hidden');
-    $('rAgain').textContent = s.finished ? 'New season' : 'Next round: ' + TRACKS[s.round].name;
+    $('rAgain').textContent = s.finished ? 'New season' : 'Next round: ' + TRACKS[calIdx()[s.round]].name;
   }
   $('results').classList.remove('hidden');
 }
 
 /* ---------------- Menu ---------------- */
 function refreshMenu() {
+  { // calendar: only this series' tracks, numbered in calendar order
+    const cal = calIdx();
+    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = cal.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k; el.querySelector('.rnd').textContent = String(k + 1).padStart(2, '0'); el.querySelector('.st').innerHTML = cardStats(i); } });
+    $('optLmClass').classList.toggle('hidden', SER.id !== 'lemans');
+    $('menuSub').textContent = SER.name + ' · ' + cal.length + '-round championship';
+  }
   document.querySelectorAll('.seg').forEach(seg => { const k = seg.dataset.opt; seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(settings[k]) === b.dataset.v)); });
   const mode = settings.mode, s = loadSeason();
   ['optLaps', 'optOpp', 'optDiff'].forEach(id => $(id).style.opacity = mode === 'tt' || (mode === 'champ' && s && !s.finished) ? 0.35 : 1);
@@ -1859,7 +1906,7 @@ function refreshMenu() {
   $('mpBox').classList.toggle('hidden', mode !== 'mp');
   if (mode === 'mp') { ['optOpp', 'optDiff', 'optQuali', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = 0.35); $('optLaps').style.opacity = 1; mpShareInfo(); renderRoom(); }
   if (mode === 'champ') {
-    if (s && !s.finished) { settings.track = s.round; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + TRACKS.length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
+    if (s && !s.finished) { settings.track = calIdx()[s.round]; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + calIdx().length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
     else { settings.track = 0; $('seasonInfo').innerHTML = 'A 24-round season. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals and AI skill above. You get a teammate.</small>'; $('newSeason').classList.add('hidden'); }
   }
   $('startBtn').textContent = mode === 'tt' ? 'Start Time Trial' : mode === 'champ' ? (s && !s.finished ? 'Start Round ' + (s.round + 1) : 'Start Season') : 'Start Weekend';
@@ -1876,8 +1923,8 @@ function showLoading(on) { $('loading').classList.toggle('hidden', !on); }
 function withLoading(fn) { showLoading(true); setTimeout(() => { try { fn(); } finally { showLoading(false); } }, 30); }
 function selectTrack(i) { if (settings.mode === 'champ') return; settings.track = i; saveSettings(); refreshMenu(); withLoading(() => buildTrack(i)); }
 function cardStats(i) {
-  const d = TRACKS[i], pv = previewPoints(d, 60), rec = parseFloat(store.get('apexgp2-best-' + d.id));
-  return '<b>' + (pv.length / 1000).toFixed(2) + ' km</b> · ' + (d.type === 'street' ? 'Street' : 'Circuit') + (isFinite(rec) ? ' · <b>' + fmt(rec) + '</b>' : '');
+  const d = TRACKS[i], pv = previewPoints(d, 60), rec = parseFloat(store.get('apexgp2-best-' + serKey(d.id)));
+  return '<b>' + (pv.length / 1000).toFixed(2) + ' km</b> · ' + (d.oval ? 'Oval' : d.type === 'street' ? 'Street' : 'Circuit') + (isFinite(rec) ? ' · <b>' + fmt(rec) + '</b>' : '');
 }
 function initMenu() {
   { const inp = $('lbNameIn'); inp.value = lbName(); inp.addEventListener('change', () => { const v = inp.value.replace(/[^\w .\-]/g, '').trim().slice(0, 16); inp.value = v; store.set('apexgp-name', v); refreshLeaderboard(); }); }
@@ -1887,6 +1934,7 @@ function initMenu() {
     settings[k] = (k === 'laps' || k === 'opp') ? parseInt(v, 10) : v; saveSettings();
     if (k === 'line') world.setRaceLine(v === 'on');
     const prev = settings.track; refreshMenu();
+    if (k === 'series' || k === 'lmClass') { applySeries(settings.series); refreshMenu(); withLoading(() => buildTrack(settings.track)); return; }
     if (k === 'mode' && settings.track !== prev) withLoading(() => buildTrack(settings.track));
   }));
   $('aiSlider').addEventListener('input', e => { settings.ai = parseInt(e.target.value, 10); saveSettings(); $('aiVal').textContent = settings.ai; $('aiDesc').textContent = aiLabel(settings.ai); });
@@ -1910,17 +1958,18 @@ function initMenu() {
   $('mpCreate').onclick = () => { takeName(); mpEnter(null); };
   $('mpJoin').onclick = () => { takeName(); const c = $('mpCode').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length === 4) mpEnter(c); else mpStatus('Room codes are 4 letters or numbers.'); };
   $('mpLeave').onclick = async () => { await net.leave(); renderRoom(); refreshStartBtn(); };
-  $('newSeason').onclick = () => { store.del('apexgp3-season'); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
+  $('newSeason').onclick = () => { store.del(seasonKey()); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
   for (let k = 0; k < 5; k++) { const pod = document.createElement('div'); pod.className = 'pod'; pod.innerHTML = '<i></i><i></i>'; $('startLights').appendChild(pod); }
   for (let k = 0; k < 10; k++) $('shift').appendChild(document.createElement('i'));
   $('pResume').onclick = () => togglePause(false);
   $('pRestart').onclick = () => { if (settings.mode === 'champ') return; withLoading(startWeekend); };
   $('pEnd').onclick = () => { togglePause(false); if (!isRace() && game.session !== 'tt') { game.player.lapInvalid = false; endQualiSession(); } };
   $('pQuit').onclick = toMenu; $('rMenu').onclick = toMenu;
-  $('rAgain').onclick = () => { if (game.mp) return toMenu(); if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del('apexgp3-season'); } withLoading(startWeekend); };
+  $('rAgain').onclick = () => { if (game.mp) return toMenu(); if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del(seasonKey()); } withLoading(startWeekend); };
   $('qNext').onclick = () => { $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
   $('stratGo').onclick = () => withLoading(startRace);
   $('leaveGarage').onclick = leaveGarage;
+  applySeries(settings.series);
   refreshMenu();
   withLoading(() => buildTrack(settings.track));
 }
@@ -1996,12 +2045,12 @@ function updateSound(dt) {
   const p = game.player;
   if (!(game.state === 'race' && p && !game.paused && game.phase !== 'idle' && game.phase !== 'red')) { sound.update(dt, { on: false }); return; }
   let rival = null, bd = 60;
-  for (const o of game.cars) { if (o === p || !o.active || !o.group.visible) continue; const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < bd) { bd = d; rival = { rpm: o.rpm, thr: o.inp.throttle, gain: (1 - d / 60) ** 2 * 0.8 }; } }
+  for (const o of game.cars) { if (o === p || !o.active || !o.group.visible) continue; const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < bd) { bd = d; rival = { eng: o.spec && o.spec.eng, rpm: o.rpm, thr: o.inp.throttle, gain: (1 - d / 60) ** 2 * 0.8 }; } }
   const lock = p.inp.brake > 0.8 && Math.abs(p.v) > 25 && Math.abs(p.steer) > 0.5;
-  sound.update(dt, { on: true, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
+  sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ai26c');
+await loadCarModel('js/car.bin?v=ser26a');
 initMenu();
 requestAnimationFrame(frame);
 

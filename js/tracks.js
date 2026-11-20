@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp, smooth } from './util.js?v=ai26c';
+import { clamp, smooth } from './util.js?v=ser26a';
 
 export const W = 7;        // road half-width (m)
 export const KERB = 1.4;   // kerb width (m)
@@ -31,6 +31,8 @@ export const THEMES = {
   city: T({ sunElev: 48, sunAz: 140, grass: '#666a70', terrain: ['#666a70', '#666a70', '#7a7d84'], relief: 'flat', hillAmp: 30, scenery: { buildings: 800 }, barrier: 'street', wallA: '#f1f5f9', wallB: '#94a3b8', fog: '#d6e2ee' }),
   streetNight: T({ night: true, nightSky: ['#02030a', '#1b1440'], exposure: 0.95, grass: '#2a2c33', terrain: ['#2a2c33', '#2a2c33', '#33353d'], relief: 'flat', hillAmp: 30, scenery: { buildings: 800 }, barrier: 'street', wallA: '#ff2e88', wallB: '#26e0ff', fog: '#130f2a', fogDensity: 0.0003, bloom: 1.0 }),
   marinaNight: T({ night: true, nightSky: ['#020615', '#0e2a4a'], exposure: 0.95, grass: '#2b2f36', terrain: ['#2b2f36', '#2b2f36', '#30343c'], relief: 'flat', hillAmp: 20, water: { level: -2, mode: 'side', angle: 4.0 }, scenery: { buildings: 700 }, barrier: 'street', wallA: '#ffb020', wallB: '#1e3a8a', fog: '#0b1630', fogDensity: 0.0003, bloom: 1.0 }),
+  sarthe: T({ sunElev: 4, sunAz: 285, turbidity: 6, rayleigh: 2.6, exposure: 0.58, lights: true, scenery: { trees: 2600, pines: 1200 }, foliage: ['#24552a', '#2d6630', '#1d4a25', '#3a6d2c'], hillAmp: 60, fog: '#f0b48a', wallB: '#1d4ed8', apron: '#1d4ed8', bloom: 0.5 }),
+  speedway: T({ sunElev: 50, sunAz: 200, grass: '#5d9a3e', terrain: ['#5d9a3e', '#6a9a4a', '#7d9060'], relief: 'flat', hillAmp: 25, scenery: { trees: 600 }, barrier: 'street', wallA: '#f4f6f8', wallB: '#c8102e', apron: '#7a7d84' }),
   lake: T({ sunElev: 35, sunAz: 100, water: { level: -3, mode: 'low' }, hillAmp: 160, scenery: { trees: 1200, pines: 600 }, wallB: '#0284c7', apron: '#0284c7' }),
   autumn: T({ sunElev: 24, sunAz: 230, turbidity: 5, grass: '#7a8a3a', terrain: ['#7a8a3a', '#8a7f45', '#7f6f50'], scenery: { trees: 2000 }, foliage: ['#c8642a', '#d98b2b', '#a8441f', '#e0b03a', '#6b7a2a'], hillAmp: 150, fog: '#e6d8c4', wallB: '#b91c1c', apron: '#b91c1c' }),
   vineyard: T({ sunElev: 11, sunAz: 260, turbidity: 4, rayleigh: 2, exposure: 0.58, grass: '#8a9a4a', terrain: ['#8a9a4a', '#9a9a55', '#a68f60'], scenery: { shrubs: 2200, trees: 400 }, foliage: ['#4a6a2a', '#5a7a30', '#6a7a35'], hillAmp: 120, fog: '#f0cfa8', wallB: '#7e22ce', apron: '#7e22ce' }),
@@ -101,6 +103,59 @@ export const TRACKS = [
   { id: 'abudhabi', name: 'Abu Dhabi', loc: 'United Arab Emirates · Yas Island', blurb: 'Season finale from sunset into the night.', theme: 'sunsetCoast', runoff: 14, pit: 'R', drs: [1418, 2638], scale: 1,
     pts: [[-13,-69],[9,-72],[31,-75],[52,-78],[74,-80],[96,-83],[118,-86],[139,-89],[161,-92],[183,-95],[205,-98],[226,-102],[245,-114],[254,-133],[253,-155],[248,-176],[243,-198],[238,-219],[233,-241],[228,-262],[223,-283],[218,-305],[212,-326],[202,-345],[186,-360],[167,-370],[146,-377],[125,-384],[104,-391],[84,-401],[66,-413],[50,-428],[36,-445],[25,-464],[18,-484],[15,-506],[17,-528],[22,-550],[28,-571],[33,-592],[39,-613],[44,-635],[47,-656],[49,-678],[50,-700],[49,-722],[47,-744],[44,-766],[42,-788],[39,-809],[36,-831],[33,-853],[31,-875],[28,-897],[25,-918],[22,-940],[20,-962],[17,-984],[11,-1005],[-1,-1023],[-21,-1031],[-41,-1025],[-55,-1008],[-63,-987],[-69,-966],[-75,-945],[-80,-924],[-85,-902],[-91,-881],[-98,-860],[-105,-840],[-112,-819],[-119,-798],[-126,-777],[-133,-756],[-140,-735],[-147,-715],[-154,-694],[-161,-673],[-168,-652],[-175,-631],[-182,-611],[-189,-590],[-196,-569],[-203,-548],[-210,-527],[-217,-507],[-224,-486],[-231,-465],[-238,-444],[-245,-423],[-252,-402],[-259,-382],[-266,-361],[-273,-340],[-280,-319],[-287,-298],[-293,-277],[-300,-256],[-306,-235],[-311,-214],[-317,-193],[-324,-172],[-330,-151],[-337,-130],[-343,-109],[-350,-88],[-356,-67],[-363,-46],[-370,-25],[-377,-4],[-384,16],[-391,37],[-398,58],[-404,79],[-396,98],[-374,99],[-352,99],[-337,113],[-330,134],[-325,155],[-319,176],[-313,197],[-305,218],[-297,238],[-287,258],[-275,276],[-262,294],[-249,311],[-234,328],[-219,343],[-202,358],[-185,372],[-168,385],[-151,399],[-134,413],[-116,426],[-99,440],[-82,453],[-65,467],[-48,481],[-30,494],[-13,508],[4,522],[21,535],[39,548],[58,560],[76,572],[95,583],[114,593],[134,603],[154,613],[174,622],[194,631],[214,640],[234,650],[253,659],[273,668],[293,677],[314,685],[336,688],[357,683],[376,672],[390,655],[398,635],[400,613],[396,592],[387,572],[373,555],[355,542],[335,535],[313,532],[291,530],[269,528],[247,526],[225,525],[204,523],[182,521],[160,519],[138,517],[117,512],[97,503],[78,491],[59,479],[41,468],[22,456],[6,441],[-4,422],[-10,401],[-14,379],[-19,358],[-23,336],[-22,315],[-4,304],[18,300],[39,297],[61,292],[80,282],[90,263],[92,241],[92,219],[91,197],[85,176],[68,163],[46,159],[24,158],[3,159],[-19,163],[-41,166],[-63,169],[-84,173],[-106,176],[-128,179],[-149,182],[-171,183],[-193,180],[-213,172],[-228,156],[-239,137],[-250,118],[-261,98],[-271,79],[-283,61],[-293,41],[-300,20],[-301,-1],[-293,-21],[-274,-31],[-252,-34],[-230,-37],[-209,-41],[-187,-44],[-165,-47],[-143,-50],[-122,-53],[-100,-56],[-78,-59],[-56,-62],[-35,-66]] },
 ];
+
+/* ---- ovals, generated from their real dimensions (anticlockwise: left turns) ----
+   rect: straight, short chute between the two halves of each end, turn radius, banking (degrees) */
+function ovalPts(straight, chute, R, step = 20) {
+  const pts = [], C = [[straight / 2, -R], [straight / 2, -R - chute], [-straight / 2, -R - chute], [-straight / 2, -R]];
+  const line = (a, b) => { const n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step)); for (let k = 0; k < n; k++) pts.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); };
+  const arc = (c, a0, a1) => { const n = Math.max(2, Math.round(Math.abs(a1 - a0) * R / step)); for (let k = 0; k < n; k++) { const a = a0 + (a1 - a0) * k / n; pts.push([c[0] + Math.cos(a) * R, c[1] + Math.sin(a) * R]); } };
+  const H = Math.PI / 2;
+  line([0, 0], [straight / 2, 0]); arc(C[0], H, 0);
+  if (chute > 0) line([straight / 2 + R, -R], [straight / 2 + R, -R - chute]);
+  arc(C[1], 0, -H); line([straight / 2, -2 * R - chute], [-straight / 2, -2 * R - chute]);
+  arc(C[2], -H, -2 * H); if (chute > 0) line([-straight / 2 - R, -R - chute], [-straight / 2 - R, -R]);
+  arc(C[3], -2 * H, -3 * H); line([-straight / 2, 0], [0, 0]);
+  return pts.map(p => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]);
+}
+function ovalBanks(straight, chute, R, deg) {
+  const q = Math.PI / 2 * R, h = straight / 2;
+  if (chute > 0) return [[h, h + q, deg], [h + q + chute, h + 2 * q + chute, deg], [h + 2 * q + chute + straight, h + 3 * q + chute + straight, deg], [h + 3 * q + 2 * chute + straight, h + 4 * q + 2 * chute + straight, deg]];
+  return [[h, h + 2 * q, deg], [h + 2 * q + straight, h + 4 * q + straight, deg]];
+}
+TRACKS.push(
+  { id: 'indianapolis', name: 'Indianapolis', loc: 'United States · Speedway, Indiana', blurb: 'The 2.5-mile Brickyard: four 9° corners taken flat out at 370 km/h.', theme: 'speedway', runoff: 2.5, pit: 'L', drs: [], oval: true, kerb: ['#e8e8e8', '#e8e8e8'],
+    banks: ovalBanks(1006, 201, 256, 9.2), scale: 1, pts: ovalPts(1006, 201, 256) },
+  { id: 'texas', name: 'Fort Worth', loc: 'United States · Texas', blurb: '1.5-mile high-banked oval: 24° turns, pack racing in the draft.', theme: 'speedway', runoff: 2.5, pit: 'L', drs: [], oval: true, kerb: ['#e8e8e8', '#e8e8e8'],
+    banks: ovalBanks(600, 0, 190, 24), scale: 1, pts: ovalPts(600, 0, 190) },
+  { id: 'iowa', name: 'Newton', loc: 'United States · Iowa', blurb: 'Seven-eighths of a mile, 14° banking: a bullring with no time to breathe.', theme: 'speedway', runoff: 2.5, pit: 'L', drs: [], oval: true, kerb: ['#e8e8e8', '#e8e8e8'],
+    banks: ovalBanks(300, 0, 125, 14), scale: 1, pts: ovalPts(300, 0, 125) },
+);
+
+/* ---- Circuit de la Sarthe (Le Mans), drawn from its layout: x = east, -z = north, clockwise ----
+   Dunlop curve and chicane, the Esses, Tertre Rouge, the 6 km Mulsanne straight with its two chicanes,
+   Mulsanne corner, Indianapolis, Arnage, the Porsche curves, Maison Blanche and the Ford chicanes */
+{
+  const P = [];
+  const at = (x, y) => P.push([x, -y]);
+  [[0, 0], [30, 160], [60, 320], [95, 470], [140, 580], [200, 650], [250, 680], [285, 668], [320, 690], [370, 700], [440, 690], [520, 655], [580, 615], [625, 612], [670, 618], [705, 598], [728, 560], [748, 510]].forEach(p => at(...p));
+  // Mulsanne straight (heading SSE) with two chicanes
+  const S0 = [770, 455], dir = [0.36, -0.933], perp = [0.933, 0.36], L = 6000;
+  const on = (t, off = 0) => at(S0[0] + dir[0] * L * t + perp[0] * off, S0[1] + dir[1] * L * t + perp[1] * off);
+  for (const t of [0.04, 0.12, 0.2, 0.27, 0.31]) on(t);
+  on(0.318, 0); on(0.322, 14); on(0.328, 16); on(0.334, 2); on(0.339, -12); on(0.344, -12); on(0.35, 0);
+  for (const t of [0.4, 0.48, 0.56, 0.62, 0.645]) on(t);
+  on(0.653, 0); on(0.657, -14); on(0.663, -16); on(0.669, -2); on(0.674, 12); on(0.679, 12); on(0.685, 0);
+  for (const t of [0.74, 0.8, 0.86, 0.9, 0.94, 0.97]) on(t, t > 0.85 ? (t - 0.85) * 60 : 0);
+  // Mulsanne corner (sharp right), then north-west to Indianapolis and Arnage
+  [[2915, -5080], [2935, -5135], [2915, -5170], [2860, -5175], [2700, -5135], [2450, -5060], [2150, -4965], [1850, -4870], [1580, -4785], [1420, -4725],
+   [1330, -4680], [1285, -4640], [1250, -4612], [1205, -4612], [1150, -4640], [1060, -4660], [960, -4650], [905, -4625], [880, -4580], [885, -4520], [900, -4430]].forEach(p => at(...p));
+  // run north to the Porsche curves, Maison Blanche, Ford chicanes and the line
+  [[880, -4150], [820, -3800], [740, -3450], [650, -3100], [560, -2780], [500, -2560], [470, -2430], [495, -2330], [530, -2250], [505, -2150], [455, -2080], [440, -1980],
+   [460, -1870], [430, -1720], [380, -1560], [320, -1330], [255, -1080], [190, -820], [140, -600], [110, -470], [90, -400], [118, -360], [118, -300], [80, -255], [55, -195], [80, -150], [70, -95], [35, -45]].forEach(p => at(...p));
+  TRACKS.push({ id: 'lemans', name: 'Le Mans', loc: 'France · Circuit de la Sarthe', blurb: '13.6 km of public roads at dusk: the Mulsanne straight, Arnage and the Porsche curves.', theme: 'sarthe', runoff: 9, pit: 'R', drs: [],
+    kerb: ['#d42027', '#f4f4f4'], elev: [[0, 0], [300, 3], [650, 9], [900, 4], [1300, 0], [4000, 3], [7500, 0], [9000, 2], [11000, 4], [12600, 1]], scale: 0.945, pts: P });
+}
 
 /* Lightweight centreline for menu previews */
 export function previewPoints(def, n = 240) {
@@ -235,24 +290,9 @@ function buildTrackData(def) {
     rks[i] = d > 0 ? -2 * cross / d : 0;
   }
   T.rk = new Float32Array(N); for (let i = 0; i < N; i++) { let a = 0; for (let j = -3; j <= 3; j++) a += rks[(i + j + N) % N]; T.rk[i] = a / 7; }
-  const vcorner = F();
-  for (let i = 0; i < N; i++) {
-    let k = 0; for (let j = -1; j <= 1; j++) k = Math.max(k, kr[(i + j + N) % N]);
-    // lateral grip: AI_GRIP * (18 + 0.25 v) (downforce grows with speed) plus banking
-    const G = AI_GRIP, Ab = 18 * G + 9.81 * T.bankSin[i] * 1.6, b = 0.25 * G;
-    vcorner[i] = k > 1e-5 ? Math.min(95, (b + Math.sqrt(b * b + 4 * k * Ab)) / (2 * k)) : 95;
-  }
-  // braking profiles: cautious (most AI) and late-braking (top-level AI)
-  const brakeProfile = brk => {
-    const v = Float32Array.from(vcorner);
-    for (let pass = 0; pass < 3; pass++) for (let i = N - 1; i >= 0; i--) {
-      const nv = v[(i + 1) % N], lim = Math.sqrt(nv * nv + 2 * brk * DS);
-      if (v[i] > lim) v[i] = lim;
-    }
-    return v;
-  };
-  T.vprof = brakeProfile(27);
-  T.vprof2 = brakeProfile(35);
+  T.kr = kr; T.profCache = new Map();
+  const base = speedProfiles(T, { grip: 1, brake: 1, vmax: 1 });
+  T.vprof = base[0]; T.vprof2 = base[1];
 
   // DRS: every long flat-out section (including gently curving straights), detection 150 m before
   {
@@ -341,7 +381,7 @@ function buildTrackData(def) {
     const lim = limFor(side, range);
     // short lanes (Monaco) get shorter limiter zones and tighter box spacing
     const len = range.length, limIn = Math.min(26, Math.round(len * 0.18)), limOut = len - limIn, first = limIn + Math.min(22, Math.max(16, Math.round(len * 0.12))), avail = limOut - Math.min(18, Math.round(len * 0.1)) - first;
-    const boxGap = clamp(Math.floor(avail / 12), 3, 4);
+    const boxGap = clamp(Math.floor(avail / 13), 3, 4);
     T.pit = { side, entry, exit, wall: lim, fast: side * (lim + 3), lat: side * (lim + 7.3), outer: lim + 10, len, boxStart: (entry + first) % N, boxGap, limIn, limOut };
   }
   return T;
@@ -355,6 +395,29 @@ export function bankH(T, i, lat) {
   return e + b * clamp(lat, -Wb, Wb) + Math.abs(b) * Wb;
 }
 export const elevAt = (T, i) => T.elev ? T.elev[i] : 0;
+/* AI speed plans for a car spec ({grip, brake, vmax} as multiples of the F1 car): the fastest speed through
+   each corner, and how early to brake for it. [cautious, late-braking]; cached per spec on the track. */
+export function speedProfiles(T, spec) {
+  const key = spec.grip + '/' + spec.brake + '/' + spec.vmax;
+  if (T.profCache.has(key)) return T.profCache.get(key);
+  const N = T.N, kr = T.kr, vcorner = new Float32Array(N), cap = 95 * spec.vmax;
+  for (let i = 0; i < N; i++) {
+    let k = 0; for (let j = -1; j <= 1; j++) k = Math.max(k, kr[(i + j + N) % N]);
+    // lateral grip: AI_GRIP * grip * (18 + 0.25 v) (downforce grows with speed) plus banking
+    const G = AI_GRIP * spec.grip, Ab = 18 * G + 9.81 * T.bankSin[i] * 1.6, b = 0.25 * G;
+    vcorner[i] = k > 1e-5 ? Math.min(cap, (b + Math.sqrt(b * b + 4 * k * Ab)) / (2 * k)) : cap;
+  }
+  const brakeProfile = brk => {
+    const v = Float32Array.from(vcorner);
+    for (let pass = 0; pass < 3; pass++) for (let i = N - 1; i >= 0; i--) {
+      const nv = v[(i + 1) % N], lim = Math.sqrt(nv * nv + 2 * brk * DS);
+      if (v[i] > lim) v[i] = lim;
+    }
+    return v;
+  };
+  const k = spec.grip * spec.brake, res = [brakeProfile(27 * k), brakeProfile(35 * k)];
+  T.profCache.set(key, res); return res;
+}
 /* pit entry and exit roads: at sample i, the unsigned lateral edges [a, b] of the slip road on the pit side
    (null where there is none). It peels off the track edge before the entry, curves out to the fast lane,
    and on exit curves back and merges onto the track. Shared by the renderer and the physics. */

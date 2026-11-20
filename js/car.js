@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=ai26c';
+import { canvasTex } from './util.js?v=ser26a';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -155,8 +155,9 @@ function numberTex(num, color, stroke) {
   }, { repeat: false });
 }
 
-export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compound = 'medium' }) {
+export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compound = 'medium', model = 'f1' }) {
   const M = MODEL || buildModel();
+  if (model === 'gt3' || model === 'hyper') return makeClosedCar(model, { color, accent, helmet, number, compound });
   const g = new THREE.Group();
   const mats = {
     body: new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.08 }),
@@ -165,7 +166,7 @@ export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compoun
   };
   const shadow = new THREE.Mesh(SHADOW, SHADOW_MAT); shadow.position.y = 0.025; shadow.renderOrder = 1; g.add(shadow);
   const fwing = new THREE.Group(), rwing = new THREE.Group(); g.add(fwing, rwing);
-  if (EXT) return makeExtCar(g, fwing, rwing, mats, compound);
+  if (EXT) { const car = makeExtCar(g, fwing, rwing, mats, compound); if (model === 'indy') addAeroscreen(g); return car; }
   for (const k in M.merged) {
     const part = k.startsWith('fw_') ? fwing : k.startsWith('rw_') ? rwing : g, mk = k.replace(/^(fw|rw)_/, '');
     part.add(new THREE.Mesh(M.merged[k], mats[mk]));
@@ -281,6 +282,93 @@ export function setCompound(c, comp) { const m = MODEL.wheelMats[comp] || MODEL.
 export function disposeCar(c) { c.mats.body.dispose(); c.mats.acc.dispose(); c.numTex.dispose(); }
 
 /* Safety car: a low grand-tourer with a light bar */
+/* IndyCar: the aeroscreen, a tinted wraparound screen round the front of the cockpit on a titanium frame */
+const SCREEN_GLASS = new THREE.MeshPhysicalMaterial({ color: 0x8fa6b8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+const AERO_GEO = new THREE.CylinderGeometry(0.36, 0.44, 0.3, 28, 1, true, -Math.PI * 0.56, Math.PI * 1.12);
+const AERO_RIM = new THREE.TorusGeometry(0.36, 0.018, 6, 28, Math.PI * 1.12).rotateX(Math.PI / 2).rotateY(Math.PI * 0.5 - Math.PI * 0.56 + Math.PI);
+function addAeroscreen(g) {
+  const sc = new THREE.Mesh(AERO_GEO, SCREEN_GLASS); sc.position.set(0, 0.93, 0.32); sc.renderOrder = 2; g.add(sc);
+  const rim = new THREE.Mesh(AERO_RIM, HALO_MAT); rim.position.set(0, 1.08, 0.32); g.add(rim);
+}
+
+/* ---- closed cars: GT3 (front-engined coupé) and Le Mans Hypercar (prototype) ----
+   Lofted bodies [z, halfWidth, halfHeight, centreY, roundness], the same wheels as the single-seater,
+   and the same parts list (wheels, wings, steering, numbers) so the rest of the game treats them alike. */
+const CLOSED = {
+  gt3: {
+    body: [[-2.28, 0.8, 0.24, 0.66, 3], [-2.15, 0.95, 0.3, 0.66, 4], [-1.75, 1.0, 0.31, 0.66, 5], [-1.0, 0.98, 0.3, 0.66, 6], [0.0, 0.96, 0.29, 0.65, 6],
+      [0.9, 0.98, 0.28, 0.63, 6], [1.45, 1.0, 0.26, 0.6, 5], [1.95, 0.96, 0.21, 0.56, 4], [2.25, 0.86, 0.15, 0.5, 3], [2.36, 0.72, 0.09, 0.46, 2.6]],
+    glass: [[-1.25, 0.55, 0.1, 0.95, 3], [-0.85, 0.66, 0.3, 0.98, 3.5], [0.15, 0.68, 0.32, 0.98, 3.5], [0.65, 0.62, 0.22, 0.95, 3], [0.98, 0.5, 0.05, 0.94, 2.5]],
+    roof: [[-0.95, 0.6, 0.035, 1.272, 4], [0.1, 0.62, 0.035, 1.284, 4], [0.45, 0.58, 0.03, 1.262, 4]],
+    axF: 1.42, axR: -1.38, track: 0.8, helmet: [0.3, 1.0, -0.25], wing: { y: 1.32, z: -2.02, w: 1.86 }, num: [0.995, 0.64, -0.15],
+  },
+  hyper: {
+    body: [[-2.55, 0.86, 0.16, 0.58, 3], [-2.3, 1.0, 0.24, 0.6, 4], [-1.75, 1.0, 0.27, 0.6, 5], [-1.0, 0.95, 0.24, 0.56, 5], [0, 0.92, 0.22, 0.54, 5],
+      [0.9, 0.98, 0.24, 0.56, 5], [1.55, 1.0, 0.26, 0.56, 5], [2.1, 0.95, 0.2, 0.5, 4], [2.45, 0.85, 0.12, 0.42, 3], [2.6, 0.7, 0.06, 0.36, 2.5]],
+    glass: [[-1.05, 0.35, 0.05, 0.86, 3], [-0.7, 0.46, 0.22, 0.9, 3], [0.25, 0.48, 0.24, 0.9, 3], [0.75, 0.4, 0.14, 0.86, 3], [1.15, 0.24, 0.03, 0.82, 2.5]],
+    roof: [[-0.75, 0.3, 0.03, 1.118, 4], [0.2, 0.32, 0.03, 1.135, 4]],
+    axF: 1.5, axR: -1.5, track: 0.82, helmet: [0, 0.95, -0.15], wing: { y: 1.05, z: -2.42, w: 1.95 }, num: [0.97, 0.62, -1.1], fin: true,
+  },
+};
+const CLOSED_GEO = {};
+const GLASS_MAT = new THREE.MeshPhysicalMaterial({ color: 0x0b0f16, roughness: 0.06, metalness: 0.4, clearcoat: 1 });
+const HEAD_MAT = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff6e0, emissiveIntensity: 2.2 });
+const TAIL_MAT = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff1a1a, emissiveIntensity: 2.4 });
+const PLATE_MAT = new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.6 });
+function closedGeo(kind) {
+  if (CLOSED_GEO[kind]) return CLOSED_GEO[kind];
+  const C = CLOSED[kind], box = (w, h, d, x, y, z, ry = 0, rx = 0) => new THREE.BoxGeometry(w, h, d).rotateX(rx).rotateY(ry).translate(x, y, z);
+  const W = C.wing, gw = {
+    body: loft(C.body, 40), glass: loft(C.glass, 28), roof: loft(C.roof, 28),
+    wing: mergeGeometries([box(W.w, 0.035, 0.34, 0, W.y, W.z, 0, -0.12), box(0.025, 0.24, 0.5, W.w / 2, W.y - 0.05, W.z + 0.02), box(0.025, 0.24, 0.5, -W.w / 2, W.y - 0.05, W.z + 0.02),
+      box(0.04, W.y - 0.82, 0.1, 0.42, (W.y + 0.82) / 2, W.z + 0.08), box(0.04, W.y - 0.82, 0.1, -0.42, (W.y + 0.82) / 2, W.z + 0.08)]),
+    splitter: box(1.7, 0.025, 0.2, 0, 0.2, C.body[C.body.length - 1][0] - 0.22),
+    sill: mergeGeometries([box(0.05, 0.12, 2.1, 0.975, 0.42, 0.05), box(0.05, 0.12, 2.1, -0.975, 0.42, 0.05)]),
+    heads: kind === 'gt3' ? mergeGeometries([box(0.36, 0.07, 0.06, 0.6, 0.66, 2.2, 0.35), box(0.36, 0.07, 0.06, -0.6, 0.66, 2.2, -0.35)])
+      : mergeGeometries([box(0.05, 0.04, 0.5, 0.74, 0.74, 2.12, 0.55), box(0.05, 0.04, 0.5, -0.74, 0.74, 2.12, -0.55), box(0.05, 0.04, 0.3, 0.6, 0.7, 2.3, 1.1), box(0.05, 0.04, 0.3, -0.6, 0.7, 2.3, -1.1)]),
+    tails: kind === 'gt3' ? mergeGeometries([box(0.5, 0.06, 0.04, 0.55, 0.86, -2.27), box(0.5, 0.06, 0.04, -0.55, 0.86, -2.27)]) : box(1.72, 0.035, 0.03, 0, 0.84, -2.56),
+    fin: C.fin ? box(0.03, 0.32, 1.55, 0, 0.98, -1.55) : null,
+  };
+  return (CLOSED_GEO[kind] = gw);
+}
+function makeClosedCar(kind, { color, accent, helmet, number, compound }) {
+  const C = CLOSED[kind], G = closedGeo(kind), M = MODEL, g = new THREE.Group();
+  const mats = {
+    body: new THREE.MeshPhysicalMaterial({ color, roughness: 0.38, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.12 }),
+    acc: new THREE.MeshPhysicalMaterial({ color: accent, roughness: 0.4, metalness: 0.1, clearcoat: 0.8 }),
+    carbon: CARBON, dark: DARK, metal: METAL, light: LIGHT,
+  };
+  const shadow = new THREE.Mesh(SHADOW, SHADOW_MAT); shadow.position.y = 0.025; shadow.scale.set(1, 1, 0.9); shadow.renderOrder = 1; g.add(shadow);
+  const fwing = new THREE.Group(), rwing = new THREE.Group(); g.add(fwing, rwing);
+  g.add(new THREE.Mesh(G.body, mats.body), new THREE.Mesh(G.glass, GLASS_MAT), new THREE.Mesh(G.roof, mats.body), new THREE.Mesh(G.sill, mats.acc),
+    new THREE.Mesh(G.heads, HEAD_MAT), new THREE.Mesh(G.tails, TAIL_MAT));
+  if (G.fin) g.add(new THREE.Mesh(G.fin, mats.body));
+  fwing.add(new THREE.Mesh(G.splitter, CARBON)); rwing.add(new THREE.Mesh(G.wing, kind === 'gt3' ? CARBON : mats.acc));
+  // door numbers on white roundels
+  const tex = numberTex(number, '#111111', 'rgba(255,255,255,0)');
+  const nmat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  for (const sx of [1, -1]) {
+    const pl = new THREE.Mesh(new THREE.CircleGeometry(0.2, 24), PLATE_MAT); pl.position.set(sx * C.num[0], C.num[1], C.num[2]); pl.rotation.y = sx * Math.PI / 2; g.add(pl);
+    const n = new THREE.Mesh(NUM_FIN, nmat); n.scale.setScalar(0.9); n.position.set(sx * (C.num[0] + 0.004), C.num[1], C.num[2]); n.rotation.y = sx * Math.PI / 2; g.add(n);
+  }
+  const helmetMesh = new THREE.Group(); helmetMesh.position.set(...C.helmet);
+  helmetMesh.add(new THREE.Mesh(HELMET, new THREE.MeshPhysicalMaterial({ color: helmet, roughness: 0.2, metalness: 0.3, clearcoat: 1 })), new THREE.Mesh(VISOR, VISOR_MAT));
+  g.add(helmetMesh);
+  const wheels = [], stripes = [];
+  for (const [front, sx] of [[true, 1], [true, -1], [false, 1], [false, -1]]) {
+    const Wg = front ? M.front : M.rear;
+    const pivot = new THREE.Group(); pivot.position.set(sx * (C.track + 0.04), 0.36, front ? C.axF : C.axR); g.add(pivot);
+    const spin = new THREE.Group(); pivot.add(spin);
+    spin.add(new THREE.Mesh(Wg.tyre, M.wheelMats.tyre), new THREE.Mesh(Wg.rim, M.wheelMats.rim));
+    const face = new THREE.Mesh(Wg.face, M.wheelMats.face); face.position.x = sx * (Wg.w / 2 - 0.004); face.rotation.y = sx * Math.PI / 2; spin.add(face);
+    for (const s2 of [1, -1]) { const st = new THREE.Mesh(Wg.stripe, M.wheelMats[compound]); st.position.x = s2 * (Wg.w / 2 + 0.002); spin.add(st); stripes.push(st); }
+    wheels.push({ pivot, spin, front });
+  }
+  const steering = new THREE.Group(); steering.position.set(C.helmet[0], 0.8, C.helmet[2] + 0.45); steering.rotation.x = -0.9; g.add(steering);
+  steering.add(new THREE.Mesh(SW, DARK)); steering.visible = false;
+  return { group: g, wheels, helmet: helmetMesh, steering, cockpitHide: [helmetMesh], mats, numTex: tex, stripes, fwing, rwing, closed: kind };
+}
+
 export function makeSafetyCar() {
   const g = new THREE.Group();
   const paint = new THREE.MeshPhysicalMaterial({ color: '#c9ced6', roughness: 0.25, metalness: 0.7, clearcoat: 1 });

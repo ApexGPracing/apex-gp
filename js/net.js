@@ -155,5 +155,5 @@ export class Net {
   }
   // reliable, rare messages (race start, results) always go over the signalling channel
   broadcast(type, payload) { if (this.tr) this.tr.send({ t: type, from: this.id, ...payload }); }
-  linkInfo() { const out = {}, now = performance.now(); for (const [id, p] of this.peers) out[id] = p.open && now - (this.lastRx.get(id) || 0) < 3000; return out; }
+  linkInfo() { const out = {}, now = performance.now(); for (const [id, p] of this.peers) out[id] = p.open && (!this.lastRx.has(id) || now - this.lastRx.get(id) < 3000); return out; }
 }

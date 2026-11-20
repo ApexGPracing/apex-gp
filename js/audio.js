@@ -1,6 +1,7 @@
 /* Synthesised sound: a screaming 2011-era V8 (18,000 rpm, exhaust-blown diffuser) for the player's car
    (plus the nearest rival), off-throttle "hot blowing" stutter and crackle, seamless-shift cuts,
    downshift blips, kerb rumble, tyre squeal, wind, rain and impacts. */
+const ENG_F1 = { lo: 7000, hi: 18000, cyl: 8, roar: 1, scream: 1 };
 export class Sound {
   constructor() { this.ctx = null; this.muted = false; this.prevGear = 0; this.popT = 0; this.stutT = 0; this.blowAmt = 0; }
 
@@ -101,19 +102,22 @@ export class Sound {
     r1.start(); r2.start(); r3.start();
     return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG };
   }
-  setEngine(e, rpm, thr, gain, blow = 0) {
-    // the game's rev range (4k-12.5k) is mapped onto a real high-revving V8 range (7k-18k)
-    const t = this.ctx.currentTime, target = 7000 + Math.min(1, Math.max(0, (rpm - 4000) / 8500)) * 11000;
+  setEngine(e, rpm, thr, gain, blow = 0, eng = ENG_F1) {
+    // the game's rev range (4k-12.5k) is mapped onto the real engine's range (F1 V8: 7k-18k, GT3 V8: 3.5k-8.8k...)
+    const t = this.ctx.currentTime, span = eng.hi - eng.lo, target = eng.lo + Math.min(1, Math.max(0, (rpm - 4000) / 8500)) * span;
+    if (e.eng !== eng) { e.eng = eng; e.srpm = target; }
     e.srpm += (target - e.srpm) * 0.22;
-    e.jit = (e.jit || 0) * 0.85 + (Math.random() - 0.5) * 0.0035;
-    const fire = e.srpm / 60 * 4 * (1 + e.jit), base = fire / 2;
+    // combustion irregularity; a lazy big V8 (GT3) burbles much more than a screaming F1 engine
+    const lumpy = eng.cyl === 8 && eng.hi < 10000 ? 4 : 1;
+    e.jit = (e.jit || 0) * 0.85 + (Math.random() - 0.5) * 0.0035 * lumpy;
+    const fire = e.srpm / 60 * eng.cyl / 2 * (1 + e.jit), base = fire / 2;
     e.o1.frequency.setTargetAtTime(base, t, 0.015); e.o2.frequency.setTargetAtTime(base * 1.0035, t, 0.015);
     e.f1.frequency.setTargetAtTime(1600 + e.srpm * 0.08, t, 0.05);
     e.f2.frequency.setTargetAtTime(2500 + thr * 4500 + e.srpm * 0.15, t, 0.05);
     // scream gets stronger with revs and throttle; rasp is strongest on throttle
-    const hi = Math.min(1, Math.max(0, (e.srpm - 9000) / 9000));
+    const hi = Math.min(1, Math.max(0, (e.srpm - (eng.lo + 0.18 * span)) / (0.82 * span))) * eng.scream;
     e.sc.frequency.setTargetAtTime(fire, t, 0.015); e.sc2.frequency.setTargetAtTime(fire * 1.5, t, 0.015);
-    e.scBand.frequency.setTargetAtTime(1600 + e.srpm * 0.22, t, 0.05);
+    e.scBand.frequency.setTargetAtTime(1600 + fire * 3.3, t, 0.05);
     e.scG.gain.setTargetAtTime(0.3 + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);
     e.pulse.frequency.setTargetAtTime(fire, t, 0.015);
     e.nzBand.frequency.setTargetAtTime(1200 + e.srpm * 0.08, t, 0.05);
@@ -121,9 +125,9 @@ export class Sound {
     e.rasp.gain.setTargetAtTime(0.15 + 0.45 * thr + 0.6 * blow, t, 0.04);
     // roar: drive and brightness open up with throttle; stays meaty on hot-blown overrun
     e.r1.frequency.setTargetAtTime(fire, t, 0.015); e.r2.frequency.setTargetAtTime(base * 1.004, t, 0.015); e.r3.frequency.setTargetAtTime(fire * 2, t, 0.015);
-    e.rDrive.gain.setTargetAtTime(1 + 2.8 * thr + 2 * blow, t, 0.04);
+    e.rDrive.gain.setTargetAtTime((1 + 2.8 * thr + 2 * blow) * eng.roar, t, 0.04);
     e.rLp.frequency.setTargetAtTime(1400 + thr * 3200 + e.srpm * 0.12, t, 0.05);
-    e.roarG.gain.setTargetAtTime(0.25 + 0.4 * thr + 0.3 * blow, t, 0.04);
+    e.roarG.gain.setTargetAtTime((0.25 + 0.4 * thr + 0.3 * blow) * eng.roar, t, 0.04);
     e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.09 + 0.17 * Math.max(thr, 0.75 * blow)), t, 0.04);
   }
   burst(gain, dur, freq = 1500, q = 1) {
@@ -153,14 +157,16 @@ export class Sound {
     // stutters and crackles loudly into every braking zone instead of going quiet
     const blowOn = s.throttle < 0.15 && s.rpm > 6500 && s.speed > 15 && s.gear > 0;
     this.blowAmt += ((blowOn ? 1 : 0) - this.blowAmt) * Math.min(1, dt * (blowOn ? 14 : 6));
-    this.setEngine(this.engine, rpm, Math.max(s.throttle, this.blip > 0 ? 0.6 : 0), 1, this.blowAmt);
+    // the exhaust-blown-diffuser stutter is an F1 thing; other engines just crackle a little on the overrun
+    const eng = s.eng || ENG_F1, bm = eng.hi >= 15000 ? 1 : 0.3;
+    this.setEngine(this.engine, rpm, Math.max(s.throttle, this.blip > 0 ? 0.6 : 0), 1, this.blowAmt * bm, eng);
     const gate = this.engine.gate.gain;
-    if (this.blowAmt > 0.05) {
+    if (this.blowAmt * bm > 0.05) {
       // irregular misfire chop, scheduled slightly ahead of the audio clock
       if (this.stutT < t) this.stutT = t;
       while (this.stutT < t + 0.08) {
         const r = Math.random(), lvl = r < 0.3 ? 0.15 : r < 0.55 ? 0.5 : 1;
-        gate.setValueAtTime(1 - this.blowAmt * (1 - lvl), this.stutT);
+        gate.setValueAtTime(1 - this.blowAmt * bm * (1 - lvl), this.stutT);
         this.stutT += 0.008 + Math.random() * 0.022;
       }
       // loud pops and bangs from fuel burning in the exhaust
@@ -168,11 +174,11 @@ export class Sound {
       if (this.popT <= 0) {
         this.popT = 0.025 + Math.random() * 0.07;
         const big = Math.random() < 0.18;
-        this.burst((big ? 0.22 : 0.08 + Math.random() * 0.1) * this.blowAmt, big ? 0.09 : 0.04 + Math.random() * 0.04, big ? 350 + Math.random() * 300 : 700 + Math.random() * 1600, big ? 0.6 : 0.9);
+        this.burst((big ? 0.22 : 0.08 + Math.random() * 0.1) * this.blowAmt * Math.max(bm, 0.6), big ? 0.09 : 0.04 + Math.random() * 0.04, big ? 350 + Math.random() * 300 : 700 + Math.random() * 1600, big ? 0.6 : 0.9);
       }
     } else if (this.stutT) { gate.cancelScheduledValues(t); gate.setTargetAtTime(1, t, 0.01); this.stutT = 0; }
     // nearest rival
-    if (s.rival) this.setEngine(this.rival, s.rival.rpm, s.rival.thr, s.rival.gain, s.rival.thr < 0.15 && s.rival.rpm > 6500 ? 0.8 : 0); else this.rival.out.gain.setTargetAtTime(0, t, 0.1);
+    if (s.rival) this.setEngine(this.rival, s.rival.rpm, s.rival.thr, s.rival.gain, s.rival.thr < 0.15 && s.rival.rpm > 6500 ? 0.8 * ((s.rival.eng || ENG_F1).hi >= 15000 ? 1 : 0.3) : 0, s.rival.eng || ENG_F1); else this.rival.out.gain.setTargetAtTime(0, t, 0.1);
     // kerbs: rumble pulses at the stripe frequency
     this.rumbleLfo.frequency.setTargetAtTime(Math.max(2, s.speed / 2), t, 0.05);
     this.rumble.g.gain.setTargetAtTime(s.kerb && s.speed > 5 ? 0.35 : 0, t, 0.03);
