@@ -170,6 +170,27 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 .mpp{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600;padding:3px 0}.mpp i{width:14px;height:14px;border-radius:3px;display:inline-block}.mpp .tag{font-size:11px;letter-spacing:.1em;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.12);color:var(--muted)}.mpp .tag.ok{background:rgba(47,213,106,.2);color:#2fd56a}.mpp .tag.you{background:rgba(255,204,0,.2);color:#ffcc00}
 #mpName.need{border-color:#ffb020;box-shadow:0 0 0 2px rgba(255,176,32,.4)}#mpStatus{font-weight:600}
 #verTag{position:fixed;left:8px;bottom:6px;font-size:11px;color:rgba(255,255,255,.35);z-index:200;pointer-events:none}
+#touch{display:none}body.touchUI #touch{display:block}
+#touch .tl,#touch .tr{position:absolute;bottom:18px;display:flex;gap:14px;pointer-events:auto}#touch .tl{left:18px}#touch .tr{right:18px}
+#touch .tm{position:absolute;top:120px;left:50%;transform:translateX(-50%);display:flex;gap:8px;pointer-events:auto}
+#touch button{touch-action:none;user-select:none;-webkit-user-select:none;border:2px solid rgba(255,255,255,.35);background:rgba(10,12,18,.45);color:#fff;font:800 22px "Barlow Condensed",Arial;border-radius:18px}
+#touch .tl button{width:96px;height:96px;font-size:38px}#touch .tr button{width:104px;height:120px}#touch .tr .thr{height:150px;background:rgba(34,197,94,.35)}#touch .tr .brk{background:rgba(239,68,68,.35)}
+#touch .tm button{padding:8px 14px;font-size:16px;border-radius:10px}#touch button.on{background:rgba(255,204,0,.55)}
+@media (max-height:560px),(max-width:820px){
+  #hud > *:not(#touch):not(#startLights):not(#flag){zoom:.5}
+  #startLights{zoom:.6}#flag{zoom:.6}
+  #touch .tl button{width:72px;height:72px;font-size:30px}#touch .tr button{width:80px;height:92px;font-size:18px}#touch .tr .thr{height:116px}
+  #touch .tm{top:8px}#touch .tm button{padding:5px 10px;font-size:13px}
+  body.touchUI #speedo{bottom:8px}
+  body.touchUI #mapWrap{bottom:auto;top:320px;right:auto;left:16px}
+  body.touchUI #camTag{display:none}
+  #touch .tm{top:8px;bottom:auto}
+  body.touchUI #minimap{width:140px;height:140px}
+  body.touchUI #radio .rmsg:nth-child(n+3){display:none}
+  body.touchUI #board .r:nth-child(n+9){display:none}
+  body.touchUI #radio{top:40%}
+}
+#speedo.cockpitHide{opacity:0;pointer-events:none}
 #mpHostInfo{font-size:14px;color:var(--muted);margin:6px 0}#mpStatus{font-size:14px;color:#ffb020;margin-top:6px}#startBtn:disabled{opacity:.5;cursor:default}
 .lbname{font-size:15px;color:var(--muted);display:flex;gap:8px;align-items:center}.lbname input{flex:1;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:6px;color:#fff;font:inherit;font-size:16px;padding:4px 8px}
 .opt h4{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;font-weight:600}
@@ -229,6 +250,9 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   <div id="camTag" class="panel">CAMERA <b id="camName">CHASE</b> · C to switch · ESC pause</div>
   <div id="wrongway" class="hidden">WRONG WAY</div>
   <div id="radio"></div>
+  <div id="touch"><div class="tl"><button data-k="a">◀</button><button data-k="d">▶</button></div>
+    <div class="tm"><button data-act="cam">CAM</button><button data-act="radio">RADIO</button><button data-act="pause">II</button></div>
+    <div class="tr"><button data-k="s" class="brk">BRAKE</button><button data-k="w" class="thr">GAS</button></div></div>
   <div id="engMenu" class="hidden"></div>
   <div id="carPanel" class="panel"><div class="tyre"><span id="tyreBadge" class="tb">M</span><div><b id="tyreWear">100%</b><small id="tyreName">MEDIUM</small></div></div><div class="dmg" title="Car damage"><i id="dFW" class="fw"></i><i id="dTL" class="tl"></i><i id="dTR" class="tr"></i><i id="dSus" class="sus"></i><i id="dBL" class="bl"></i><i id="dBR" class="br"></i><i id="dRW" class="rw"></i></div></div>
   <div id="pitTag" class="hidden"></div>
@@ -263,9 +287,10 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
     <div class="opt panel" id="optQuali"><h4>Qualifying</h4><div class="seg" data-opt="quali"><button data-v="on">Q1 / Q2 / Q3</button><button data-v="off">Off</button></div></div>
     <div class="opt panel" id="optWx"><h4>Weather</h4><div class="seg" data-opt="weather"><button data-v="dry">Dry</button><button data-v="random">Random</button><button data-v="wet">Wet</button></div></div>
     <div class="opt panel" id="optDmg"><h4>Damage</h4><div class="seg" data-opt="damage"><button data-v="off">Off</button><button data-v="reduced">Reduced</button><button data-v="sim">Simulation</button></div></div>
+    <div class="opt panel"><h4>Steering</h4><div class="seg" data-opt="steer"><button data-v="smooth">Smooth</button><button data-v="normal">Normal</button><button data-v="sharp">Sharp</button></div></div>
     <div class="opt panel"><h4>Racing Line <span style="text-transform:none;letter-spacing:0">(L in race)</span></h4><div class="seg" data-opt="line"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
     <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div></div>
-    <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd> Throttle &nbsp; <kbd>S</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> Steer &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>R</kbd> Team radio &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
+    <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd>/<kbd>↑</kbd> Throttle &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> Steer · controllers work too &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>R</kbd> Team radio &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
     <button class="btn primary" id="startBtn">Start Race</button>
   </div>
   <div></div>
@@ -293,7 +318,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 
 <div id="loading" class="hidden"><span>LOADING CIRCUIT</span></div>
 
-<div id="verTag">build 2026-11-19 · online 3 · ai 2 · series 1</div>
+<div id="verTag">build 2026-11-19 · online 3 · ai 2 · series 1 · cars 2</div>
 <div id="splash">
   <div class="logo">APEX<span>GP</span></div>
   <div class="warn">THIS GAME IS FOR<br>BREAK TIME ONLY</div>
@@ -306,6 +331,6 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=ser26a"></script>
+<script type="module" src="js/main.js?v=ck26b"></script>
 </body>
 </html>

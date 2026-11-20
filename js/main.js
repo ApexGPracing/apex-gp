@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ser26a';
-import { World } from './world.js?v=ser26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, AXLE_F, AXLE_R } from './car.js?v=ser26a';
-import { Sound } from './audio.js?v=ser26a';
-import { Particles, Skids } from './fx.js?v=ser26a';
-import { Weather } from './weather.js?v=ser26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ser26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ser26a';
-import { Net, newCode } from './net.js?v=ser26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ser26a';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ck26b';
+import { World } from './world.js?v=ck26b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=ck26b';
+import { Sound } from './audio.js?v=ck26b';
+import { Particles, Skids } from './fx.js?v=ck26b';
+import { Weather } from './weather.js?v=ck26b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ck26b';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ck26b';
+import { Net, newCode } from './net.js?v=ck26b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ck26b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -16,17 +16,17 @@ const VMAX = 100;
 /* ---------------- Teams, drivers, tyres ---------------- */
 // the 2026 grid: 11 teams, 2 drivers each (DRIVERS lists them in team order)
 let TEAMS = [
-  { name: 'McLaren', color: '#ff8000', accent: '#111111' },
-  { name: 'Ferrari', color: '#dc0000', accent: '#fff200' },
-  { name: 'Red Bull Racing', color: '#1e2a5a', accent: '#e10600' },
-  { name: 'Mercedes', color: '#c8ccd0', accent: '#00a19c' },
-  { name: 'Aston Martin', color: '#006f62', accent: '#cedc00' },
-  { name: 'Alpine', color: '#0078c1', accent: '#ff87bc' },
-  { name: 'Williams', color: '#1868db', accent: '#ffffff' },
-  { name: 'Racing Bulls', color: '#f4f4f4', accent: '#1634cb' },
-  { name: 'Audi', color: '#5b5f63', accent: '#ff2d1a' },
-  { name: 'Haas', color: '#b6babd', accent: '#e10600' },
-  { name: 'Cadillac', color: '#111111', accent: '#e5e5e5' },
+  { name: 'McLaren', color: '#ff8000', accent: '#111111', liv: { p: 'twotone', c2: '#111111', c3: '#1fb4ff' } },
+  { name: 'Ferrari', color: '#dc0000', accent: '#fff200', liv: { p: 'sash', c2: '#f4f4f4', c3: '#111111' } },
+  { name: 'Red Bull Racing', color: '#1e2a5a', accent: '#e10600', liv: { p: 'arrow', c2: '#e10600', c3: '#ffcc00' } },
+  { name: 'Mercedes', color: '#c8ccd0', accent: '#00a19c', liv: { p: 'fade', c2: '#111111', c3: '#00d2be' } },
+  { name: 'Aston Martin', color: '#006f62', accent: '#cedc00', liv: { p: 'stripes', c2: '#cedc00', c3: '#0a2b26' } },
+  { name: 'Alpine', color: '#0078c1', accent: '#ff87bc', liv: { p: 'fade', c2: '#ff87bc', c3: '#ffffff' } },
+  { name: 'Williams', color: '#1868db', accent: '#ffffff', liv: { p: 'halves', c2: '#0a1e3d', c3: '#64c4ff' } },
+  { name: 'Racing Bulls', color: '#f4f4f4', accent: '#1634cb', liv: { p: 'sash', c2: '#1634cb', c3: '#e10600' } },
+  { name: 'Audi', color: '#5b5f63', accent: '#ff2d1a', liv: { p: 'nose', c2: '#ff2d1a', c3: '#111111' } },
+  { name: 'Haas', color: '#f2f2f2', accent: '#e10600', liv: { p: 'twotone', c2: '#2a2a2a', c3: '#e10600' } },
+  { name: 'Cadillac', color: '#111111', accent: '#e5e5e5', liv: { p: 'gulf', c2: '#e5e5e5', c3: '#b08d57' } },
 ];
 let DRIVERS = [
   ['Lando Norris', 'NOR'], ['Oscar Piastri', 'PIA'],
@@ -76,6 +76,12 @@ function applySeries(id) {
   const cal = calIdx(); if (!cal.includes(settings.track)) settings.track = cal[0];
 }
 // the class (physics, model, sound) a car races in
+const PATS = ['stripes', 'twotone', 'sash', 'nose', 'arrow', 'fade', 'gulf', 'halves'];
+const lum = hex => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
+function liveryFor(teamIdx) {
+  const t = TEAMS[teamIdx]; if (!t) return null;
+  return t.liv || { p: PATS[(teamIdx * 3 + SER.id.length) % PATS.length], c2: t.accent, c3: lum(t.color) > 0.55 ? '#111111' : '#ffffff' };
+}
 function classFor(teamIdx, isMine) {
   if (SER.multiClass) { if (isMine) return settings.lmClass === 'gt3' ? 'gt3' : 'hyper'; return (TEAMS[teamIdx] && TEAMS[teamIdx].cls) || SER.cls; }
   return SER.cls;
@@ -120,7 +126,7 @@ const smoke = new Particles(scene, 1600, false);
 const sparks = new Particles(scene, 500, true);
 const skids = new Skids(scene);
 
-const settings = Object.assign({ series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim' }, store.json('apexgp2-settings', {}));
+const settings = Object.assign({ steer: 'normal', series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim' }, store.json('apexgp2-settings', {}));
 if (settings.track >= TRACKS.length) settings.track = 0;
 if (typeof settings.diff === 'string') { settings.ai = { easy: 25, medium: 50, hard: 72 }[settings.diff] ?? 50; delete settings.diff; }
 delete settings.gfx;
@@ -185,12 +191,13 @@ function makeField(lineup, skill) {
   clearCars();
   const colr = LIVERIES[settings.livery], acc = colr === '#111827' ? '#ffcc00' : '#111827';
   const pcls = classFor(TEAMS.length, true);
-  const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: 1, compound: 'medium', model: CLASSES[pcls].model }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
+  const myLiv = { p: PATS[(settings.livery * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
+  const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: 1, compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
   game.cars.push(p); game.player = p;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
     const tm = TEAMS[teamIdxOf(di)], cls = mate ? pcls : classFor(teamIdxOf(di), false);
-    const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium', model: CLASSES[cls].model }), { cls, spec: CLASSES[cls] },
+    const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium', model: CLASSES[cls].model, livery: mate ? myLiv : liveryFor(teamIdxOf(di)) }), { cls, spec: CLASSES[cls] },
       { name: DRIVERS[di][0], code: DRIVERS[di][1], team: mate ? 'Your Team' : tm.name, color: mate ? colr : tm.color, isPlayer: false, mate, teamIdx: mate ? TEAMS.length : teamIdxOf(di),
         per: personaOf(DRIVERS[di][1]), pace: Math.min(1.035, aiPace(skill) * L.rating * (1 + (personaOf(DRIVERS[di][1]).skill - 0.86) * 0.03)), lateBrake: skill >= 70, rating: L.rating, boost: aiBoost(skill) });
     game.cars.push(c); if (mate) game.mate = c;
@@ -725,10 +732,34 @@ function debris(c, zOff) {
 }
 
 /* ---------------- Driver inputs ---------------- */
+/* steering feel: how fast the wheel turns and how much it calms down at speed */
+const STEER = { smooth: { rate: 0.7, back: 0.85, speed: 1.25 }, normal: { rate: 1, back: 1, speed: 1 }, sharp: { rate: 1.45, back: 1.25, speed: 0.8 } };
+/* game controller: left stick (or d-pad) steers, right trigger accelerates, left trigger brakes */
+function padInput() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const g of pads) {
+    if (!g || !g.connected) continue;
+    let x = g.axes[0] || 0; if (Math.abs(x) < 0.08) x = 0; else x = Math.sign(x) * ((Math.abs(x) - 0.08) / 0.92) ** 1.4;
+    if (g.buttons[14] && g.buttons[14].pressed) x = -1; if (g.buttons[15] && g.buttons[15].pressed) x = 1;
+    const thr = Math.max(g.buttons[7] ? g.buttons[7].value : 0, g.buttons[0] && g.buttons[0].pressed ? 1 : 0), brk = Math.max(g.buttons[6] ? g.buttons[6].value : 0, g.buttons[1] && g.buttons[1].pressed ? 1 : 0);
+    if (x || thr > 0.02 || brk > 0.02) return { steer: -x, thr, brk };
+  }
+  return null;
+}
 function playerInput(c, dt) {
+  const S = STEER[settings.steer] || STEER.normal, pad = padInput();
+  const slow = 1 + Math.max(0, Math.abs(c.v) - 25) / (35 * S.speed);
+  if (pad) {
+    // analog: follow the stick closely, with less lock at speed
+    const want = pad.steer / Math.sqrt(slow);
+    c.steer += clamp(want - c.steer, -9 * S.rate * dt, 9 * S.rate * dt);
+    return { throttle: pad.thr, brake: pad.brk, steer: c.steer };
+  }
   const tgt = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
-  const slow = 1 + Math.max(0, Math.abs(c.v) - 25) / 35;
-  const rate = (tgt === 0 ? 7 : (c.steer !== 0 && Math.sign(tgt) !== Math.sign(c.steer) ? 9 : 4.2)) / slow;
+  // keyboard: the wheel winds on progressively the longer the key is held, and snaps back quicker when released
+  c.held = tgt === 0 ? 0 : (Math.sign(tgt) === Math.sign(c.held || 0) ? c.held + dt : dt);
+  const build = 0.6 + Math.min(1, c.held / 0.35) * 0.6;
+  const rate = (tgt === 0 ? 7 * S.back : (c.steer !== 0 && Math.sign(tgt) !== Math.sign(c.steer) ? 9 : 4.2 * build) * S.rate) / slow;
   c.steer += clamp(tgt - c.steer, -rate * dt, rate * dt);
   return { throttle: keys.w ? 1 : 0, brake: keys.s ? 1 : 0, steer: c.steer };
 }
@@ -1382,7 +1413,7 @@ function startMp(cfg) {
     cfg.players.forEach((pl, k) => {
       const colr = LIVERIES[pl.livery] || LIVERIES[0], acc = colr === '#111827' ? '#ffcc00' : '#111827', mine = pl.id === net.id;
       const mcls = SER.multiClass ? 'hyper' : SER.cls;
-      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium', model: CLASSES[mcls].model }), { cls: mcls, spec: CLASSES[mcls] },
+      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium', model: CLASSES[mcls].model, livery: { p: PATS[(pl.livery * 5) % PATS.length], c2: acc, c3: '#ffffff' } }), { cls: mcls, spec: CLASSES[mcls] },
         { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
           teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined });
       game.cars.push(c); if (mine) game.player = c;
@@ -1663,7 +1694,8 @@ function updateCamera(dt, time) {
   const sp = Math.abs(c.v), shake = (c.surf === 1 ? 0.012 : 0.002) * Math.min(1, sp / 60);
   const jx = (Math.random() - 0.5) * shake, jy = (Math.random() - 0.5) * shake;
   if (game.camMode === 0) {
-    g.localToWorld(tmpV.set(jx, 0.92 + jy, 0.05)); g.localToWorld(tmpL.set(c.steer * 0.6, 0.95, 14));
+    const E = c.eye || [0, 0.92, 0.05];
+    g.localToWorld(tmpV.set(E[0] + jx, E[1] + jy, E[2])); g.localToWorld(tmpL.set(E[0] + c.steer * 0.6, E[1] + 0.02, 14));
     camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = 72;
   } else if (game.camMode === 1) {
     g.localToWorld(tmpV.set(jx, 1.36 + jy, -0.5)); g.localToWorld(tmpL.set(0, 0.8, 12));
@@ -1754,12 +1786,17 @@ function updateDrsHud() {
 }
 function dmgColor(v) { return v < 0.05 ? '#2fd56a' : v < 0.4 ? '#f5c400' : v < 0.8 ? '#ff7a1a' : '#ff2a2a'; }
 let boardT = 0;
+let dashT = 0;
 function updateHUD(dt) {
   const p = game.player, Tr = game.T, sess = game.session;
   $('hSpd').textContent = Math.round(Math.abs(p.v) * 3.6);
   $('hGear').textContent = p.pit ? 'P' : p.gear === -1 ? 'R' : p.gear === 0 ? 'N' : p.gear;
   $('hRpm').textContent = Math.round(p.rpm / 100) * 100;
   const lit = clamp(Math.floor((p.rpm - 7000) / 450), 0, 10);
+  // live steering-wheel screen and shift lights in the cockpit view; the wheel replaces the dashboard panel
+  $('speedo').classList.toggle('cockpitHide', game.camMode === 0 && !!p.dash);
+  if (game.camMode === 0 && p.dash) { dashT -= dt; if (dashT <= 0) { dashT = 0.1; const st = isRace() ? standings() : null;
+    updateDash(p, { gear: $('hGear').textContent, kmh: Math.round(Math.abs(p.v) * 3.6), frac: (p.rpm - 7000) / 4500, lap: isRace() ? 'L' + Math.min(game.laps, curLap(p)) + '/' + game.laps : '', pos: st ? 'P' + (st.indexOf(p) + 1) : '', delta: '' }); } }
   [...$('shift').children].forEach((el, k) => el.className = k < lit ? (k < 4 ? 'g' : k < 8 ? 'r' : 'b') : '');
   const timing = isRace() ? game.phase !== 'lights' : p.maxDone >= 0;
   const cur = timing ? game.raceTime - p.lapStart : 0;
@@ -1995,6 +2032,8 @@ function togglePause(force) {
 addEventListener('keydown', e => {
   if (e.target && e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  const ak = { arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' }[k];
+  if (ak) { keys[ak] = true; e.preventDefault(); }
   if (k === 'w' || k === 'a' || k === 's' || k === 'd') { keys[k] = true; e.preventDefault(); }
   if (e.repeat) return;
   if (k === 'c' && game.state === 'race' && !game.paused) setCam((game.camMode + 1) % 3);
@@ -2006,7 +2045,21 @@ addEventListener('keydown', e => {
   if (k === 'm') { audio.muted = !audio.muted; store.set('apexgp-muted', audio.muted ? '1' : '0'); if (game.state === 'race') flashMsg(audio.muted ? 'SOUND OFF' : 'SOUND ON', 0.9); }
 });
 $('engMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (b) engAsk(+b.dataset.k); });
-addEventListener('keyup', e => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = false; });
+addEventListener('keyup', e => { const k = e.key.toLowerCase(), ak = { arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' }[k]; if (ak) keys[ak] = false; if (k in keys) keys[k] = false; });
+/* touch controls (phones and tablets): steering buttons on the left, pedals on the right */
+{
+  const tc = document.getElementById('touch');
+  if (tc && (matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search))) {
+    document.body.classList.add('touchUI');
+    tc.querySelectorAll('[data-k]').forEach(b => {
+      const k = b.dataset.k, on = e => { e.preventDefault(); keys[k] = true; b.classList.add('on'); }, off = e => { e.preventDefault(); keys[k] = false; b.classList.remove('on'); };
+      b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+    });
+    tc.querySelector('[data-act="cam"]').addEventListener('pointerdown', e => { e.preventDefault(); if (game.state === 'race') setCam((game.camMode + 1) % 3); });
+    tc.querySelector('[data-act="radio"]').addEventListener('pointerdown', e => { e.preventDefault(); if (game.state === 'race') engMenu(); });
+    tc.querySelector('[data-act="pause"]').addEventListener('pointerdown', e => { e.preventDefault(); togglePause(); });
+  }
+}
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'race' && !game.mp && (game.phase === 'race' || game.phase === 'run')) togglePause(true); });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
@@ -2050,7 +2103,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ser26a');
+await loadCarModel('js/car.bin?v=ck26b');
 initMenu();
 requestAnimationFrame(frame);
 
