@@ -1,6 +1,6 @@
 /* Racing series: cars, physics, sound, drivers and calendars.
    Track ids refer to TRACKS in tracks.js. Classes give each car its physics (multiples of the F1 car)
-   and its 3D model. Formula 1 uses the real grid in main.js; the other series use made-up drivers and teams. */
+   and its 3D model. All grids are real 2026 line-ups (one listed driver per car; F1's is in main.js). */
 
 // physics multiples of the F1 car: aero drag, top speed, engine power, grip, braking; drs = can use DRS
 // eng = engine sound: rev range (lo..hi rpm), cylinders, and how much roar vs scream
@@ -13,7 +13,7 @@ export const CLASSES = {
 };
 
 const T = (name, color, accent, cls) => ({ name, color, accent, cls });
-const D = (name, code, persona) => [name, code, persona];
+const D = (name, code, persona, num, team) => [name, code, persona, num, team]; // team = index into teams
 
 export const SERIES = {
   f1: {
@@ -23,55 +23,68 @@ export const SERIES = {
   f2: {
     id: 'f2', name: 'Formula 2', short: 'F2', cls: 'f2', laps: 5,
     calendar: ['melbourne', 'sakhir', 'jeddah', 'imola', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'monza', 'baku', 'lusail', 'abudhabi'],
-    teams: [T('Valiant Junior', '#d4002a', '#f5f5f5'), T('Harbour Racing', '#0a2a66', '#f2c200'), T('Kestrel', '#f2f2f2', '#d10f2f'), T('Meridian GP', '#1e1e1e', '#ff6a00'),
-      T('Arrowhead', '#ff8c1a', '#0d1b3e'), T('Bluewing', '#2a6fdb', '#ffffff'), T('Corsa Nova', '#00a19c', '#111111'), T('Halberd', '#6a2c91', '#f5d000'),
-      T('Ridgeway', '#2e7d32', '#ffffff'), T('Solano Motorsport', '#c0c4ca', '#c8102e'), T('Northgate', '#ffd500', '#111111')],
-    drivers: [D('Joaquin Demir', 'DEM', [0.9, 0.75, 0.7, 0.85, 1]), D('Silas Nyberg', 'NYB', [0.86, 0.7, 0.7, 0.82, 1]), D('Oskar Reyes', 'REY', [0.88, 0.7, 0.75, 0.88, 0.95]), D('Kira Silvestri', 'SIL', [0.84, 0.8, 0.6, 0.78, 1.05]),
-      D('Orla Devereux', 'DEV', [0.87, 0.65, 0.75, 0.9, 0.95]), D('Jules Stavros', 'STA', [0.83, 0.7, 0.65, 0.8, 1]), D('Soren Duarte', 'DUA', [0.89, 0.85, 0.7, 0.8, 1]), D('Ella Jurado', 'JUR', [0.82, 0.6, 0.7, 0.85, 0.95]),
-      D('Viktor Ishii', 'ISH', [0.86, 0.7, 0.65, 0.86, 1]), D('Jonah Whitmore', 'WHI', [0.85, 0.8, 0.6, 0.75, 1.05]), D('Maya Ingram', 'ING', [0.84, 0.65, 0.8, 0.86, 0.95]), D('Jules Blackwood', 'BLA', [0.83, 0.7, 0.7, 0.84, 1]),
-      D('Leo Hollis', 'HOL', [0.87, 0.75, 0.75, 0.83, 1]), D('Rosa Fabre', 'FAB', [0.81, 0.65, 0.6, 0.8, 1]), D('Silas Lindgren', 'LIN', [0.85, 0.7, 0.7, 0.85, 1]), D('Kai Menon', 'MEN', [0.88, 0.8, 0.65, 0.8, 1]),
-      D('Nora Kraemer', 'KRA', [0.82, 0.75, 0.6, 0.76, 1.05]), D('Tomas Yardley', 'YAR', [0.84, 0.6, 0.85, 0.88, 0.9]), D('Leo Corrado', 'COR', [0.83, 0.7, 0.7, 0.82, 1]), D('Hamish Aubert', 'AUB', [0.86, 0.8, 0.7, 0.8, 1]),
-      D('Nils Rao', 'RAO', [0.8, 0.65, 0.65, 0.84, 1]), D('Aiden Barrowclough', 'BAR', [0.85, 0.7, 0.75, 0.86, 0.95])],
+    teams: [T('Invicta Racing', '#111111', '#d4af37'), T('Hitech TGR', '#f2f2f2', '#d40000'), T('Campos Racing', '#e10600', '#ffcc00'), T('DAMS Lucas Oil', '#0b2a66', '#e10600'),
+      T('MP Motorsport', '#ff6a00', '#0b1f4d'), T('PREMA Racing', '#d40000', '#f2f2f2'), T('Rodin Motorsport', '#f2f2f2', '#00a19c'), T('ART Grand Prix', '#1a1a1a', '#c0c4ca'),
+      T('AIX Racing', '#1c1c1c', '#ff2d55'), T('Van Amersfoort Racing', '#ff8c00', '#111111'), T('Trident', '#0a3d91', '#c0c4ca')],
+    drivers: [D('Rafael Câmara', 'CAM', [0.92, 0.8, 0.75, 0.88, 1], 1, 0), D('Joshua Dürksen', 'DUR', [0.87, 0.75, 0.7, 0.84, 1], 2, 0),
+      D('Ritomo Miyata', 'MIY', [0.87, 0.7, 0.75, 0.87, 0.95], 3, 1), D('Colton Herta', 'HER', [0.93, 0.85, 0.75, 0.85, 1], 4, 1),
+      D('Noel León', 'LEO', [0.86, 0.75, 0.7, 0.82, 1], 5, 2), D('Nikola Tsolov', 'TSO', [0.88, 0.85, 0.65, 0.78, 1.05], 6, 2),
+      D('Dino Beganovic', 'BEG', [0.88, 0.75, 0.75, 0.86, 1], 7, 3), D('Roman Bilinski', 'BIL', [0.86, 0.75, 0.7, 0.83, 1], 8, 3),
+      D('Gabriele Minì', 'MIN', [0.89, 0.75, 0.75, 0.86, 1], 9, 4), D('Oliver Goethe', 'GOE', [0.85, 0.7, 0.7, 0.84, 1], 10, 4),
+      D('Sebastián Montoya', 'MON', [0.87, 0.75, 0.7, 0.84, 1], 11, 5), D('Mari Boya', 'BOY', [0.85, 0.75, 0.65, 0.8, 1.05], 12, 5),
+      D('Martinius Stenshorne', 'STE', [0.88, 0.75, 0.75, 0.86, 1], 14, 6), D('Alex Dunne', 'DUN', [0.88, 0.85, 0.7, 0.8, 1], 15, 6),
+      D('Kush Maini', 'MAI', [0.86, 0.75, 0.7, 0.82, 1], 16, 7), D('Tasanapol Inthraphuvasak', 'INT', [0.84, 0.7, 0.7, 0.82, 1], 17, 7),
+      D('Emerson Fittipaldi Jr', 'FIT', [0.84, 0.7, 0.7, 0.83, 1], 20, 8), D('Cian Shields', 'SHI', [0.82, 0.7, 0.65, 0.8, 1], 21, 8),
+      D('Hiyu Yamakoshi', 'YAM', [0.82, 0.7, 0.65, 0.8, 1], 22, 9), D('Rafael Villagómez', 'VIL', [0.83, 0.7, 0.7, 0.82, 1], 23, 9),
+      D('Laurens van Hoepen', 'HOE', [0.85, 0.75, 0.7, 0.83, 1], 24, 10), D('John Bennett', 'BEN', [0.84, 0.75, 0.65, 0.8, 1], 25, 10)],
   },
   indy: {
     id: 'indy', name: 'IndyCar', short: 'INDY', cls: 'indy', laps: 8,
     calendar: ['indianapolis', 'texas', 'iowa', 'austin', 'miami', 'montreal', 'lasvegas', 'madrid'],
-    teams: [T('Penfold Racing', '#ffd400', '#111111'), T('Garrison Racing', '#d40000', '#ffffff'), T('Andover Autosport', '#0b1f4d', '#ff6a13'), T('Arrow Ridge', '#ff7a00', '#003b6f'),
-      T('Redline Racing', '#00843d', '#ffffff'), T('Shaw Motorsport', '#e6e6e6', '#d40000'), T('Cardinal Racing', '#1a1a1a', '#00c2ff'), T('Foyle Racing', '#c8102e', '#f5d000'),
-      T('Lakeshore Motorsports', '#00a3e0', '#111111'), T('Juno Racing', '#6e2c90', '#ffffff'), T('Prairie Racing', '#f5f5f5', '#008a5c')],
-    drivers: [D('Marco Zelenka', 'ZEL', [0.94, 0.85, 0.85, 0.9, 0.95]), D('Kenta Blackwood', 'BLA', [0.93, 0.7, 0.85, 0.93, 0.9]), D('Jules Ives', 'IVE', [0.92, 0.85, 0.8, 0.88, 1]), D('Elio Redfern', 'RED', [0.92, 0.65, 0.9, 0.95, 0.85]),
-      D('Kira Ingram', 'ING', [0.92, 0.9, 0.7, 0.82, 1.05]), D('Ivo Northcott', 'NOR', [0.89, 0.8, 0.75, 0.86, 1]), D('Rosa Montague', 'MON', [0.88, 0.75, 0.85, 0.88, 0.95]), D('Orla Rasmussen', 'RAS', [0.87, 0.7, 0.75, 0.88, 0.95]),
-      D('Lars Calloway', 'CAL', [0.88, 0.7, 0.75, 0.86, 1]), D('Lars Brandt', 'BRA', [0.86, 0.9, 0.6, 0.75, 1.05]), D('Lorenzo Lockhart', 'LOC', [0.87, 0.75, 0.7, 0.85, 1]), D('Emil Galloway', 'GAL', [0.84, 0.75, 0.65, 0.8, 1]),
-      D('Pablo Marchand', 'MAR', [0.83, 0.7, 0.7, 0.82, 1]), D('Hana Holloway', 'HOL', [0.86, 0.7, 0.75, 0.87, 0.95]), D('Adrien Wexford', 'WEX', [0.83, 0.8, 0.65, 0.78, 1]), D('Yusuf Quintero', 'QUI', [0.82, 0.75, 0.65, 0.8, 1]),
-      D('Viktor Menon', 'MEN', [0.83, 0.7, 0.75, 0.84, 1]), D('Pablo Aubert', 'AUB', [0.82, 0.65, 0.7, 0.83, 1]), D('Paula Thorne', 'THO', [0.84, 0.7, 0.7, 0.85, 1]), D('Lorenzo Yamazaki', 'YAM', [0.8, 0.7, 0.6, 0.78, 1.05]),
-      D('Kenta Whitmore', 'WHI', [0.8, 0.65, 0.65, 0.8, 1]), D('Owen Ostrowski', 'OST', [0.81, 0.7, 0.7, 0.82, 1])],
+    teams: [T('Team Penske', '#f2f2f2', '#ffd400'), T('Chip Ganassi Racing', '#d40000', '#ffffff'), T('Arrow McLaren', '#ff8000', '#0a2b5c'), T('Andretti Global', '#0b1f4d', '#ff6a13'),
+      T('A.J. Foyt Racing', '#c8102e', '#f2f2f2'), T('Ed Carpenter Racing', '#1a1a1a', '#00c2ff'), T('Dale Coyne Racing', '#00a3e0', '#111111'), T('Rahal Letterman Lanigan', '#f5f5f5', '#00843d')],
+    drivers: [D('Josef Newgarden', 'NEW', [0.93, 0.85, 0.85, 0.88, 1], 2, 0), D('Scott McLaughlin', 'MCL', [0.93, 0.8, 0.85, 0.9, 0.95], 3, 0), D('David Malukas', 'MLK', [0.9, 0.8, 0.75, 0.85, 1], 12, 0),
+      D('Kyffin Simpson', 'SIM', [0.85, 0.7, 0.7, 0.84, 1], 8, 1), D('Scott Dixon', 'DIX', [0.94, 0.75, 0.9, 0.96, 0.85], 9, 1), D('Álex Palou', 'PAL', [0.97, 0.8, 0.9, 0.96, 0.85], 10, 1),
+      D('Pato O\'Ward', 'OWA', [0.94, 0.9, 0.8, 0.86, 1], 5, 2), D('Nolan Siegel', 'SIE', [0.86, 0.75, 0.7, 0.82, 1], 6, 2), D('Christian Lundgaard', 'LUN', [0.91, 0.75, 0.8, 0.9, 0.95], 7, 2),
+      D('Will Power', 'POW', [0.93, 0.85, 0.85, 0.88, 0.95], 26, 3), D('Kyle Kirkwood', 'KIR', [0.92, 0.8, 0.8, 0.88, 1], 27, 3), D('Marcus Ericsson', 'ERI', [0.9, 0.7, 0.8, 0.9, 0.95], 28, 3),
+      D('Caio Collet', 'COL', [0.86, 0.75, 0.7, 0.82, 1], 4, 4), D('Santino Ferrucci', 'FER', [0.88, 0.85, 0.75, 0.84, 1], 14, 4),
+      D('Alexander Rossi', 'ROS', [0.9, 0.8, 0.8, 0.88, 0.95], 20, 5), D('Christian Rasmussen', 'RAS', [0.88, 0.8, 0.75, 0.84, 1], 21, 5),
+      D('Romain Grosjean', 'GRO', [0.88, 0.8, 0.75, 0.84, 1], 18, 6), D('Dennis Hauger', 'HAU', [0.87, 0.8, 0.7, 0.82, 1], 19, 6),
+      D('Graham Rahal', 'RAH', [0.88, 0.75, 0.8, 0.88, 0.95], 15, 7), D('Mick Schumacher', 'SCH', [0.87, 0.75, 0.75, 0.86, 1], 30, 7)],
   },
   gt3: {
     id: 'gt3', name: 'GT3', short: 'GT3', cls: 'gt3', laps: 5,
     calendar: ['monza', 'silverstone', 'spa', 'barcelona', 'zandvoort', 'imola', 'budapest', 'spielberg', 'austin', 'abudhabi', 'lemans'],
-    teams: [T('Vesper Corse', '#cc0000', '#f2c200'), T('Iron Crown Werks', '#f2f2f2', '#c8102e'), T('Bavaria Motorsport', '#1c3f94', '#f5f5f5'), T('Albion GT', '#0b5e3b', '#d4af37'),
-      T('Toro Squadra', '#e8c300', '#111111'), T('Silver Arrowhead', '#9aa3ad', '#00a19c'), T('Motor City GT', '#f2f2f2', '#0a3d91'), T('Four Rings Racing', '#111111', '#d40000'),
-      T('Kyoto Racing', '#ffffff', '#d40000'), T('Papaya Works', '#ff8000', '#111111'), T('Midlands GT', '#14506f', '#b2d235'), T('Norden Team', '#6c2b8a', '#f5f5f5')],
-    drivers: [D('Kenta Fabre', 'FAB', [0.92, 0.75, 0.8, 0.9, 0.95]), D('Hamish Mercer', 'MER', [0.9, 0.7, 0.75, 0.88, 0.95]), D('Paula Lockhart', 'LOC', [0.93, 0.8, 0.85, 0.9, 0.95]), D('Emil Dunmore', 'DUN', [0.91, 0.7, 0.8, 0.9, 0.95]),
-      D('Matteo Halonen', 'HAL', [0.9, 0.75, 0.8, 0.88, 1]), D('Beatriz Zorn', 'ZOR', [0.89, 0.7, 0.7, 0.86, 1]), D('Adrien Hartigan', 'HAR', [0.9, 0.75, 0.85, 0.9, 0.95]), D('Felix Redfern', 'RED', [0.9, 0.7, 0.8, 0.9, 0.95]),
-      D('Jules Gallardo', 'GAL', [0.88, 0.7, 0.75, 0.88, 1]), D('Emil Paz', 'PAZ', [0.87, 0.75, 0.7, 0.85, 1]), D('Lars Esposito', 'ESP', [0.91, 0.8, 0.75, 0.88, 1]), D('Noah Roux', 'ROU', [0.88, 0.75, 0.7, 0.86, 1]),
-      D('Zane Fairbanks', 'FAI', [0.9, 0.75, 0.8, 0.9, 0.95]), D('Maya Oyelaran', 'OYE', [0.88, 0.7, 0.75, 0.88, 1]), D('Hugo Jurado', 'JUR', [0.89, 0.75, 0.8, 0.88, 0.95]), D('Quentin Iversen', 'IVE', [0.88, 0.65, 0.85, 0.92, 0.9]),
-      D('Yusuf Brandt', 'BRA', [0.89, 0.75, 0.8, 0.88, 1]), D('Rowan Demir', 'DEM', [0.9, 0.8, 0.75, 0.86, 1]), D('Sam Quintero', 'QUI', [0.86, 0.7, 0.7, 0.86, 1]), D('Sofia Calloway', 'CAL', [0.87, 0.75, 0.7, 0.85, 1]),
-      D('Tariq Pellegrini', 'PEL', [0.88, 0.75, 0.75, 0.87, 1]), D('Luca Novak', 'NOV', [0.87, 0.8, 0.7, 0.84, 1]), D('Viktor Waverly', 'WAV', [0.85, 0.7, 0.7, 0.86, 1]), D('Olivia Thorne', 'THO', [0.86, 0.7, 0.75, 0.86, 1])],
+    teams: [T('Team WRT · BMW', '#1c3f94', '#f5f5f5'), T('AF Corse · Ferrari', '#d40000', '#f2c200'), T('Emil Frey Racing · Ferrari', '#f2f2f2', '#d40000'), T('Boutsen VDS · Porsche', '#111111', '#f5d000'),
+      T('Comtoyou Racing · Aston Martin', '#0b5e3b', '#d4af37'), T('Paradine Competition · BMW', '#f2f2f2', '#1c3f94')],
+    drivers: [D('Kelvin van der Linde', 'KVL', [0.94, 0.8, 0.8, 0.9, 0.95], 30, 0), D('Jordan Pepper', 'PEP', [0.91, 0.75, 0.8, 0.9, 0.95], 31, 0), D('Valentino Rossi', 'ROS', [0.85, 0.75, 0.7, 0.85, 1], 46, 0),
+      D('Arthur Leclerc', 'LEC', [0.89, 0.8, 0.75, 0.86, 1], 50, 1), D('Jef Machiels', 'MAC', [0.84, 0.7, 0.7, 0.84, 1], 52, 1), D('Ariel Levi', 'LEV', [0.84, 0.75, 0.7, 0.82, 1], 66, 1), D('Carl Bennett', 'BEN', [0.82, 0.7, 0.65, 0.8, 1], 71, 1),
+      D('Matteo Cairoli', 'CAI', [0.91, 0.8, 0.8, 0.88, 0.95], 14, 2),
+      D('Alessio Picariello', 'PIC', [0.9, 0.8, 0.75, 0.86, 1], 2, 3), D('Gilles Magnus', 'MAG', [0.87, 0.75, 0.7, 0.85, 1], 10, 3),
+      D('Nicki Thiim', 'THI', [0.9, 0.75, 0.8, 0.9, 0.95], 7, 4), D('Arthur Dorison', 'DOR', [0.85, 0.75, 0.7, 0.84, 1], 21, 4),
+      D('Dries Vanthoor', 'VTH', [0.93, 0.8, 0.8, 0.9, 0.95], 991, 5)],
   },
   lemans: {
     id: 'lemans', name: 'Le Mans', short: 'LM', cls: 'hyper', laps: 4, multiClass: true,
     calendar: ['lemans', 'spa', 'monza', 'sakhir', 'lusail', 'austin', 'saopaulo', 'imola'],
-    teams: [T('Vesper Hypercar', '#d40000', '#f2c200', 'hyper'), T('Iron Crown Racing', '#f2f2f2', '#e30613', 'hyper'), T('Kaiju Endurance', '#111111', '#e60012', 'hyper'), T('Bleu Alpin', '#1f6fe0', '#ff4fa0', 'hyper'),
-      T('Liberty Prototype', '#111111', '#d4af37', 'hyper'), T('Lion Noir', '#2b2f36', '#b5f700', 'hyper'),
-      T('Vesper GT', '#cc0000', '#ffffff', 'gt3'), T('Waldring GT', '#e5e5e5', '#00843d', 'gt3'), T('Thunderbolt GT', '#f5d000', '#111111', 'gt3'), T('Albion Endurance', '#0b5e3b', '#d4af37', 'gt3'),
-      T('Kyoto Endurance', '#ffffff', '#003b8e', 'gt3'), T('Bavaria Endurance', '#1c3f94', '#f5f5f5', 'gt3')],
-    drivers: [D('Diego Tremblay', 'TRE', [0.95, 0.8, 0.8, 0.9, 0.95]), D('Oskar Montague', 'MON', [0.94, 0.75, 0.8, 0.92, 0.9]), D('Nora Esposito', 'ESP', [0.94, 0.8, 0.85, 0.9, 0.95]), D('Silas Fairbanks', 'FAI', [0.93, 0.7, 0.8, 0.9, 0.95]),
-      D('Silas Rao', 'RAO', [0.94, 0.75, 0.85, 0.93, 0.9]), D('Dana Larkin', 'LAR', [0.93, 0.75, 0.8, 0.9, 0.95]), D('Tobias Fabre', 'FAB', [0.91, 0.75, 0.7, 0.86, 1]), D('Aiden Ishii', 'ISH', [0.9, 0.7, 0.75, 0.88, 0.95]),
-      D('Elio Kittredge', 'KIT', [0.92, 0.75, 0.8, 0.9, 0.95]), D('Callum Haas', 'HAA', [0.91, 0.7, 0.75, 0.9, 0.95]), D('Lorenzo Fontaine', 'FON', [0.9, 0.7, 0.75, 0.88, 0.95]), D('Luca Blackwood', 'BLA', [0.9, 0.75, 0.75, 0.86, 1]),
-      D('Yusuf Waverly', 'WAV', [0.9, 0.75, 0.8, 0.88, 0.95]), D('Marco Abernathy', 'ABE', [0.88, 0.7, 0.75, 0.88, 1]), D('Theo Reyes', 'REY', [0.9, 0.7, 0.85, 0.92, 0.9]), D('Elio Hartigan', 'HAR', [0.88, 0.75, 0.7, 0.86, 1]),
-      D('Quentin Demir', 'DEM', [0.89, 0.7, 0.8, 0.9, 0.95]), D('Remy Yamazaki', 'YAM', [0.88, 0.75, 0.75, 0.86, 1]), D('Clara Marchand', 'MAR', [0.88, 0.7, 0.75, 0.88, 1]), D('Felix Quintero', 'QUI', [0.89, 0.75, 0.75, 0.87, 1]),
-      D('Beatriz Pendleton', 'PEN', [0.89, 0.75, 0.8, 0.9, 0.95]), D('Dana Sandoval', 'SAN', [0.87, 0.7, 0.7, 0.86, 1]), D('Noah Novak', 'NOV', [0.88, 0.7, 0.75, 0.88, 1]), D('Arjun Wexford', 'WEX', [0.86, 0.7, 0.7, 0.86, 1])],
+    teams: [T('Ferrari AF Corse', '#d40000', '#f2c200', 'hyper'), T('Toyota Gazoo Racing', '#f2f2f2', '#e60012', 'hyper'), T('BMW M Team WRT', '#1c3f94', '#f5f5f5', 'hyper'),
+      T('Cadillac Hertz Team Jota', '#111111', '#f5d000', 'hyper'), T('Alpine Endurance Team', '#1f6fe0', '#ff4fa0', 'hyper'), T('Peugeot TotalEnergies', '#2b2f36', '#b5f700', 'hyper'),
+      T('Aston Martin THOR Team', '#0b5e3b', '#c8ff00', 'hyper'),
+      T('Vista AF Corse · Ferrari', '#cc0000', '#ffffff', 'gt3'), T('Heart of Racing · Aston Martin', '#0b5e3b', '#d4af37', 'gt3'), T('Team WRT · BMW', '#1c3f94', '#ffffff', 'gt3'),
+      T('Garage 59 · McLaren', '#ff8000', '#111111', 'gt3'), T('Iron Lynx · Mercedes-AMG', '#9aa3ad', '#111111', 'gt3'), T('TF Sport · Corvette', '#f5d000', '#111111', 'gt3')],
+    drivers: [D('Antonio Fuoco', 'FUO', [0.95, 0.8, 0.8, 0.9, 0.95], 50, 0), D('Alessandro Pier Guidi', 'PIE', [0.95, 0.75, 0.85, 0.93, 0.9], 51, 0),
+      D('Kamui Kobayashi', 'KOB', [0.94, 0.8, 0.85, 0.92, 0.9], 7, 1), D('Sébastien Buemi', 'BUE', [0.95, 0.75, 0.85, 0.94, 0.9], 8, 1),
+      D('Dries Vanthoor', 'VTH', [0.93, 0.8, 0.8, 0.9, 0.95], 15, 2), D('René Rast', 'RAS', [0.93, 0.75, 0.85, 0.92, 0.9], 20, 2),
+      D('Will Stevens', 'STE', [0.92, 0.75, 0.8, 0.9, 0.95], 12, 3), D('Earl Bamber', 'BAM', [0.92, 0.8, 0.8, 0.9, 0.95], 38, 3),
+      D('Ferdinand Habsburg', 'HAB', [0.9, 0.75, 0.75, 0.88, 0.95], 35, 4), D('Frédéric Makowiecki', 'MAK', [0.91, 0.75, 0.8, 0.9, 0.95], 36, 4),
+      D('Stoffel Vandoorne', 'VAN', [0.92, 0.75, 0.8, 0.9, 0.95], 93, 5), D('Loïc Duval', 'DUV', [0.9, 0.7, 0.8, 0.9, 0.95], 94, 5),
+      D('Harry Tincknell', 'TIN', [0.9, 0.75, 0.8, 0.9, 0.95], '007', 6), D('Alex Riberas', 'RIB', [0.9, 0.75, 0.8, 0.88, 0.95], '009', 6),
+      D('Alessio Rovera', 'ROV', [0.9, 0.75, 0.8, 0.9, 0.95], 21, 7), D('Davide Rigon', 'RIG', [0.9, 0.75, 0.8, 0.9, 0.95], 54, 7),
+      D('Mattia Drudi', 'DRU', [0.9, 0.75, 0.75, 0.88, 0.95], 27, 8), D('Jonny Adam', 'ADA', [0.89, 0.7, 0.8, 0.9, 0.95], 23, 8),
+      D('Augusto Farfus', 'FAR', [0.9, 0.75, 0.8, 0.9, 0.95], 32, 9), D('Anthony McIntosh', 'MCI', [0.84, 0.7, 0.7, 0.84, 1], 69, 9),
+      D('Marvin Kirchhöfer', 'KIR', [0.88, 0.75, 0.75, 0.88, 0.95], 10, 10), D('Benjamin Goethe', 'GOE', [0.86, 0.75, 0.7, 0.85, 1], 58, 10),
+      D('Maxime Martin', 'MAR', [0.9, 0.75, 0.8, 0.9, 0.95], 61, 11), D('Matteo Cressoni', 'CRE', [0.86, 0.7, 0.75, 0.86, 1], 79, 11),
+      D('Nicky Catsburg', 'CAT', [0.91, 0.8, 0.8, 0.88, 0.95], 33, 12)],
   },
 };
 export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans'];

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=px26a';
-import { World } from './world.js?v=px26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=px26a';
-import { Sound } from './audio.js?v=px26a';
-import { Particles, Skids } from './fx.js?v=px26a';
-import { Weather } from './weather.js?v=px26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=px26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=px26a';
-import { Net, newCode } from './net.js?v=px26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=px26a';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=real26a';
+import { World } from './world.js?v=real26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=real26a';
+import { Sound } from './audio.js?v=real26a';
+import { Particles, Skids } from './fx.js?v=real26a';
+import { Weather } from './weather.js?v=real26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=real26a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=real26a';
+import { Net, newCode } from './net.js?v=real26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=real26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -68,10 +68,11 @@ function applySeries(id) {
   if (SER.id === 'f1') { TEAMS = F1_GRID.teams; DRIVERS = F1_GRID.drivers; CAR_NUMS = F1_GRID.nums; SERIES_PERSONA = {}; }
   else {
     TEAMS = SER.teams; DRIVERS = SER.drivers.map(d => [d[0], d[1]]);
-    CAR_NUMS = DRIVERS.map((_, i) => [2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 17, 18, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 33][i] || i + 2);
+    CAR_NUMS = SER.drivers.map((d, i) => d[3] ?? i + 2);
     SERIES_PERSONA = Object.fromEntries(SER.drivers.map(d => [d[1], d[2]]));
   }
-  FIXED_TEAMS = DRIVERS.map((_, i) => Math.floor(i / 2)); TEAM_MAP = FIXED_TEAMS.slice();
+  // teams can run two or three cars: the driver list says which team each driver is in
+  FIXED_TEAMS = SER.id === 'f1' ? DRIVERS.map((_, i) => Math.floor(i / 2)) : SER.drivers.map((d, i) => d[4] ?? Math.floor(i / 2)); TEAM_MAP = FIXED_TEAMS.slice();
   builtFor = -1;
   const cal = calIdx(); if (!cal.includes(settings.track)) settings.track = cal[0];
 }
@@ -2114,7 +2115,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=px26a');
+await loadCarModel('js/car.bin?v=real26a');
 initMenu();
 requestAnimationFrame(frame);
 
