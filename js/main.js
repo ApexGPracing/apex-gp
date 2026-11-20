@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=real26a';
-import { World } from './world.js?v=real26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=real26a';
-import { Sound } from './audio.js?v=real26a';
-import { Particles, Skids } from './fx.js?v=real26a';
-import { Weather } from './weather.js?v=real26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=real26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=real26a';
-import { Net, newCode } from './net.js?v=real26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=real26a';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=net26b';
+import { World } from './world.js?v=net26b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=net26b';
+import { Sound } from './audio.js?v=net26b';
+import { Particles, Skids } from './fx.js?v=net26b';
+import { Weather } from './weather.js?v=net26b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=net26b';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=net26b';
+import { Net, newCode } from './net.js?v=net26b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=net26b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1389,7 +1389,19 @@ net.on('data', (id, d) => {
   if (!d || d.k !== 's') return;
   const c = carByNet(id); if (!c || !game.mp) return;
   if (c.lastSeq !== undefined && d.n <= c.lastSeq && c.lastSeq - d.n < 1000) return; // late, out-of-order packet
-  c.lastSeq = d.n; d.tr = performance.now(); c.snaps.push(d); if (c.snaps.length > 40) c.snaps.shift();
+  const now = performance.now(); c.lastSeq = d.n; d.tr = now;
+  if (d.t !== undefined) {
+    // sender clock -> our clock: the smallest (arrival - sent) seen is the best estimate (least-delayed packet);
+    // it creeps up slowly so a clock drift or a route change is followed
+    const off = now - d.t;
+    if (c.netOff === undefined || off < c.netOff) c.netOff = off; else c.netOff += (off - c.netOff) * 0.004;
+    c.netJit = (c.netJit || 20) * 0.95 + Math.abs(off - c.netOff) * 0.05;
+    const last = c.snaps[c.snaps.length - 1];
+    if (last && last.t !== undefined && d.t > last.t) c.netInt = (c.netInt || 60) * 0.9 + (d.t - last.t) * 0.1;
+  }
+  // insert in sender-time order (packets can arrive out of order)
+  let k = c.snaps.length; while (k > 0 && c.snaps[k - 1].t > d.t) k--;
+  c.snaps.splice(k, 0, d); if (c.snaps.length > 60) c.snaps.shift();
   if (c.netGone || c.dnf) { c.netGone = false; c.dnf = false; c.retire = null; c.group.visible = true; }
 });
 function mpHostStart() {
@@ -1433,34 +1445,50 @@ function startMp(cfg) {
     radio('Online race at ' + Tr.def.name + ', ' + game.laps + ' laps, ' + game.cars.length + ' drivers. You start P' + (game.grid.indexOf(game.player) + 1) + '.', 'info', 7);
   });
 }
-/* remote cars: drawn ~120 ms in the past, smoothly between the two snapshots around that moment */
-function remoteStep(c, Tr) {
+/* remote cars: drawn a little in the past, between the two updates around that moment, timed by the SENDER's clock
+   (so network jitter doesn't make them surge and stall). The delay adapts to how often updates arrive and how
+   jittery they are; positions follow smooth curves using each update's velocity; and if a late update shows the
+   car somewhere slightly different, it is eased across rather than snapped. */
+function remoteStep(c, Tr, dt) {
   const S = c.snaps; if (!S.length) return;
-  const rt = performance.now() - 120;
-  while (S.length > 2 && S[1].tr <= rt) S.shift();
+  const now = performance.now(), off = c.netOff ?? 0;
+  const delay = clamp((c.netInt || 60) * 1.7 + (c.netJit || 20) * 2.5 + 30, 90, 500);
+  const rt = now - off - delay;                       // the moment to show, on the sender's clock
+  while (S.length > 2 && S[1].t <= rt) S.shift();
   const a = S[0], b = S[1];
   let x, z, h, vh, v, prog, lat, src;
-  if (b && rt >= a.tr && rt <= b.tr) {
-    const f = (rt - a.tr) / Math.max(1, b.tr - a.tr);
-    x = a.x + (b.x - a.x) * f; z = a.z + (b.z - a.z) * f; h = a.h + angDiff(b.h, a.h) * f; vh = a.vh + angDiff(b.vh, a.vh) * f;
+  if (b && rt >= a.t && rt <= b.t) {
+    const T = Math.max(1, b.t - a.t), f = (rt - a.t) / T, Ts = T / 1000;
+    // cubic Hermite between the two positions, using each one's velocity as the tangent
+    const avx = Math.sin(a.vh) * a.v * Ts, avz = Math.cos(a.vh) * a.v * Ts, bvx = Math.sin(b.vh) * b.v * Ts, bvz = Math.cos(b.vh) * b.v * Ts;
+    const f2 = f * f, f3 = f2 * f, h00 = 2 * f3 - 3 * f2 + 1, h10 = f3 - 2 * f2 + f, h01 = -2 * f3 + 3 * f2, h11 = f3 - f2;
+    const curve = Math.hypot(b.x - a.x, b.z - a.z) < 60; // a teleport (pit, reset) is not a curve
+    x = curve ? h00 * a.x + h10 * avx + h01 * b.x + h11 * bvx : a.x + (b.x - a.x) * f;
+    z = curve ? h00 * a.z + h10 * avz + h01 * b.z + h11 * bvz : a.z + (b.z - a.z) * f;
+    h = a.h + angDiff(b.h, a.h) * f; vh = a.vh + angDiff(b.vh, a.vh) * f;
     v = a.v + (b.v - a.v) * f; prog = a.prog + (b.prog - a.prog) * f; lat = a.lat + (b.lat - a.lat) * f; src = f < 0.5 ? a : b;
   } else {
-    src = S[S.length - 1]; const ex = clamp((rt - src.tr) / 1000, 0, 0.25);
-    x = src.x + Math.sin(src.vh) * src.v * ex; z = src.z + Math.cos(src.vh) * src.v * ex; h = src.h; vh = src.vh; v = src.v; prog = src.prog + src.v * ex / DS; lat = src.lat;
+    // ran out of updates: carry on along the last known path for a moment
+    src = S[S.length - 1]; const ex = clamp((rt - src.t) / 1000, 0, 0.35);
+    x = src.x + Math.sin(src.vh) * src.v * ex; z = src.z + Math.cos(src.vh) * src.v * ex; h = src.h + (src.yr || 0) * ex; vh = src.vh; v = src.v; prog = src.prog + src.v * ex / DS; lat = src.lat;
   }
-  Object.assign(c, { x, z, h, vh, v, lat, steer: src.st });
+  // soft correction: ease towards the computed spot unless it is far off (then jump)
+  const err = Math.hypot(x - c.x, z - c.z), k = 1 - Math.exp(-(dt || 0.016) * 18);
+  if (!c.netSeen || err > 12) { c.x = x; c.z = z; c.h = h; c.netSeen = true; }
+  else { c.x += (x - c.x) * k; c.z += (z - c.z) * k; c.h += angDiff(h, c.h) * k; }
+  Object.assign(c, { vh, v, lat, steer: src.st });
   c.prog = Math.max(c.prog, Math.round(prog)); c.idx = ((Math.round(prog) % Tr.N) + Tr.N) % Tr.N;
   c.netPit = !!src.pit; c.inp = { throttle: src.thr, brake: src.br, steer: src.st };
   if (src.cmp && c.tyre && c.tyre.comp !== src.cmp) setTyres(c, src.cmp);
   // silent for a while: hide the car (it comes back as soon as data arrives again); only after a long gap is it out
-  const quiet = performance.now() - S[S.length - 1].tr;
+  const quiet = now - S[S.length - 1].tr;
   c.group.visible = quiet < 4000;
   if (quiet > 45000 && !c.dnf) { c.dnf = true; c.retire = 'connection lost'; }
 }
-setInterval(() => { if (game.mp && game.state === 'race') mpSend(); }, 1000 / 15);
+setInterval(() => { if (game.mp && game.state === 'race') mpSend(); }, 1000 / 20);
 function mpSend() {
   const p = game.player; if (!p) return;
-  net.sendFast({ k: 's', n: ++mpSeq, x: +p.x.toFixed(2), z: +p.z.toFixed(2), h: +p.h.toFixed(3), vh: +p.vh.toFixed(3), v: +p.v.toFixed(2), prog: +p.prog.toFixed(1), lat: +p.lat.toFixed(2),
+  net.sendFast({ k: 's', n: ++mpSeq, t: Math.round(performance.now()), yr: +((p.r || 0)).toFixed(3), x: +p.x.toFixed(2), z: +p.z.toFixed(2), h: +p.h.toFixed(3), vh: +p.vh.toFixed(3), v: +p.v.toFixed(2), prog: +p.prog.toFixed(1), lat: +p.lat.toFixed(2),
     st: +p.steer.toFixed(2), thr: p.inp.throttle, br: p.inp.brake, pit: !!p.pit, cmp: p.tyre && p.tyre.comp });
 }
 
@@ -1612,7 +1640,7 @@ function update(dt) {
   if (game.raceTime > 1 && !$('startLights').classList.contains('hidden')) $('startLights').classList.add('hidden');
   computeTow();
   const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
-  if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr); }
+  if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr, dt); }
   for (let s = 0; s < steps; s++) {
     for (const c of game.cars) {
       if (!c.active || c.remote) continue;
@@ -2115,7 +2143,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=real26a');
+await loadCarModel('js/car.bin?v=net26b');
 initMenu();
 requestAnimationFrame(frame);
 

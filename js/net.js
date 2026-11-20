@@ -140,7 +140,7 @@ export class Net {
   }
 
   /* ---- sending ---- */
-  // fast data (car states): direct where connected, otherwise relayed at up to 6 Hz per peer
+  // fast data (car states): direct where connected, otherwise relayed at up to 9 Hz
   sendFast(data) {
     const s = JSON.stringify(data), now = performance.now();
     let needRelay = false;
@@ -151,7 +151,7 @@ export class Net {
       if (peer && peer.open && peer.dc.readyState === 'open') { try { peer.dc.send(s); } catch (e) { needRelay = true; } if (!fresh) needRelay = true; }
       else needRelay = true;
     }
-    if (needRelay && this.tr && now - (this.lastRelay.get('all') || 0) > 160) { this.lastRelay.set('all', now); this.tr.send({ t: 'relay', from: this.id, data }); }
+    if (needRelay && this.tr && now - (this.lastRelay.get('all') || 0) > 110) { this.lastRelay.set('all', now); this.tr.send({ t: 'relay', from: this.id, data }); }
   }
   // reliable, rare messages (race start, results) always go over the signalling channel
   broadcast(type, payload) { if (this.tr) this.tr.send({ t: type, from: this.id, ...payload }); }
