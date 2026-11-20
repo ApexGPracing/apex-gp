@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ck26b';
-import { World } from './world.js?v=ck26b';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=ck26b';
-import { Sound } from './audio.js?v=ck26b';
-import { Particles, Skids } from './fx.js?v=ck26b';
-import { Weather } from './weather.js?v=ck26b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ck26b';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ck26b';
-import { Net, newCode } from './net.js?v=ck26b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ck26b';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ck26c';
+import { World } from './world.js?v=ck26c';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=ck26c';
+import { Sound } from './audio.js?v=ck26c';
+import { Particles, Skids } from './fx.js?v=ck26c';
+import { Weather } from './weather.js?v=ck26c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ck26c';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ck26c';
+import { Net, newCode } from './net.js?v=ck26c';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ck26c';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1695,8 +1695,8 @@ function updateCamera(dt, time) {
   const jx = (Math.random() - 0.5) * shake, jy = (Math.random() - 0.5) * shake;
   if (game.camMode === 0) {
     const E = c.eye || [0, 0.92, 0.05];
-    g.localToWorld(tmpV.set(E[0] + jx, E[1] + jy, E[2])); g.localToWorld(tmpL.set(E[0] + c.steer * 0.6, E[1] + 0.02, 14));
-    camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = 72;
+    g.localToWorld(tmpV.set(E[0] + jx, E[1] + jy, E[2])); g.localToWorld(tmpL.set(E[0] + c.steer * 0.6, E[1] - (c.dash && !c.closed ? 0.35 : -0.02), 14));
+    camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = c.closed ? 72 : 78;
   } else if (game.camMode === 1) {
     g.localToWorld(tmpV.set(jx, 1.36 + jy, -0.5)); g.localToWorld(tmpL.set(0, 0.8, 12));
     camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = 68;
@@ -2103,7 +2103,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ck26b');
+await loadCarModel('js/car.bin?v=ck26c');
 initMenu();
 requestAnimationFrame(frame);
 

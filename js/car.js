@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=ck26b';
+import { canvasTex } from './util.js?v=ck26c';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -481,7 +481,7 @@ export function updateDash(car, { gear, kmh, rpm, frac, lap, pos, delta }) {
 /* replace a car's simple wheel with the detailed one, placed for its cockpit */
 function fitCockpit(car, kind, glove) {
   const W = buildWheel(kind === 'gt3' || kind === 'hyper', glove);
-  const P = { f1: { wheel: [0, 0.74, 0.47, -0.32], eye: [0, 0.93, 0.02] }, gt3: { wheel: [0.32, 0.97, 0.14, -0.22], eye: [0.32, 1.1, -0.32] }, hyper: { wheel: [0, 0.86, 0.32, -0.3], eye: [0, 1.0, -0.14] } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.74, 0.47, -0.32], eye: [0, 0.93, 0.02] };
+  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.97, 0.14, -0.22], eye: [0.32, 1.1, -0.32] }, hyper: { wheel: [0, 0.86, 0.32, -0.3], eye: [0, 1.0, -0.14] } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
   const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); st.visible = false;
   car.dash = W; car.eye = P.eye;
   return car;
