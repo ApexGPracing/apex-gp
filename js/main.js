@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ck26c';
-import { World } from './world.js?v=ck26c';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=ck26c';
-import { Sound } from './audio.js?v=ck26c';
-import { Particles, Skids } from './fx.js?v=ck26c';
-import { Weather } from './weather.js?v=ck26c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=ck26c';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ck26c';
-import { Net, newCode } from './net.js?v=ck26c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ck26c';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=px26a';
+import { World } from './world.js?v=px26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=px26a';
+import { Sound } from './audio.js?v=px26a';
+import { Particles, Skids } from './fx.js?v=px26a';
+import { Weather } from './weather.js?v=px26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=px26a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=px26a';
+import { Net, newCode } from './net.js?v=px26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=px26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1836,16 +1836,27 @@ function updateHUD(dt) {
   else hint.className = 'hidden';
   drawMinimap();
 }
+/* F1 25-style proximity arrows: chevrons beside your car pointing in at a car alongside, sliding up or down
+   with how far ahead or behind it is, amber when close, red when you are overlapping wheel-to-wheel */
 function updateProximity(p) {
-  let L = 0, R = 0, B = 0; const h = p.h, sh = Math.sin(h), ch = Math.cos(h);
+  const side = { L: null, R: null }; let B = 0; const h = p.h, sh = Math.sin(h), ch = Math.cos(h);
   for (const o of game.cars) {
     if (o === p || !o.active || o.pit || !o.group.visible) continue;
     const dx = o.x - p.x, dz = o.z - p.z, fwd = dx * sh + dz * ch, left = dx * ch - dz * sh;
-    if (fwd < -16 || fwd > 5 || Math.abs(left) > 7) continue;
-    const k = 1 - Math.min(1, Math.abs(fwd) / 16);
-    if (Math.abs(left) > 1.4) { if (left > 0) L = Math.max(L, k); else R = Math.max(R, k); } else if (fwd < -3) B = Math.max(B, k);
+    if (fwd < -14 || fwd > 7 || Math.abs(left) > 7.5) continue;
+    if (Math.abs(left) > 1.3) {
+      const k = 1 - Math.min(1, Math.max(0, Math.abs(fwd) - 2) / 12) * 0.85, hot = Math.abs(fwd) < 5 && Math.abs(left) < 3.4, key = left > 0 ? 'L' : 'R';
+      if (!side[key] || k > side[key].k) side[key] = { k, hot, fwd };
+    } else if (fwd < -3) B = Math.max(B, 1 - Math.min(1, (-fwd - 3) / 11));
   }
-  $('proxL').style.opacity = L; $('proxR').style.opacity = R; $('proxB').style.opacity = B;
+  document.body.classList.toggle('cockpit', game.camMode === 0);
+  for (const key of ['L', 'R']) {
+    const el = $('prox' + key), s2 = side[key];
+    if (!s2) { el.style.opacity = 0; continue; }
+    el.style.opacity = s2.k; el.classList.toggle('hot', s2.hot);
+    el.style.top = (game.camMode === 0 ? 50 - clamp(s2.fwd, -14, 7) * 0.9 : 55 - clamp(s2.fwd, -14, 7) * 1.4) + '%';
+  }
+  $('proxB').style.opacity = B;
 }
 function raceBoard() {
   const Tr = game.T, p = game.player, st = standings(), L = st[0];
@@ -2103,7 +2114,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ck26c');
+await loadCarModel('js/car.bin?v=px26a');
 initMenu();
 requestAnimationFrame(frame);
 

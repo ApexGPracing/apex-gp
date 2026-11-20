@@ -124,11 +124,18 @@ table.res tr.ko td{color:#ff8a8a}
 #flag.sc{background:#f5c400;color:#111}
 #flag.red{background:#e11d1d;color:#fff;font-size:44px}
 #flag.green{background:#16a34a;color:#fff}
-.prox{position:absolute;opacity:0;pointer-events:none;transition:opacity .08s}
-.prox.l,.prox.r{top:35%;height:30%;width:34px}
-.prox.l{left:0;background:linear-gradient(90deg,rgba(255,170,0,.95),rgba(255,170,0,0));clip-path:polygon(0 50%,100% 0,100% 100%)}
-.prox.r{right:0;background:linear-gradient(270deg,rgba(255,170,0,.95),rgba(255,170,0,0));clip-path:polygon(100% 50%,0 0,0 100%)}
-.prox.b{left:50%;bottom:0;width:240px;height:26px;transform:translateX(-50%);background:linear-gradient(0deg,rgba(255,170,0,.9),rgba(255,170,0,0));clip-path:polygon(50% 100%,0 0,100% 0)}
+.prox{position:absolute;opacity:0;pointer-events:none;transition:opacity .1s,top .1s;display:flex;gap:3px;--pc:#ffb000;filter:drop-shadow(0 0 6px rgba(0,0,0,.6))}
+.prox i{display:block;background:var(--pc)}
+.prox.hot{--pc:#ff2a2a}
+.prox.l,.prox.r{top:55%;transform:translateY(-50%)}
+.prox.l{left:calc(50% - 250px)}.prox.r{right:calc(50% - 250px);flex-direction:row-reverse}
+.prox.l i,.prox.r i{width:16px;height:46px}
+.prox.r i{clip-path:polygon(0 0,45% 0,100% 50%,45% 100%,0 100%,55% 50%)}
+.prox.l i{clip-path:polygon(100% 0,55% 0,0 50%,55% 100%,100% 100%,45% 50%)}
+.prox.l i:nth-child(2),.prox.r i:nth-child(2){opacity:.75}.prox.l i:nth-child(3),.prox.r i:nth-child(3){opacity:.5}
+body.cockpit .prox.l{left:4%}body.cockpit .prox.r{right:4%}
+.prox.b{left:50%;top:auto;bottom:150px;transform:translateX(-50%);flex-direction:column;align-items:center;gap:2px}
+.prox.b i{width:60px;height:14px;clip-path:polygon(0 0,50% 60%,100% 0,100% 40%,50% 100%,0 40%)}.prox.b i:nth-child(2){opacity:.6}
 
 #delta{position:absolute;left:50%;top:66px;transform:translateX(-50%);padding:4px 16px;border-radius:8px;background:rgba(10,12,18,.85);border:2px solid var(--green);font-size:26px;font-weight:800;letter-spacing:.06em;font-variant-numeric:tabular-nums;white-space:nowrap}
 #delta span{font-size:15px;color:var(--muted);margin-right:8px;letter-spacing:.14em}
@@ -259,7 +266,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   <div id="pitHint" class="hidden"></div>
   <div id="flag" class="hidden"></div>
   <div id="delta" class="hidden"><span>DELTA</span><b id="deltaVal">+0.0</b></div>
-  <div id="proxL" class="prox l"></div><div id="proxR" class="prox r"></div><div id="proxB" class="prox b"></div>
+  <div id="proxL" class="prox l"><i></i><i></i><i></i></div><div id="proxR" class="prox r"><i></i><i></i><i></i></div><div id="proxB" class="prox b"><i></i><i></i></div>
   <div id="wx"></div>
   <div id="drs" class="hidden"></div>
   <div id="tow" class="hidden"></div>
@@ -331,6 +338,6 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=ck26c"></script>
+<script type="module" src="js/main.js?v=px26a"></script>
 </body>
 </html>
