@@ -18,14 +18,13 @@ const D = (name, code, persona, num, team) => [name, code, persona, num, team]; 
 export const SERIES = {
   f1: {
     id: 'f1', name: 'Formula 1', short: 'F1', cls: 'f1', laps: 5,
-    // 2026: 22 rounds after Bahrain and Saudi Arabia were cancelled (Suzuka, round 3, is not in the game yet)
-    calendar: ['melbourne', 'shanghai', 'miami', 'montreal', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'zandvoort', 'monza', 'madrid', 'baku', 'singapore', 'austin', 'mexicocity', 'saopaulo', 'lasvegas', 'lusail', 'abudhabi'],
-    missing: ['Suzuka'],
+    // the 2026 calendar as planned at the start of the year, with Imola in Suzuka's slot (round 3)
+    calendar: ['melbourne', 'shanghai', 'imola', 'sakhir', 'jeddah', 'miami', 'montreal', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'zandvoort', 'monza', 'madrid', 'baku', 'singapore', 'austin', 'mexicocity', 'saopaulo', 'lasvegas', 'lusail', 'abudhabi'],
   },
   f2: {
     id: 'f2', name: 'Formula 2', short: 'F2', cls: 'f2', laps: 5,
-    // 2026: Sakhir and Jeddah cancelled, Miami and Montreal added
-    calendar: ['melbourne', 'miami', 'montreal', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'monza', 'madrid', 'baku', 'lusail', 'abudhabi'],
+    // the 2026 calendar as planned at the start of the year
+    calendar: ['melbourne', 'sakhir', 'jeddah', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'monza', 'madrid', 'baku', 'lusail', 'abudhabi'],
     teams: [T('Invicta Racing', '#111111', '#d4af37'), T('Hitech TGR', '#f2f2f2', '#d40000'), T('Campos Racing', '#e10600', '#ffcc00'), T('DAMS Lucas Oil', '#0b2a66', '#e10600'),
       T('MP Motorsport', '#ff6a00', '#0b1f4d'), T('PREMA Racing', '#d40000', '#f2f2f2'), T('Rodin Motorsport', '#f2f2f2', '#00a19c'), T('ART Grand Prix', '#1a1a1a', '#c0c4ca'),
       T('AIX Racing', '#1c1c1c', '#ff2d55'), T('Van Amersfoort Racing', '#ff8c00', '#111111'), T('Trident', '#0a3d91', '#c0c4ca')],

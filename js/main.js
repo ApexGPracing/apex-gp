@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=scn26b';
-import { World } from './world.js?v=scn26b';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=scn26b';
-import { Sound } from './audio.js?v=scn26b';
-import { Particles, Skids } from './fx.js?v=scn26b';
-import { Weather } from './weather.js?v=scn26b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=scn26b';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=scn26b';
-import { Net, newCode, loadTurn } from './net.js?v=scn26b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=scn26b';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=kerb26d';
+import { World } from './world.js?v=kerb26d';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=kerb26d';
+import { Sound } from './audio.js?v=kerb26d';
+import { Particles, Skids } from './fx.js?v=kerb26d';
+import { Weather } from './weather.js?v=kerb26d';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=kerb26d';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=kerb26d';
+import { Net, newCode, loadTurn } from './net.js?v=kerb26d';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=kerb26d';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1693,7 +1693,9 @@ function updateCarVisuals(dt) {
     c.roll = (c.roll || 0) + (tgtRoll - (c.roll || 0)) * Math.min(1, dt * 6); c.group.rotation.z = c.roll;
     const Tb = game.T, bh = surf.h, inBank = Math.abs(c.lat) < W + KERB + 2 ? Math.atan(Tb.bank[c.idx]) : 0;
     c.group.rotation.z += inBank;
-    c.group.position.y = bh + (c.lift || 0) + ((c.surf === 1 && Math.abs(c.v) > 10) ? Math.sin(performance.now() * 0.08 + c.x) * 0.012 : (c.dmg.punct ? -0.05 : 0));
+    // riding up over the kerb bump (and a little rattle across its stripes)
+    const onKerb = c.surf === 1 ? kerbHeight(Math.abs(c.lat) - W) * 0.85 : 0;
+    c.group.position.y = bh + (c.lift || 0) + onKerb + ((c.surf === 1 && Math.abs(c.v) > 10) ? Math.sin(performance.now() * 0.08 + c.x) * 0.012 : (c.dmg.punct ? -0.05 : 0));
     const sp = Math.abs(c.v);
     if (c.v < -0.5) { c.gear = -1; c.rpm = 4500 + sp * 400; }
     else {
@@ -2171,7 +2173,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=scn26b');
+await loadCarModel('js/car.bin?v=kerb26d');
 initMenu();
 requestAnimationFrame(frame);
 

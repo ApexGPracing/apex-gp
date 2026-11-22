@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=scn26b';
-import { AXLE_F, AXLE_R } from './car.js?v=scn26b';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=scn26b';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=kerb26d';
+import { AXLE_F, AXLE_R } from './car.js?v=kerb26d';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=kerb26d';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -246,7 +246,7 @@ export class World {
     const lineMat = new THREE.MeshStandardMaterial({ color: '#f2f2f2', roughness: 0.6, map: tx.paint });
     for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);
     // verges / run-off
-    const vergeMat = T.street ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#7d7f86', roughness: 0.9 })
+    const vergeMat = T.street ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: T.def.pave || '#7d7f86', roughness: 0.9 })
       : new THREE.MeshStandardMaterial({ map: tx.verge, color: th.grass, roughness: 1 });
     for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * W, 0.01, 0), i => [s * (sideLim(T, s)(i) + 0.3), 0.01, 1]], T.street ? 6 : 16), vergeMat);
     // kerbs
@@ -256,7 +256,7 @@ export class World {
     for (const [s0, e0] of T.kerbs) {
       const cnt = e0 - s0;
       for (const s of [1, -1]) {
-        add(ribbon(T, s0, cnt, [col(s * (W - 0.03), 0.025, 0), col(s * (W + 0.55), 0.075, 0.4), col(s * (W + KERB - 0.25), 0.065, 0.8), col(s * (W + KERB), 0.018, 1)], 4), kerbMat);
+        add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 4), kerbMat);
         if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
       }
     }
