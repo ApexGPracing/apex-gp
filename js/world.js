@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=street26a';
-import { AXLE_F, AXLE_R } from './car.js?v=street26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=street26a';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=real26b';
+import { AXLE_F, AXLE_R } from './car.js?v=real26b';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=real26b';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -246,7 +246,11 @@ export class World {
     const lineMat = new THREE.MeshStandardMaterial({ color: '#f2f2f2', roughness: 0.6, map: tx.paint });
     for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);
     // verges / run-off
-    const vergeMat = T.street ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: T.def.pave || '#7d7f86', roughness: 0.9 })
+    const rs = T.def.runoffStyle;
+    const ricardT = canvasTex(128, 16, (g2, w, h) => { for (let k = 0; k < 8; k++) { g2.fillStyle = k < 2 ? '#d42027' : k % 2 ? '#1d4ed8' : '#e8ecf2'; g2.fillRect(k * 16, 0, 16, h); } });
+    const vergeMat = rs === 'tarmac' ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#9ea1a8', roughness: 0.9 })
+      : rs === 'ricard' ? new THREE.MeshStandardMaterial({ map: ricardT, roughness: 0.75 })
+      : T.street ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: T.def.pave || '#7d7f86', roughness: 0.9 })
       : new THREE.MeshStandardMaterial({ map: tx.verge, color: th.grass, roughness: 1 });
     for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * W, 0.01, 0), i => [s * (sideLim(T, s)(i) + 0.3), 0.01, 1]], T.street ? 6 : 16), vergeMat);
     // kerbs
@@ -261,9 +265,9 @@ export class World {
       }
     }
     // big flat kerbs (e.g. Sainte Devote): a wider kerb on the inside of the corner
-    for (const [m0, m1, wdt] of T.def.bigKerbs || []) {
+    for (const [m0, m1, wdt, where] of T.def.bigKerbs || []) {
       const a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS); let sum = 0; for (let k = 0; k <= cnt; k++) sum += T.curv[(a + k) % N];
-      const sd = sum > 0 ? 1 : -1;
+      const sd = (sum > 0 ? 1 : -1) * (where === 'out' ? -1 : 1);
       add(ribbon(T, a, cnt, [col(sd * (W - 0.03), 0.012, 0), col(sd * (W + 0.15), 0.05, 0.1), col(sd * (W + wdt - 0.2), 0.06, 0.9), col(sd * (W + wdt), 0.012, 1)], 2.4), kerbMat);
     }
     // tunnels (Monaco): concrete walls, a roof, and rows of lights along the ceiling
@@ -291,6 +295,25 @@ export class World {
         const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 1.2, 1.2).translate(0, 11.6, 0), stone, mer.length), dd = new THREE.Object3D();
         mer.forEach((i, k) => { const l = sd * (sideLim(T, sd)(i) + 0.9); dd.position.set(T.px[i] + T.nx[i] * l, bankH(T, i, l), T.pz[i] + T.nz[i] * l); dd.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); dd.updateMatrix(); im.setMatrixAt(k, dd.matrix); }); G.add(im);
       }
+    }
+    // wide run-off at famous corners: gravel or tarmac out to the moved-back wall
+    for (const z of T.runZones || []) {
+      const lim = sideLim(T, z.side), m = z.kind === 'gravel' ? new THREE.MeshStandardMaterial({ map: tx.gravel, normalMap: tx.gravelN, roughness: 1 }) : new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#a3a6ad', roughness: 0.9 });
+      add(ribbon(T, z.a, z.len, [col(z.side * (W + KERB + 2.4), z.kind === 'gravel' ? 0.03 : 0.025, 0), i => [z.side * Math.max(W + KERB + 2.6, lim(i) - 0.6), z.kind === 'gravel' ? 0.03 : 0.025, 3]], 8), m);
+    }
+    // bridges (Singapore's Anderson Bridge): white steel arches over both sides of the road
+    for (const [m0, m1] of T.def.bridges || []) {
+      const a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS), steelW = new THREE.MeshStandardMaterial({ color: '#e8eaee', roughness: 0.4, metalness: 0.5, emissive: th.night ? '#9fb3ff' : '#000000', emissiveIntensity: 0.25 });
+      for (const sd of [1, -1]) for (const [u0, u1, hgt] of [[0, 0.34, 9], [0.33, 0.67, 11], [0.66, 1, 9]]) {
+        const pts = []; for (let k = 0; k <= 16; k++) { const t = u0 + (u1 - u0) * k / 16, i = (a + Math.round(t * cnt)) % N, l = sd * (sideLim(T, sd)(i) + 0.6), y = bankH(T, i, l) + Math.sin(Math.PI * k / 16) * hgt; pts.push(new THREE.Vector3(T.px[i] + T.nx[i] * l, y, T.pz[i] + T.nz[i] * l)); }
+        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.35, 8), steelW, { cast: q > 0 });
+        for (let k = 1; k < 16; k += 2) { const p0 = pts[k]; const v = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, Math.max(0.2, p0.y - pts[0].y), 6), steelW); v.position.set(p0.x, (p0.y + pts[0].y) / 2, p0.z); G.add(v); }
+      }
+    }
+    // a giant glowing dome near the track (Las Vegas)
+    if (T.def.dome) {
+      const [dx2, dz2, rad] = T.def.dome, domeMat = new THREE.MeshStandardMaterial({ color: '#111', emissive: '#ffffff', emissiveMap: canvasTex(512, 256, (g2, w, h) => { const gr = g2.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#ff2bd6'); gr.addColorStop(0.35, '#ffb400'); gr.addColorStop(0.7, '#00d4ff'); gr.addColorStop(1, '#7c3aed'); g2.fillStyle = gr; g2.fillRect(0, 0, w, h); for (let k = 0; k < 600; k++) { g2.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.25) + ')'; g2.fillRect(Math.random() * w, Math.random() * h, 3, 3); } }), emissiveIntensity: 1.6 });
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(rad, 48, 24), domeMat); dome.position.set(dx2, height(dx2, dz2) + rad * 0.72, dz2); G.add(dome);
     }
     // escape roads straight on through chicanes: asphalt with white edge lines and painted chevrons
     for (const z of T.escapes || []) {
@@ -434,7 +457,7 @@ export class World {
       add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (W - 0.05), 0.012, 0], () => [ps * (P.wall - 0.25), 0.012, 1]], 6), new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#9a9da4', roughness: 0.9 }));
       // entry and exit slip roads, with white edge lines
       const roadMat = new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#bfc2c8', roughness: 0.88 });
-      for (const [s0, cnt] of [[(P.entry - 30 + N) % N, P.limIn + 33], [(P.entry + P.limOut - 2) % N, P.len - P.limOut + 33]]) {
+      for (const [s0, cnt] of [[(P.entry - 30 + N) % N, P.limIn + 33], [(P.entry + P.limOut - 2) % N, P.len - P.limOut + 33 + Math.round((P.merge || 0) / DS)]]) {
         const ed = (i, w) => { const r2 = pitRoad(T, i); return r2 ? (w ? r2.b : r2.a) : W; };
         add(ribbon(T, s0, cnt, [i => [ps * ed(i, 0), 0.03, 0], i => [ps * ed(i, 1), 0.03, 1]], 6), roadMat);
         add(ribbon(T, s0, cnt, [i => [ps * Math.max(ed(i, 0), ed(i, 1) - 0.35), 0.036, 0], i => [ps * Math.max(ed(i, 0), ed(i, 1) - 0.1), 0.036, 1]], 4), lineMat);
@@ -730,9 +753,9 @@ export class World {
       // street circuits: the town comes right up to the barriers (Monaco, Baku, Singapore...)
       const near = scatter(Math.round(sc2.buildings * (T.street ? 1.4 : 0.55) * mult), T.wallOff + (T.street ? 12 : 26), 300, 1e9, T.wallOff + 32);
       const far = scatter(Math.round(sc2.buildings * 0.45 * mult), 450, 1600);
-      const mat = th.night ? new THREE.MeshStandardMaterial({ color: '#2a2f3c', roughness: 0.4, metalness: 0.4, emissive: '#ffffff', emissiveMap: tx.winNight, emissiveIntensity: 0.55 })
+      const mat = th.night ? new THREE.MeshStandardMaterial({ color: '#2a2f3c', roughness: 0.4, metalness: 0.4, emissive: T.def.neon ? '#ffd27a' : '#ffffff', emissiveMap: tx.winNight, emissiveIntensity: T.def.neon ? 1.1 : 0.55 })
         : new THREE.MeshStandardMaterial({ map: tx.winDay, roughness: 0.35, metalness: 0.45 });
-      const pal = th.night ? ['#2a2f3c', '#252a38', '#31283f'] : ['#e8dccb', '#cdd5dd', '#d9c6b0', '#b9c3cc', '#f0e6d8', '#a9b8c8'];
+      const pal = th.night ? (T.def.neon ? ['#ff2bd6', '#ffb400', '#00d4ff', '#7c3aed', '#ff5a36', '#22c55e'] : ['#2a2f3c', '#252a38', '#31283f']) : ['#e8dccb', '#cdd5dd', '#d9c6b0', '#b9c3cc', '#f0e6d8', '#a9b8c8'];
       const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
       inst(geo, mat, near.concat(far), (d, p) => { const fr = p[3] > 450; d.rotation.y = r() * 6; d.scale.set(16 + r() * 26, fr ? 50 + Math.pow(r(), 2) * 230 : 14 + Math.pow(r(), 2) * 90, 16 + r() * 26); }, { colors: pal });
     }

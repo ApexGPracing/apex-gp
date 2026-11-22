@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=street26a';
-import { World } from './world.js?v=street26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=street26a';
-import { Sound } from './audio.js?v=street26a';
-import { Particles, Skids } from './fx.js?v=street26a';
-import { Weather } from './weather.js?v=street26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=street26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=street26a';
-import { Net, newCode, loadTurn } from './net.js?v=street26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=street26a';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=real26b';
+import { World } from './world.js?v=real26b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=real26b';
+import { Sound } from './audio.js?v=real26b';
+import { Particles, Skids } from './fx.js?v=real26b';
+import { Weather } from './weather.js?v=real26b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=real26b';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=real26b';
+import { Net, newCode, loadTurn } from './net.js?v=real26b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=real26b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -436,6 +436,8 @@ function surfaceOf(c, Tr) {
   // escape roads are asphalt
   for (const z of Tr.escapes || []) if (z.off.has(c.idx) && Math.abs(c.lat - z.off.get(c.idx)) < 3.8) return 0;
   if (Tr.street) return 2;
+  for (const z of Tr.runZones || []) if (z.side === s && ((c.idx - z.a + Tr.N) % Tr.N) <= z.len && a > W + KERB + 2.4) return z.kind === 'gravel' ? 3 : 2;
+  if (Tr.def.runoffStyle && a > W + KERB) return Tr.gravel[c.idx] === s && a > W + KERB + 2.4 ? 3 : 2;
   if (a <= W + KERB + 2.4) return 2;
   if (Tr.gravel[c.idx] === s) return 3;
   return 4;
@@ -889,6 +891,7 @@ function pitPathLat(c, i, Tr) {
     if (before > 0 && before < 75) return Tr.race[i] + (edge - Tr.race[i]) * smooth(75, 0, before);
     if (kk <= P.limIn + 2) return edge + (P.fast - edge) * smooth(0, P.limIn - 6, kk);
   }
+  if (P.merge && !c.pit && game.raceTime - (c.pitExitT ?? -99) < 25 && kk >= P.limOut - 2 && kk <= P.len + Math.round(P.merge / DS) + 30) { const r2 = pitRoad(Tr, i); if (r2) return P.side * (r2.a + r2.b) / 2; }
   if (c.inPitRoad && !c.pit && kk >= P.limOut - 2 && kk < P.len) return P.fast + (P.side * (W - 1.5) - P.fast) * smooth(P.limOut, P.len - 4, kk);
   return null;
 }
@@ -2189,7 +2192,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=street26a');
+await loadCarModel('js/car.bin?v=real26b');
 initMenu();
 requestAnimationFrame(frame);
 
