@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=elev26a';
-import { World } from './world.js?v=elev26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=elev26a';
-import { Sound } from './audio.js?v=elev26a';
-import { Particles, Skids } from './fx.js?v=elev26a';
-import { Weather } from './weather.js?v=elev26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=elev26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=elev26a';
-import { Net, newCode, loadTurn } from './net.js?v=elev26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=elev26a';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=scn26b';
+import { World } from './world.js?v=scn26b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=scn26b';
+import { Sound } from './audio.js?v=scn26b';
+import { Particles, Skids } from './fx.js?v=scn26b';
+import { Weather } from './weather.js?v=scn26b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=scn26b';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=scn26b';
+import { Net, newCode, loadTurn } from './net.js?v=scn26b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=scn26b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1993,7 +1993,11 @@ function refreshMenu() {
     // championship: the series' real calendar; other modes: every track, the series' own calendar first
     const cal = calIdx(), list = settings.mode === 'champ' ? cal : cal.concat(TRACKS.map((_, i) => i).filter(i => !cal.includes(i)));
     if (!list.includes(settings.track)) settings.track = list[0];
-    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = list.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k; el.querySelector('.rnd').textContent = String(k + 1).padStart(2, '0'); el.querySelector('.st').innerHTML = cardStats(i); } });
+    // section headers: the series' calendar, then "Other tracks"
+    const head = (id, html, order, show) => { let h = $(id); if (!h) { h = document.createElement('div'); h.id = id; h.className = 'calHead'; $('trackList').appendChild(h); } h.innerHTML = html; h.style.order = order; h.style.display = show ? '' : 'none'; };
+    head('calHead', SER.name + ' 2026 calendar · ' + cal.length + ' rounds' + (SER.missing ? '<small>Not in the game yet: ' + SER.missing.join(', ') + '</small>' : ''), -1, true);
+    head('otherHead', 'Other tracks<small>Race any series here in Quick Race, Time Trial and Online</small>', cal.length * 2 - 1, list.length > cal.length);
+    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = list.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k * 2; el.querySelector('.rnd').textContent = k < cal.length ? String(k + 1).padStart(2, '0') : '–'; el.querySelector('.st').innerHTML = cardStats(i); } });
     $('optLmClass').classList.toggle('hidden', SER.id !== 'lemans');
     $('menuSub').textContent = SER.name + ' · ' + cal.length + '-round championship · ' + TRACKS.length + ' tracks';
   }
@@ -2167,7 +2171,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=elev26a');
+await loadCarModel('js/car.bin?v=scn26b');
 initMenu();
 requestAnimationFrame(frame);
 

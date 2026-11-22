@@ -18,11 +18,14 @@ const D = (name, code, persona, num, team) => [name, code, persona, num, team]; 
 export const SERIES = {
   f1: {
     id: 'f1', name: 'Formula 1', short: 'F1', cls: 'f1', laps: 5,
-    calendar: ['melbourne', 'shanghai', 'imola', 'sakhir', 'jeddah', 'miami', 'montreal', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'zandvoort', 'monza', 'madrid', 'baku', 'singapore', 'austin', 'mexicocity', 'saopaulo', 'lasvegas', 'lusail', 'abudhabi'],
+    // 2026: 22 rounds after Bahrain and Saudi Arabia were cancelled (Suzuka, round 3, is not in the game yet)
+    calendar: ['melbourne', 'shanghai', 'miami', 'montreal', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'zandvoort', 'monza', 'madrid', 'baku', 'singapore', 'austin', 'mexicocity', 'saopaulo', 'lasvegas', 'lusail', 'abudhabi'],
+    missing: ['Suzuka'],
   },
   f2: {
     id: 'f2', name: 'Formula 2', short: 'F2', cls: 'f2', laps: 5,
-    calendar: ['melbourne', 'sakhir', 'jeddah', 'imola', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'monza', 'baku', 'lusail', 'abudhabi'],
+    // 2026: Sakhir and Jeddah cancelled, Miami and Montreal added
+    calendar: ['melbourne', 'miami', 'montreal', 'montecarlo', 'barcelona', 'spielberg', 'silverstone', 'spa', 'budapest', 'monza', 'madrid', 'baku', 'lusail', 'abudhabi'],
     teams: [T('Invicta Racing', '#111111', '#d4af37'), T('Hitech TGR', '#f2f2f2', '#d40000'), T('Campos Racing', '#e10600', '#ffcc00'), T('DAMS Lucas Oil', '#0b2a66', '#e10600'),
       T('MP Motorsport', '#ff6a00', '#0b1f4d'), T('PREMA Racing', '#d40000', '#f2f2f2'), T('Rodin Motorsport', '#f2f2f2', '#00a19c'), T('ART Grand Prix', '#1a1a1a', '#c0c4ca'),
       T('AIX Racing', '#1c1c1c', '#ff2d55'), T('Van Amersfoort Racing', '#ff8c00', '#111111'), T('Trident', '#0a3d91', '#c0c4ca')],
@@ -40,7 +43,9 @@ export const SERIES = {
   },
   indy: {
     id: 'indy', name: 'IndyCar', short: 'INDY', cls: 'indy', laps: 8,
-    calendar: ['miami', 'austin', 'indianapolis', 'texas', 'montreal', 'iowa', 'watkinsglen', 'lasvegas', 'madrid'],
+    // 2026: 18 races; only the Indianapolis 500 venue is in the game so far
+    calendar: ['indianapolis'],
+    missing: ['St. Petersburg', 'Phoenix', 'Arlington', 'Barber', 'Long Beach', 'Indianapolis road course', 'Detroit', 'World Wide Technology Raceway', 'Road America', 'Mid-Ohio', 'Nashville', 'Milwaukee (x2)', 'Markham', 'Portland', 'Washington D.C.', 'Laguna Seca'],
     teams: [T('Team Penske', '#f2f2f2', '#ffd400'), T('Chip Ganassi Racing', '#d40000', '#ffffff'), T('Arrow McLaren', '#ff8000', '#0a2b5c'), T('Andretti Global', '#0b1f4d', '#ff6a13'),
       T('A.J. Foyt Racing', '#c8102e', '#f2f2f2'), T('Ed Carpenter Racing', '#1a1a1a', '#00c2ff'), T('Dale Coyne Racing', '#00a3e0', '#111111'), T('Rahal Letterman Lanigan', '#f5f5f5', '#00843d')],
     drivers: [D('Josef Newgarden', 'NEW', [0.93, 0.85, 0.85, 0.88, 1], 2, 0), D('Scott McLaughlin', 'MCL', [0.93, 0.8, 0.85, 0.9, 0.95], 3, 0), D('David Malukas', 'MLK', [0.9, 0.8, 0.75, 0.85, 1], 12, 0),
@@ -54,7 +59,9 @@ export const SERIES = {
   },
   gt3: {
     id: 'gt3', name: 'GT3', short: 'GT3', cls: 'gt3', laps: 5,
-    calendar: ['paulricard', 'monza', 'silverstone', 'spa', 'nurburgring', 'hockenheim', 'magnycours', 'zandvoort', 'barcelona', 'portimao', 'mugello', 'imola', 'budapest', 'spielberg', 'lemans'],
+    // GT World Challenge Europe 2026 (Brands Hatch and Misano are not in the game yet)
+    calendar: ['paulricard', 'monza', 'spa', 'magnycours', 'nurburgring', 'zandvoort', 'barcelona', 'portimao'],
+    missing: ['Brands Hatch', 'Misano'],
     teams: [T('Team WRT · BMW', '#1c3f94', '#f5f5f5'), T('AF Corse · Ferrari', '#d40000', '#f2c200'), T('Emil Frey Racing · Ferrari', '#f2f2f2', '#d40000'), T('Boutsen VDS · Porsche', '#111111', '#f5d000'),
       T('Comtoyou Racing · Aston Martin', '#0b5e3b', '#d4af37'), T('Paradine Competition · BMW', '#f2f2f2', '#1c3f94')],
     drivers: [D('Kelvin van der Linde', 'KVL', [0.94, 0.8, 0.8, 0.9, 0.95], 30, 0), D('Jordan Pepper', 'PEP', [0.91, 0.75, 0.8, 0.9, 0.95], 31, 0), D('Valentino Rossi', 'ROS', [0.85, 0.75, 0.7, 0.85, 1], 46, 0),
@@ -66,7 +73,8 @@ export const SERIES = {
   },
   lemans: {
     id: 'lemans', name: 'Le Mans', short: 'LM', cls: 'hyper', laps: 4, multiClass: true,
-    calendar: ['lusail', 'imola', 'spa', 'lemans', 'saopaulo', 'austin', 'portimao', 'monza', 'sakhir'],
+    calendar: ['lusail', 'imola', 'spa', 'lemans', 'saopaulo', 'austin', 'sakhir'], // WEC 2026 (Fuji, round 7, is not in the game yet)
+    missing: ['Fuji'],
     teams: [T('Ferrari AF Corse', '#d40000', '#f2c200', 'hyper'), T('Toyota Gazoo Racing', '#f2f2f2', '#e60012', 'hyper'), T('BMW M Team WRT', '#1c3f94', '#f5f5f5', 'hyper'),
       T('Cadillac Hertz Team Jota', '#111111', '#f5d000', 'hyper'), T('Alpine Endurance Team', '#1f6fe0', '#ff4fa0', 'hyper'), T('Peugeot TotalEnergies', '#2b2f36', '#b5f700', 'hyper'),
       T('Aston Martin THOR Team', '#0b5e3b', '#c8ff00', 'hyper'),

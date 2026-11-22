@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=elev26a';
-import { AXLE_F, AXLE_R } from './car.js?v=elev26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=elev26a';
+import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=scn26b';
+import { AXLE_F, AXLE_R } from './car.js?v=scn26b';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=scn26b';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -513,7 +513,7 @@ export class World {
       // stands outside the 3 sharpest corners
       const corners = T.kerbs.map(([a, b]) => { let mi = a, mk = 0; for (let i = a; i <= b; i++) { const k = Math.abs(T.curv[i % N]); if (k > mk) { mk = k; mi = i % N; } } return { i: mi, k: mk, s: T.curv[mi] > 0 ? -1 : 1 }; }).sort((a, b) => b.k - a.k);
       let placed = 0;
-      for (const c of corners) { if (placed >= 3) break; if (Math.min(Math.abs(c.i), N - c.i) < 120) continue; const lim = c.s > 0 ? T.limL[c.i] : T.limR[c.i]; if (lim < T.wallOff - 1 && !T.street) continue; stand(c.i, c.s, 50); placed++; }
+      for (const c of corners) { if (placed >= 6) break; if (Math.min(Math.abs(c.i), N - c.i) < 120) continue; const lim = c.s > 0 ? T.limL[c.i] : T.limR[c.i]; if (lim < T.wallOff - 1 && !T.street) continue; stand(c.i, c.s, 50); placed++; }
     }
     // sponsor bridge over a straight
     {
@@ -534,6 +534,76 @@ export class World {
       const d = new THREE.Object3D();
       poles.forEach(([i, s], k) => { const l = (s > 0 ? T.limL[i] : T.limR[i]) + 3; d.position.set(T.px[i] + T.nx[i] * s * l, bankH(T, i, s * l), T.pz[i] + T.nz[i] * s * l); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); d.updateMatrix(); pole.setMatrixAt(k, d.matrix); head.setMatrixAt(k, d.matrix); });
       G.add(pole, head);
+    }
+
+    /* ----- trackside dressing: billboards, marshal posts, TV towers, paddock, fan zones, yachts ----- */
+    {
+      const cornersAll = T.kerbs.map(([a, b]) => { let mi = a, mk = 0; for (let i = a; i <= b; i++) { const k = Math.abs(T.curv[i % N]); if (k > mk) { mk = k; mi = i % N; } } return { i: mi, k: mk, s: T.curv[mi] > 0 ? -1 : 1, a, b }; });
+      const sharp = cornersAll.slice().sort((x, y) => y.k - x.k);
+      const lim = (i, s2) => s2 > 0 ? T.limL[i] : T.limR[i];
+      const inPit = i => { const kk = (i - P.entry + N) % N; return kk <= P.len + 30 || (P.entry - i + N) % N < 40; };
+      const d = new THREE.Object3D();
+      const placeAt = (im, k, i, lat, yOff = 0, ry = 0) => { d.position.set(T.px[i] + T.nx[i] * lat, bankH(T, i, lat) + yOff, T.pz[i] + T.nz[i] * lat); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]) + ry, 0); d.scale.set(1, 1, 1); d.updateMatrix(); im.setMatrixAt(k, d.matrix); };
+      // advertising hoardings behind the barrier on the outside of corners (circuits; streets already have ad walls)
+      if (!T.street) {
+        const spots = [];
+        for (const c of cornersAll) for (let j = c.a; j <= c.b + 30; j += 9) { const i = j % N, sd = c.s; if (!inPit(i) && lim(i, sd) > 8) spots.push([i, sd]); }
+        const adMat = new THREE.MeshStandardMaterial({ map: tx.ads, roughness: 0.55, emissive: th.night ? '#ffffff' : '#000000', emissiveMap: th.night ? tx.ads : null, emissiveIntensity: 0.5 });
+        const boards = new THREE.InstancedMesh(new THREE.BoxGeometry(17, 1.6, 0.25).translate(0, 1.15, 0), [steel, steel, steel, steel, adMat, adMat], spots.length);
+        const legs = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(0.15, 1.2, 0.15).translate(-7.5, 0.4, 0), new THREE.BoxGeometry(0.15, 1.2, 0.15).translate(7.5, 0.4, 0)]), steel, spots.length);
+        spots.forEach(([i, sd], k) => { const l = sd * (lim(i, sd) + 2.2); placeAt(boards, k, i, l, 0, Math.PI / 2 * sd + Math.PI / 2); placeAt(legs, k, i, l, 0, Math.PI / 2 * sd + Math.PI / 2); });
+        boards.castShadow = q > 0; G.add(boards, legs);
+      }
+      // marshal posts every ~350 m, alternating sides
+      {
+        const posts = []; for (let i = 40, side = 1; i < N - 40; i += 175, side = -side) if (!inPit(i) && lim(i, side) > 4) posts.push([i, side]);
+        const hutGeo = mergeGeometries([new THREE.BoxGeometry(1.8, 2.2, 1.6).translate(0, 1.1, 0)]), roofGeo = new THREE.BoxGeometry(2.2, 0.18, 2.0).translate(0, 2.3, 0), poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 3.4, 6).translate(1.1, 1.7, 0), flagGeo = new THREE.PlaneGeometry(0.7, 0.45).translate(1.45, 3.1, 0);
+        const hut = new THREE.InstancedMesh(hutGeo, white, posts.length), roof = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ color: '#f97316', roughness: 0.6 }), posts.length);
+        const pole = new THREE.InstancedMesh(poleGeo, steel, posts.length), flag = new THREE.InstancedMesh(flagGeo, new THREE.MeshStandardMaterial({ color: '#16a34a', roughness: 0.7, side: THREE.DoubleSide }), posts.length);
+        posts.forEach(([i, sd], k) => { const l = sd * (lim(i, sd) + 1.6); for (const im of [hut, roof, pole, flag]) placeAt(im, k, i, l); });
+        hut.castShadow = q > 0; G.add(hut, roof, pole, flag);
+      }
+      // TV camera towers outside the four sharpest corners
+      {
+        const tw = sharp.filter(c => !inPit(c.i)).slice(0, 4);
+        const legs = mergeGeometries([[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, z]) => new THREE.BoxGeometry(0.12, 7, 0.12).translate(x * 0.9, 3.5, z * 0.9)).concat([0, 2.3, 4.6].map(y => new THREE.BoxGeometry(1.9, 0.08, 1.9).translate(0, y + 0.6, 0))));
+        const towers = new THREE.InstancedMesh(legs, steel, tw.length), decks = new THREE.InstancedMesh(new THREE.BoxGeometry(2.4, 0.2, 2.4).translate(0, 7.1, 0), white, tw.length);
+        const cams = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(0.5, 0.45, 0.9).translate(0, 7.7, 0), new THREE.CylinderGeometry(0.03, 0.05, 0.5, 6).translate(0, 7.35, 0)]), new THREE.MeshStandardMaterial({ color: '#111318', roughness: 0.4 }), tw.length);
+        tw.forEach((c, k) => { const l = c.s * (lim(c.i, c.s) + 7); for (const im of [towers, decks, cams]) placeAt(im, k, c.i, l, 0, c.s > 0 ? -Math.PI / 2 : Math.PI / 2); });
+        G.add(towers, decks, cams);
+      }
+      // paddock behind the pit building: tarmac and two rows of team motorhomes / hospitality units
+      {
+        const ps = P.side, k0 = 34, k1 = Math.max(k0 + 10, P.len - 34), base = Math.abs(P.lat) + 16 + 6.4;
+        if (!T.street || (ps > 0 ? T.limL[(P.entry + 80) % N] : T.limR[(P.entry + 80) % N]) > 10) {
+          add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (base - 1), 0.05, 0], () => [ps * (base + 34), 0.05, 4]], 10), new THREE.MeshStandardMaterial({ map: tx.asphalt, color: '#8a8d94', roughness: 0.95 }));
+          const units = []; for (let k = k0 + 4; k < k1 - 4; k += 9) for (const row of [0, 1]) units.push([(P.entry + k) % N, row, units.length]);
+          const box = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(5.5, 4.2, 15).translate(0, 2.1, 0), new THREE.BoxGeometry(5.9, 0.25, 15.4).translate(0, 4.3, 0)]), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4, metalness: 0.2 }), units.length);
+          const stripe = new THREE.InstancedMesh(new THREE.BoxGeometry(5.55, 0.7, 15.05).translate(0, 2.9, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 }), units.length);
+          const cc = new THREE.Color();
+          units.forEach(([i, row, k]) => { const l = ps * (base + 6 + row * 18); placeAt(box, k, i, l); placeAt(stripe, k, i, l); cc.set(teamColors[k % teamColors.length] || '#ffcc00'); stripe.setColorAt(k, cc); });
+          box.castShadow = q > 0; G.add(box, stripe);
+        }
+      }
+      // fan zones at permanent circuits: tents and flags in the open ground behind the fences
+      if (!T.street && !th.night) {
+        const fz = sharp.filter(c => !inPit(c.i)).slice(0, 6), tents = [], flags = [];
+        for (const c of fz) for (let n = 0; n < 6; n++) { const i = (c.i + Math.round((r() - 0.5) * 60) + N) % N, l = c.s * (lim(i, c.s) + 14 + r() * 26); tents.push([i, l]); if (n < 3) flags.push([i, l + c.s * 4]); }
+        const tent = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(5, 2.2, 5).translate(0, 1.1, 0), new THREE.ConeGeometry(3.8, 1.6, 4).rotateY(Math.PI / 4).translate(0, 3.0, 0)]), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }), tents.length);
+        const cols = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff', '#a855f7'], cc = new THREE.Color();
+        tents.forEach(([i, l], k) => { placeAt(tent, k, i, l, 0, r() * 3); cc.set(cols[k % cols.length]); tent.setColorAt(k, cc); });
+        const fl = new THREE.InstancedMesh(mergeGeometries([new THREE.CylinderGeometry(0.05, 0.05, 6, 6).translate(0, 3, 0), new THREE.PlaneGeometry(1.4, 0.9).translate(0.72, 5.4, 0)]), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6, side: THREE.DoubleSide }), flags.length);
+        flags.forEach(([i, l], k) => { placeAt(fl, k, i, l, 0, r() * 3); cc.set(cols[(k + 2) % cols.length]); fl.setColorAt(k, cc); });
+        tent.castShadow = q > 0; G.add(tent, fl);
+      }
+      // yachts in the harbour (tracks beside water)
+      if (th.water && th.water.mode === 'side') {
+        const ya = [], wdir = [Math.cos(th.water.angle), Math.sin(th.water.angle)];
+        for (let t = 0; t < 400 && ya.length < 24; t++) { const x = T.cx + (r() - 0.5) * T.radius * 2.6, z = T.cz + (r() - 0.5) * T.radius * 2.6; if (height(x, z) < th.water.level - 0.5 && dist(x, z) > T.wallOff + 25 && dist(x, z) < 500) ya.push([x, z, r()]); }
+        const hull = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(4.2, 1.6, 18).translate(0, 0.8, 0), new THREE.ConeGeometry(2.1, 5, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.5, 1).translate(0, 0.8, 11.4), new THREE.BoxGeometry(3.4, 1.6, 9).translate(0, 2.4, -1.5), new THREE.BoxGeometry(2.6, 1.2, 5).translate(0, 3.8, -2)]), new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.35 }), ya.length);
+        ya.forEach(([x, z, k2], k) => { d.position.set(x, th.water.level - 0.2, z); d.rotation.set(0, k2 * 6.28, 0); const sc = 0.7 + k2 * 0.8; d.scale.set(sc, sc, sc); d.updateMatrix(); hull.setMatrixAt(k, d.matrix); });
+        G.add(hull);
+      }
     }
 
     /* ----- scenery ----- */
@@ -597,7 +667,8 @@ export class World {
       inst(rg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, flatShading: true }), pts, (d) => { const s = 2 + Math.pow(r(), 2) * 16; d.scale.set(s * (0.8 + r() * 0.6), s * (0.45 + r() * 0.7), s * (0.8 + r() * 0.6)); d.rotation.set(r() * 3, r() * 3, r() * 3); }, { colors: [th.terrain[1], th.terrain[2], th.terrain[0]] });
     }
     if (sc2.buildings) {
-      const near = scatter(Math.round(sc2.buildings * 0.55 * mult), T.wallOff + 26, 300);
+      // street circuits: the town comes right up to the barriers (Monaco, Baku, Singapore...)
+      const near = scatter(Math.round(sc2.buildings * (T.street ? 1.4 : 0.55) * mult), T.wallOff + (T.street ? 12 : 26), 300);
       const far = scatter(Math.round(sc2.buildings * 0.45 * mult), 450, 1600);
       const mat = th.night ? new THREE.MeshStandardMaterial({ color: '#2a2f3c', roughness: 0.4, metalness: 0.4, emissive: '#ffffff', emissiveMap: tx.winNight, emissiveIntensity: 0.55 })
         : new THREE.MeshStandardMaterial({ map: tx.winDay, roughness: 0.35, metalness: 0.45 });
