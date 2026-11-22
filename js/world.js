@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=line26a';
-import { AXLE_F, AXLE_R } from './car.js?v=line26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=line26a';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=saus26a';
+import { AXLE_F, AXLE_R } from './car.js?v=saus26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=saus26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -258,6 +258,24 @@ export class World {
       for (const s of [1, -1]) {
         add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 2.4), kerbMat);
         if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
+      }
+    }
+    // escape roads straight on through chicanes: asphalt with white edge lines and painted chevrons
+    for (const z of T.escapes || []) {
+      const lat = i => z.off.has(i) ? z.off.get(i) : 0, i0 = z.a, cnt = z.len;
+      const escMat = new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#b4b7bd', roughness: 0.88 });
+      add(ribbon(T, i0, cnt, [i => [lat(i) - 3.6, 0.018, 0], i => [lat(i) + 3.6, 0.018, 1]], 6), escMat);
+      for (const e of [-1, 1]) add(ribbon(T, i0, cnt, [i => [lat(i) + e * 3.4, 0.024, 0], i => [lat(i) + e * 3.6, 0.024, 1]], 4), lineMat);
+    }
+    // sausage kerbs on the inside of chicane apexes: raised, yellow with black stripes
+    if ((T.sausages || []).length) {
+      const sTex = canvasTex(64, 64, (g2, w, h) => { g2.fillStyle = '#f5c400'; g2.fillRect(0, 0, w, h); g2.fillStyle = '#111'; for (let y = 0; y < h; y += 16) g2.fillRect(0, y, w, 7); });
+      const sMat = new THREE.MeshStandardMaterial({ map: sTex, roughness: 0.6 });
+      for (const sg of T.sausages) {
+        const n0 = (sg.i - sg.half + N) % N, sl = sg.side, base = W + KERB + 0.35;
+        const prof = [[-0.18, 0], [-0.13, 0.08], [0, 0.13], [0.13, 0.08], [0.18, 0]];
+        const m = add(ribbon(T, n0, sg.half * 2, prof.map(([d2, hh], k) => col(sl * (base + d2), hh, k / (prof.length - 1))), 1.2), sMat, { cast: q > 0 });
+        m.userData.sausage = true;
       }
     }
     // gravel traps + tyre walls
