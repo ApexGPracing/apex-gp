@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=real26b';
-import { World } from './world.js?v=real26b';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=real26b';
-import { Sound } from './audio.js?v=real26b';
-import { Particles, Skids } from './fx.js?v=real26b';
-import { Weather } from './weather.js?v=real26b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=real26b';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=real26b';
-import { Net, newCode, loadTurn } from './net.js?v=real26b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=real26b';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=pit26c';
+import { World } from './world.js?v=pit26c';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=pit26c';
+import { Sound } from './audio.js?v=pit26c';
+import { Particles, Skids } from './fx.js?v=pit26c';
+import { Weather } from './weather.js?v=pit26c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=pit26c';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=pit26c';
+import { Net, newCode, loadTurn } from './net.js?v=pit26c';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=pit26c';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -404,7 +404,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false);
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null;
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -694,6 +694,7 @@ function pitStep(c, dt, Tr) {
   pitPose(c, Tr);
 }
 function nextCompound(c) {
+  if (c.isPlayer && c.tyreChoice) return c.tyreChoice; // the player picked it over the radio
   const w = weather.average(), used = c.stints || [];
   if (w > 0.55) return 'wet';
   if (w > 0.2) return 'inter';
@@ -1518,15 +1519,18 @@ const ENG = [
   { q: 'Change mode (Save / Standard / Push)', a: engMode },
   { q: 'Box this lap / stay out', a: engBox },
   { q: 'Ask my teammate to let me by', a: engMate },
+  { q: 'Next tyres', a: engTyreChoice },
 ];
 function engMenu(open) {
   const el = $('engMenu'), show = open === undefined ? el.classList.contains('hidden') : open;
   if (show && !(game.state === 'race' && game.player && game.phase !== 'idle')) return;
-  if (show) el.innerHTML = '<div class="eh">TEAM RADIO <small>press a number</small></div>' + ENG.map((o, k) => '<button data-k="' + k + '"><kbd>' + (k + 1) + '</kbd>' + o.q.replace('(Save / Standard / Push)', '(now ' + MODES[game.mode ?? 1].name + ')') + '</button>').join('');
+  if (show) el.innerHTML = '<div class="eh">TEAM RADIO <small>press a number</small></div>' + ENG.map((o, k) => '<button data-k="' + k + '"><kbd>' + (k + 1) + '</kbd>' + (o.a === engTyreChoice ? 'Next tyres: ' + (game.player.tyreChoice ? COMP[game.player.tyreChoice].name : 'team choice') + ' <small>(press again to change)</small>' : o.q.replace('(Save / Standard / Push)', '(now ' + MODES[game.mode ?? 1].name + ')')) + '</button>').join('');
   el.classList.toggle('hidden', !show);
 }
 function engAsk(k) {
-  const o = ENG[k]; if (!o) return; engMenu(false);
+  const o = ENG[k]; if (!o) return;
+  if (o.a === engTyreChoice) { const r = o.a(); engMenu(true); radio(r[0], r[1], 4); return; }
+  engMenu(false);
   radio(o.q.replace(' (Save / Standard / Push)', ''), 'info', 4, 'YOU');
   setTimeout(() => { const r = o.a(); if (r) radio(r[0], r[1] || 'info', 7); }, 900 + Math.random() * 700);
 }
@@ -1576,6 +1580,12 @@ function engBox() {
   const p = game.player;
   if (!(racing() || game.phase === 'run') || p.pit) return ['Not now.'];
   p.pitReq = !p.pitReq; return [p.pitReq ? 'Copy, box this lap. ' + COMP[nextCompound(p)].name + 's ready.' : 'Copy, staying out.'];
+}
+const TYRE_CYCLE = [null, 'soft', 'medium', 'hard', 'inter', 'wet'];
+function engTyreChoice() {
+  const p = game.player, k = (TYRE_CYCLE.indexOf(p.tyreChoice || null) + 1) % TYRE_CYCLE.length;
+  p.tyreChoice = TYRE_CYCLE[k];
+  return [p.tyreChoice ? 'Copy, ' + COMP[p.tyreChoice].name + 's ready for the next stop.' + (p.pitReq ? '' : ' Press 7 or P to box.') : 'Copy, we will choose the tyres for you.', 'info'];
 }
 function engMate() {
   const p = game.player, m = game.mate;
@@ -2129,7 +2139,7 @@ addEventListener('keydown', e => {
   if (k === 'l' && game.state === 'race') { settings.line = settings.line === 'on' ? 'off' : 'on'; saveSettings(); world.setRaceLine(settings.line === 'on'); colorLineForPlayer(); flashMsg('RACING LINE ' + settings.line.toUpperCase(), 0.9); }
   if (k === 'p' && (racing() || game.phase === 'run') && game.player && !game.player.pit) { const p = game.player; p.pitReq = !p.pitReq; radio(p.pitReq ? 'Copy, box this lap.' : 'Copy, staying out.', 'info', 3); }
   if (k === 'r' && game.state === 'race' && !game.paused) engMenu();
-  if (k >= '1' && k <= '8' && !$('engMenu').classList.contains('hidden')) engAsk(+k - 1);
+  if (k >= '1' && k <= '9' && !$('engMenu').classList.contains('hidden')) engAsk(+k - 1);
   if (k === 'm') { audio.muted = !audio.muted; store.set('apexgp-muted', audio.muted ? '1' : '0'); if (game.state === 'race') flashMsg(audio.muted ? 'SOUND OFF' : 'SOUND ON', 0.9); }
 });
 $('engMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (b) engAsk(+b.dataset.k); });
@@ -2192,7 +2202,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=real26b');
+await loadCarModel('js/car.bin?v=pit26c');
 initMenu();
 requestAnimationFrame(frame);
 

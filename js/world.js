@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=real26b';
-import { AXLE_F, AXLE_R } from './car.js?v=real26b';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=real26b';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=pit26c';
+import { AXLE_F, AXLE_R } from './car.js?v=pit26c';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=pit26c';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -308,6 +308,14 @@ export class World {
         const pts = []; for (let k = 0; k <= 16; k++) { const t = u0 + (u1 - u0) * k / 16, i = (a + Math.round(t * cnt)) % N, l = sd * (sideLim(T, sd)(i) + 0.6), y = bankH(T, i, l) + Math.sin(Math.PI * k / 16) * hgt; pts.push(new THREE.Vector3(T.px[i] + T.nx[i] * l, y, T.pz[i] + T.nz[i] * l)); }
         add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.35, 8), steelW, { cast: q > 0 });
         for (let k = 1; k < 16; k += 2) { const p0 = pts[k]; const v = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, Math.max(0.2, p0.y - pts[0].y), 6), steelW); v.position.set(p0.x, (p0.y + pts[0].y) / 2, p0.z); G.add(v); }
+      }
+      // overhead: cross girders joining the two sides' arches over the road, with diagonal bracing
+      for (const [u0, u1, hgt] of [[0, 0.34, 9], [0.33, 0.67, 11], [0.66, 1, 9]]) for (const f of [0.3, 0.5, 0.7]) {
+        const t = u0 + (u1 - u0) * f, i = (a + Math.round(t * cnt)) % N, yy = Math.sin(Math.PI * f) * hgt;
+        const L = sideLim(T, 1)(i) + 0.6, R = sideLim(T, -1)(i) + 0.6;
+        const A = new THREE.Vector3(T.px[i] + T.nx[i] * L, bankH(T, i, L) + yy, T.pz[i] + T.nz[i] * L), B = new THREE.Vector3(T.px[i] - T.nx[i] * R, bankH(T, i, -R) + yy, T.pz[i] - T.nz[i] * R);
+        add(new THREE.TubeGeometry(new THREE.LineCurve3(A, B), 1, 0.22, 6), steelW);
+        if (f === 0.5) for (const ff of [0.3, 0.7]) { const j = (a + Math.round((u0 + (u1 - u0) * ff) * cnt)) % N, y2 = Math.sin(Math.PI * ff) * hgt, C = new THREE.Vector3(T.px[j] - T.nx[j] * R, bankH(T, j, -R) + y2, T.pz[j] - T.nz[j] * R); add(new THREE.TubeGeometry(new THREE.LineCurve3(A, C), 1, 0.12, 6), steelW); }
       }
     }
     // a giant glowing dome near the track (Las Vegas)
