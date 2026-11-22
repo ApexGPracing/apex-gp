@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=net26c';
+import { canvasTex } from './util.js?v=tc26a';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -484,6 +484,8 @@ function fitCockpit(car, kind, glove) {
   const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.97, 0.14, -0.22], eye: [0.32, 1.1, -0.32] }, hyper: { wheel: [0, 0.86, 0.32, -0.3], eye: [0, 1.0, -0.14] } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
   const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); st.visible = false;
   car.dash = W; car.eye = P.eye;
+  // T-cam mount: above the airbox on single-seaters; at the front of the roof, over the windscreen, on closed cars
+  car.tcam = { gt3: [0, 1.5, 0.5, 1.05], hyper: [0, 1.32, 0.78, 0.92] }[kind] || [0, 1.36, -0.5, 0.8];
   return car;
 }
 /* closed cars: dashboard, A-pillars, roof header, rear-view mirror, so the cockpit view looks out of a cabin */
