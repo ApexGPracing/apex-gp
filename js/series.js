@@ -40,7 +40,7 @@ export const SERIES = {
   },
   indy: {
     id: 'indy', name: 'IndyCar', short: 'INDY', cls: 'indy', laps: 8,
-    calendar: ['indianapolis', 'texas', 'iowa', 'austin', 'miami', 'montreal', 'lasvegas', 'madrid'],
+    calendar: ['miami', 'austin', 'indianapolis', 'texas', 'montreal', 'iowa', 'watkinsglen', 'lasvegas', 'madrid'],
     teams: [T('Team Penske', '#f2f2f2', '#ffd400'), T('Chip Ganassi Racing', '#d40000', '#ffffff'), T('Arrow McLaren', '#ff8000', '#0a2b5c'), T('Andretti Global', '#0b1f4d', '#ff6a13'),
       T('A.J. Foyt Racing', '#c8102e', '#f2f2f2'), T('Ed Carpenter Racing', '#1a1a1a', '#00c2ff'), T('Dale Coyne Racing', '#00a3e0', '#111111'), T('Rahal Letterman Lanigan', '#f5f5f5', '#00843d')],
     drivers: [D('Josef Newgarden', 'NEW', [0.93, 0.85, 0.85, 0.88, 1], 2, 0), D('Scott McLaughlin', 'MCL', [0.93, 0.8, 0.85, 0.9, 0.95], 3, 0), D('David Malukas', 'MLK', [0.9, 0.8, 0.75, 0.85, 1], 12, 0),
@@ -54,7 +54,7 @@ export const SERIES = {
   },
   gt3: {
     id: 'gt3', name: 'GT3', short: 'GT3', cls: 'gt3', laps: 5,
-    calendar: ['monza', 'silverstone', 'spa', 'barcelona', 'zandvoort', 'imola', 'budapest', 'spielberg', 'austin', 'abudhabi', 'lemans'],
+    calendar: ['paulricard', 'monza', 'silverstone', 'spa', 'nurburgring', 'hockenheim', 'magnycours', 'zandvoort', 'barcelona', 'portimao', 'mugello', 'imola', 'budapest', 'spielberg', 'lemans'],
     teams: [T('Team WRT · BMW', '#1c3f94', '#f5f5f5'), T('AF Corse · Ferrari', '#d40000', '#f2c200'), T('Emil Frey Racing · Ferrari', '#f2f2f2', '#d40000'), T('Boutsen VDS · Porsche', '#111111', '#f5d000'),
       T('Comtoyou Racing · Aston Martin', '#0b5e3b', '#d4af37'), T('Paradine Competition · BMW', '#f2f2f2', '#1c3f94')],
     drivers: [D('Kelvin van der Linde', 'KVL', [0.94, 0.8, 0.8, 0.9, 0.95], 30, 0), D('Jordan Pepper', 'PEP', [0.91, 0.75, 0.8, 0.9, 0.95], 31, 0), D('Valentino Rossi', 'ROS', [0.85, 0.75, 0.7, 0.85, 1], 46, 0),
@@ -66,7 +66,7 @@ export const SERIES = {
   },
   lemans: {
     id: 'lemans', name: 'Le Mans', short: 'LM', cls: 'hyper', laps: 4, multiClass: true,
-    calendar: ['lemans', 'spa', 'monza', 'sakhir', 'lusail', 'austin', 'saopaulo', 'imola'],
+    calendar: ['lusail', 'imola', 'spa', 'lemans', 'saopaulo', 'austin', 'portimao', 'monza', 'sakhir'],
     teams: [T('Ferrari AF Corse', '#d40000', '#f2c200', 'hyper'), T('Toyota Gazoo Racing', '#f2f2f2', '#e60012', 'hyper'), T('BMW M Team WRT', '#1c3f94', '#f5f5f5', 'hyper'),
       T('Cadillac Hertz Team Jota', '#111111', '#f5d000', 'hyper'), T('Alpine Endurance Team', '#1f6fe0', '#ff4fa0', 'hyper'), T('Peugeot TotalEnergies', '#2b2f36', '#b5f700', 'hyper'),
       T('Aston Martin THOR Team', '#0b5e3b', '#c8ff00', 'hyper'),

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ck26f';
-import { World } from './world.js?v=ck26f';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ck26f';
-import { Sound } from './audio.js?v=ck26f';
-import { Particles, Skids } from './fx.js?v=ck26f';
-import { Weather } from './weather.js?v=ck26f';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ck26f';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ck26f';
-import { Net, newCode, loadTurn } from './net.js?v=ck26f';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ck26f';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=trk26a';
+import { World } from './world.js?v=trk26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=trk26a';
+import { Sound } from './audio.js?v=trk26a';
+import { Particles, Skids } from './fx.js?v=trk26a';
+import { Weather } from './weather.js?v=trk26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=trk26a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=trk26a';
+import { Net, newCode, loadTurn } from './net.js?v=trk26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=trk26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -74,7 +74,7 @@ function applySeries(id) {
   // teams can run two or three cars: the driver list says which team each driver is in
   FIXED_TEAMS = SER.id === 'f1' ? DRIVERS.map((_, i) => Math.floor(i / 2)) : SER.drivers.map((d, i) => d[4] ?? Math.floor(i / 2)); TEAM_MAP = FIXED_TEAMS.slice();
   builtFor = -1;
-  const cal = calIdx(); if (!cal.includes(settings.track)) settings.track = cal[0];
+  if (settings.mode === 'champ') { const cal = calIdx(); if (!cal.includes(settings.track)) settings.track = cal[0]; }
 }
 // the class (physics, model, sound) a car races in
 const PATS = ['stripes', 'twotone', 'sash', 'nose', 'arrow', 'fade', 'gulf', 'halves'];
@@ -305,7 +305,7 @@ function startSession(kind) {
   } else if (kind === 'tt') radio('Time trial. Leave the garage when ready; DRS is free in the zones.', 'info', 6);
   $('board').classList.toggle('hidden', kind === 'tt'); $('tl').classList.toggle('hidden', kind === 'tt');
   $('startLights').classList.add('hidden'); $('garageBar').classList.remove('hidden');
-  $('trackTag').textContent = (settings.mode === 'champ' ? 'ROUND ' + (settings.track + 1) + ' · ' : '') + Tr.def.name.toUpperCase() + ' · ' + sessionLabel();
+  $('trackTag').textContent = (settings.mode === 'champ' ? 'ROUND ' + (calIdx().indexOf(settings.track) + 1) + ' · ' : '') + Tr.def.name.toUpperCase() + ' · ' + sessionLabel();
   $('radio').innerHTML = ''; updatePenTag();
   world.setRaceLine(settings.line === 'on');
   setCam(game.camMode, true);
@@ -1988,10 +1988,12 @@ function showResults() {
 /* ---------------- Menu ---------------- */
 function refreshMenu() {
   { // calendar: only this series' tracks, numbered in calendar order
-    const cal = calIdx();
-    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = cal.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k; el.querySelector('.rnd').textContent = String(k + 1).padStart(2, '0'); el.querySelector('.st').innerHTML = cardStats(i); } });
+    // championship: the series' real calendar; other modes: every track, the series' own calendar first
+    const cal = calIdx(), list = settings.mode === 'champ' ? cal : cal.concat(TRACKS.map((_, i) => i).filter(i => !cal.includes(i)));
+    if (!list.includes(settings.track)) settings.track = list[0];
+    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = list.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k; el.querySelector('.rnd').textContent = String(k + 1).padStart(2, '0'); el.querySelector('.st').innerHTML = cardStats(i); } });
     $('optLmClass').classList.toggle('hidden', SER.id !== 'lemans');
-    $('menuSub').textContent = SER.name + ' · ' + cal.length + '-round championship';
+    $('menuSub').textContent = SER.name + ' · ' + cal.length + '-round championship · ' + TRACKS.length + ' tracks';
   }
   document.querySelectorAll('.seg').forEach(seg => { const k = seg.dataset.opt; seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(settings[k]) === b.dataset.v)); });
   const mode = settings.mode, s = loadSeason();
@@ -2163,7 +2165,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ck26f');
+await loadCarModel('js/car.bin?v=trk26a');
 initMenu();
 requestAnimationFrame(frame);
 
