@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=kerb26d';
-import { World } from './world.js?v=kerb26d';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=kerb26d';
-import { Sound } from './audio.js?v=kerb26d';
-import { Particles, Skids } from './fx.js?v=kerb26d';
-import { Weather } from './weather.js?v=kerb26d';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=kerb26d';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=kerb26d';
-import { Net, newCode, loadTurn } from './net.js?v=kerb26d';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=kerb26d';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=line26a';
+import { World } from './world.js?v=line26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=line26a';
+import { Sound } from './audio.js?v=line26a';
+import { Particles, Skids } from './fx.js?v=line26a';
+import { Weather } from './weather.js?v=line26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=line26a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=line26a';
+import { Net, newCode, loadTurn } from './net.js?v=line26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=line26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -307,7 +307,7 @@ function startSession(kind) {
   $('startLights').classList.add('hidden'); $('garageBar').classList.remove('hidden');
   $('trackTag').textContent = (settings.mode === 'champ' ? 'ROUND ' + (calIdx().indexOf(settings.track) + 1) + ' · ' : '') + Tr.def.name.toUpperCase() + ' · ' + sessionLabel();
   $('radio').innerHTML = ''; updatePenTag();
-  world.setRaceLine(settings.line === 'on');
+  world.setRaceLine(settings.line === 'on'); colorLineForPlayer();
   setCam(game.camMode, true);
 }
 const sessionLabel = () => ({ Q1: 'QUALIFYING 1', Q2: 'QUALIFYING 2', Q3: 'QUALIFYING 3', Q: 'QUALIFYING', race: 'RACE', tt: 'TIME TRIAL' })[game.session];
@@ -418,7 +418,7 @@ function startRace() {
   $('startLights').classList.remove('hidden');
   $('trackTag').textContent = (settings.mode === 'champ' ? 'ROUND ' + (settings.track + 1) + ' · ' : '') + Tr.def.name.toUpperCase() + ' · RACE';
   $('radio').innerHTML = ''; updatePenTag();
-  world.setRaceLine(settings.line === 'on');
+  world.setRaceLine(settings.line === 'on'); colorLineForPlayer();
   setCam(game.camMode, true);
   radio(forecastText() + ' Starting on ' + COMP[game.player.tyre.comp].name + 's.', 'info', 7);
 }
@@ -1710,6 +1710,12 @@ function updateCarVisuals(dt) {
   smoke.update(dt); sparks.update(dt);
 }
 
+/* racing line colours worked out for the player's own car (its class and extra grip), braking as late as it can */
+function colorLineForPlayer() {
+  const p = game.player, Tr = game.T; if (!p || !Tr) return;
+  const sp = p.spec || CLASSES.f1;
+  world.colorRaceLine(speedProfiles(Tr, { grip: sp.grip * PLAYER_GRIP / AI_GRIP, brake: sp.brake, vmax: sp.vmax })[1]);
+}
 /* ---------------- Mirrors: a small rear-view picture for the cockpit mirrors ---------------- */
 const mirrorRT = new THREE.WebGLRenderTarget(384, 128);
 mirrorRT.texture.wrapS = THREE.RepeatWrapping; mirrorRT.texture.repeat.x = -1; mirrorRT.texture.offset.x = 1; // mirror image
@@ -2107,7 +2113,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   if (k === 'c' && game.state === 'race' && !game.paused) setCam((game.camMode + 1) % 3);
   if (k === 'escape') togglePause();
-  if (k === 'l' && game.state === 'race') { settings.line = settings.line === 'on' ? 'off' : 'on'; saveSettings(); world.setRaceLine(settings.line === 'on'); flashMsg('RACING LINE ' + settings.line.toUpperCase(), 0.9); }
+  if (k === 'l' && game.state === 'race') { settings.line = settings.line === 'on' ? 'off' : 'on'; saveSettings(); world.setRaceLine(settings.line === 'on'); colorLineForPlayer(); flashMsg('RACING LINE ' + settings.line.toUpperCase(), 0.9); }
   if (k === 'p' && (racing() || game.phase === 'run') && game.player && !game.player.pit) { const p = game.player; p.pitReq = !p.pitReq; radio(p.pitReq ? 'Copy, box this lap.' : 'Copy, staying out.', 'info', 3); }
   if (k === 'r' && game.state === 'race' && !game.paused) engMenu();
   if (k >= '1' && k <= '8' && !$('engMenu').classList.contains('hidden')) engAsk(+k - 1);
@@ -2173,7 +2179,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=kerb26d');
+await loadCarModel('js/car.bin?v=line26a');
 initMenu();
 requestAnimationFrame(frame);
 

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=kerb26d';
-import { AXLE_F, AXLE_R } from './car.js?v=kerb26d';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=kerb26d';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=line26a';
+import { AXLE_F, AXLE_R } from './car.js?v=line26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=line26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -174,7 +174,7 @@ export class World {
     // track sample in reach. On a steady slope that changes nothing; in a dip it sinks the ground under the road.
     const seg = q === 0 ? 200 : q === 1 ? 280 : 360, tcell = span / seg, reachR = tcell * 1.5, corridor = T.wallOff + reachR;
     const HB = 32, hash = new Map();
-    if (T.elev) for (let k = 0; k < N; k += 2) { const key = Math.floor(T.px[k] / HB) + ',' + Math.floor(T.pz[k] / HB); let a = hash.get(key); if (!a) hash.set(key, a = []); a.push(k); }
+    for (let k = 0; k < N; k += 2) { const key = Math.floor(T.px[k] / HB) + ',' + Math.floor(T.pz[k] / HB); let a = hash.get(key); if (!a) hash.set(key, a = []); a.push(k); }
     const roadCap = (x, z) => {
       let cap = Infinity; const r2 = (reachR + T.wallOff) ** 2, cx = Math.floor(x / HB), cz = Math.floor(z / HB), nb = Math.ceil((reachR + T.wallOff) / HB);
       for (let gx = cx - nb; gx <= cx + nb; gx++) for (let gz = cz - nb; gz <= cz + nb; gz++) {
@@ -256,7 +256,7 @@ export class World {
     for (const [s0, e0] of T.kerbs) {
       const cnt = e0 - s0;
       for (const s of [1, -1]) {
-        add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 4), kerbMat);
+        add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 2.4), kerbMat);
         if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
       }
     }
@@ -320,13 +320,8 @@ export class World {
     /* ----- racing line (green = full throttle, yellow = lift, red = brake) ----- */
     {
       const g = ribbon(T, 0, N, [i => [T.race[i] + 0.35, 0.045, 0], i => [T.race[i] - 0.35, 0.045, 1]], 4);
-      const cols = new Float32Array(g.attributes.position.count * 3), c = new THREE.Color();
-      for (let k = 0; k <= N; k++) {
-        const i = k % N, ahead = T.vprof[(i + 12) % N], here = T.vprof[i];
-        if (ahead < here - 0.6) c.set('#ff2a2a'); else if (here < 88) c.set('#ffd21a'); else c.set('#2bff6a');
-        for (let col2 = 0; col2 < 2; col2++) cols.set([c.r, c.g, c.b], (k * 2 + col2) * 3);
-      }
-      g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3), 3));
+      this.raceGeo = g; this.raceT = T; this.colorRaceLine(T.vprof2);
       this.raceLine = add(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }), { recv: false });
       this.raceLine.renderOrder = 2;
       this.raceLine.visible = !!this.showLine;
@@ -609,12 +604,18 @@ export class World {
     /* ----- scenery ----- */
     const mult = q === 0 ? 0.35 : q === 1 ? 1 : 1.6;
     const wl = th.water ? th.water.level + 1.5 : -1e9;
-    const scatter = (count, minD, extent, maxD = 1e9) => {
+    const exactNear = (x, z, R) => { // is any track point within R metres? (the distance field is too coarse near the track)
+      const cx = Math.floor(x / HB), cz = Math.floor(z / HB), nb = Math.ceil(R / HB), R2 = R * R;
+      for (let gx = cx - nb; gx <= cx + nb; gx++) for (let gz = cz - nb; gz <= cz + nb; gz++) { const a = hash.get(gx + ',' + gz); if (!a) continue; for (const k of a) { const dx = x - T.px[k], dz = z - T.pz[k]; if (dx * dx + dz * dz < R2) return true; } }
+      return false;
+    };
+    const scatter = (count, minD, extent, maxD = 1e9, clear = 0) => {
       const out = []; let tries = 0;
       while (out.length < count && tries < count * 10) {
         tries++;
         const x = T.minX - extent + r() * (T.maxX - T.minX + 2 * extent), z = T.minZ - extent + r() * (T.maxZ - T.minZ + 2 * extent);
         const d = dist(x, z); if (d < minD || d > maxD) continue;
+        if (d < minD + 120 && exactNear(x, z, Math.max(minD, clear))) continue;
         const h = height(x, z); if (h < wl) continue;
         out.push([x, h, z, d]);
       }
@@ -668,7 +669,7 @@ export class World {
     }
     if (sc2.buildings) {
       // street circuits: the town comes right up to the barriers (Monaco, Baku, Singapore...)
-      const near = scatter(Math.round(sc2.buildings * (T.street ? 1.4 : 0.55) * mult), T.wallOff + (T.street ? 12 : 26), 300);
+      const near = scatter(Math.round(sc2.buildings * (T.street ? 1.4 : 0.55) * mult), T.wallOff + (T.street ? 12 : 26), 300, 1e9, T.wallOff + 32);
       const far = scatter(Math.round(sc2.buildings * 0.45 * mult), 450, 1600);
       const mat = th.night ? new THREE.MeshStandardMaterial({ color: '#2a2f3c', roughness: 0.4, metalness: 0.4, emissive: '#ffffff', emissiveMap: tx.winNight, emissiveIntensity: 0.55 })
         : new THREE.MeshStandardMaterial({ map: tx.winDay, roughness: 0.35, metalness: 0.45 });
@@ -717,6 +718,20 @@ export class World {
   crewAnim(team, s) { const sc = this.stopCrews && this.stopCrews.get(team); if (sc && sc.g.visible) sc.anim(s); }
   resetCrews() { if (!this.crew) return; for (let t = 0; t < this.crewInfo.teams; t++) this.crewPose(t, null); }
 
+  /* racing line colours from a speed plan: red = braking, yellow = through the corner, green = full throttle */
+  colorRaceLine(prof) {
+    const g = this.raceGeo, T = this.raceT; if (!g || !prof) return;
+    const N = T.N, cols = g.attributes.color.array, c = new THREE.Color();
+    let top = 0; for (let i = 0; i < N; i++) top = Math.max(top, prof[i]);
+    for (let k = 0; k <= N; k++) {
+      const i = k % N, here = prof[i], next = prof[(i + 3) % N], min = Math.min(prof[(i + 8) % N], prof[(i + 16) % N]);
+      if (next < here - 0.15 && min < here - 1) c.set('#ff2a2a');            // slowing for the corner ahead
+      else if (here < top - 4 && next < here + 0.6) c.set('#ffd21a');         // in the corner: coast / maintain
+      else c.set('#2bff6a');                                                   // accelerating or flat out
+      for (let col2 = 0; col2 < 2; col2++) cols.set([c.r, c.g, c.b], (k * 2 + col2) * 3);
+    }
+    g.attributes.color.needsUpdate = true;
+  }
   setRaceLine(on) { this.showLine = on; if (this.raceLine) this.raceLine.visible = on; }
 
   setStartLights(n) { this.gantryLights.forEach((m, k) => { m.emissiveIntensity = k < n ? 6 : 0; m.color.set(k < n ? '#ff2a2a' : '#160404'); }); }
