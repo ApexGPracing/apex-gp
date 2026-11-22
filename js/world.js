@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=saus26a';
-import { AXLE_F, AXLE_R } from './car.js?v=saus26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=saus26a';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=street26a';
+import { AXLE_F, AXLE_R } from './car.js?v=street26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=street26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -258,6 +258,38 @@ export class World {
       for (const s of [1, -1]) {
         add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 2.4), kerbMat);
         if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
+      }
+    }
+    // big flat kerbs (e.g. Sainte Devote): a wider kerb on the inside of the corner
+    for (const [m0, m1, wdt] of T.def.bigKerbs || []) {
+      const a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS); let sum = 0; for (let k = 0; k <= cnt; k++) sum += T.curv[(a + k) % N];
+      const sd = sum > 0 ? 1 : -1;
+      add(ribbon(T, a, cnt, [col(sd * (W - 0.03), 0.012, 0), col(sd * (W + 0.15), 0.05, 0.1), col(sd * (W + wdt - 0.2), 0.06, 0.9), col(sd * (W + wdt), 0.012, 1)], 2.4), kerbMat);
+    }
+    // tunnels (Monaco): concrete walls, a roof, and rows of lights along the ceiling
+    for (const [m0, m1] of T.def.tunnels || []) {
+      const a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS), Ht = 6.2;
+      const conc2 = new THREE.MeshStandardMaterial({ color: '#8d9096', roughness: 0.9, side: THREE.DoubleSide }), dark = new THREE.MeshStandardMaterial({ color: '#3a3d43', roughness: 0.95, side: THREE.DoubleSide });
+      for (const sd of [1, -1]) add(ribbon(T, a, cnt, [i => [sd * (sideLim(T, sd)(i) + 0.2), 0, 0], i => [sd * (sideLim(T, sd)(i) + 0.2), Ht, 1]], 6, { up: false }), conc2);
+      add(ribbon(T, a, cnt, [i => [T.limL[i] + 0.3, Ht, 0], i => [-(T.limR[i] + 0.3), Ht, 1]], 6, { up: false }), dark);
+      add(ribbon(T, a, cnt, [i => [T.limL[i] + 0.3, Ht + 0.6, 0], i => [-(T.limR[i] + 0.3), Ht + 0.6, 1]], 10), new THREE.MeshStandardMaterial({ color: '#8d9096', roughness: 0.9 }));
+      const lamps = []; for (let k = 0; k < cnt; k += 4) lamps.push((a + k) % N);
+      const lm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.35, 0.08, 1.4).translate(0, Ht - 0.1, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd9a0').multiplyScalar(2.2), toneMapped: false }), lamps.length * 2);
+      const dd = new THREE.Object3D(); lamps.forEach((i, k) => { for (const sd of [1, -1]) { const l = sd * 3.2; dd.position.set(T.px[i] + T.nx[i] * l, bankH(T, i, l), T.pz[i] + T.nz[i] * l); dd.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); dd.updateMatrix(); lm.setMatrixAt(k * 2 + (sd > 0 ? 0 : 1), dd.matrix); } }); G.add(lm);
+      // the hotel built over the tunnel
+      const mid = (a + Math.round(cnt * 0.35)) % N, hb = new THREE.Mesh(new THREE.BoxGeometry(70, 22, 46).translate(0, 11 + Ht + 3.5, 0), new THREE.MeshStandardMaterial({ map: tx.winDay, color: '#f0e6d8', roughness: 0.5 }));
+      hb.position.set(T.px[mid], elevAt(T, mid), T.pz[mid]); hb.rotation.y = Math.atan2(T.tx[mid], T.tz[mid]) + Math.PI / 2; hb.castShadow = q > 0; G.add(hb);
+    }
+    // Baku's old city: tall sandstone castle walls with battlements right at the track edge
+    for (const [m0, m1] of T.def.castle || []) {
+      const a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS);
+      const stoneT = canvasTex(256, 128, (g2, w, h) => { g2.fillStyle = '#c9ab7c'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 16) for (let x = (y / 16 % 2) * 16; x < w; x += 32) { g2.fillStyle = ['#c09f6f', '#d4b689', '#bb9965'][(x + y) % 3]; g2.fillRect(x + 1, y + 1, 30, 14); } });
+      const stone = new THREE.MeshStandardMaterial({ map: stoneT, roughness: 0.95, side: THREE.DoubleSide });
+      for (const sd of [1, -1]) {
+        add(ribbon(T, a, cnt, [i => [sd * (sideLim(T, sd)(i) + 0.4), 0, 0], i => [sd * (sideLim(T, sd)(i) + 0.4), 11, 1]], 4, { up: false }), stone, { cast: q > 0 });
+        const mer = []; for (let k = 0; k < cnt; k += 2) mer.push((a + k) % N);
+        const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 1.2, 1.2).translate(0, 11.6, 0), stone, mer.length), dd = new THREE.Object3D();
+        mer.forEach((i, k) => { const l = sd * (sideLim(T, sd)(i) + 0.9); dd.position.set(T.px[i] + T.nx[i] * l, bankH(T, i, l), T.pz[i] + T.nz[i] * l); dd.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); dd.updateMatrix(); im.setMatrixAt(k, dd.matrix); }); G.add(im);
       }
     }
     // escape roads straight on through chicanes: asphalt with white edge lines and painted chevrons
@@ -547,6 +579,15 @@ export class World {
       const d = new THREE.Object3D();
       poles.forEach(([i, s], k) => { const l = (s > 0 ? T.limL[i] : T.limR[i]) + 3; d.position.set(T.px[i] + T.nx[i] * s * l, bankH(T, i, s * l), T.pz[i] + T.nz[i] * s * l); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); d.updateMatrix(); pole.setMatrixAt(k, d.matrix); head.setMatrixAt(k, d.matrix); });
       G.add(pole, head);
+      if (T.street) {
+        const arm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 1).translate(0, 0, 0.5), steel, poles.length), lamp = new THREE.InstancedMesh(new THREE.BoxGeometry(1.6, 0.25, 0.8), new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff4dc').multiplyScalar(5), toneMapped: false, fog: false }), poles.length);
+        poles.forEach(([i, s2], k) => {
+          const l = (s2 > 0 ? T.limL[i] : T.limR[i]) + 3, reach = l - 2.5, l2 = s2 * (l - reach), y = bankH(T, i, s2 * l) + 15;
+          d.position.set(T.px[i] + T.nx[i] * s2 * l, y, T.pz[i] + T.nz[i] * s2 * l); d.lookAt(T.px[i] + T.nx[i] * l2, y, T.pz[i] + T.nz[i] * l2); d.scale.set(1, 1, reach); d.updateMatrix(); arm.setMatrixAt(k, d.matrix);
+          d.position.set(T.px[i] + T.nx[i] * l2, y - 0.3, T.pz[i] + T.nz[i] * l2); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); d.scale.set(1, 1, 1); d.updateMatrix(); lamp.setMatrixAt(k, d.matrix);
+        });
+        G.add(arm, lamp);
+      }
     }
 
     /* ----- trackside dressing: billboards, marshal posts, TV towers, paddock, fan zones, yachts ----- */
