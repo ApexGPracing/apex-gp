@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=tc26a';
-import { World } from './world.js?v=tc26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, AXLE_F, AXLE_R } from './car.js?v=tc26a';
-import { Sound } from './audio.js?v=tc26a';
-import { Particles, Skids } from './fx.js?v=tc26a';
-import { Weather } from './weather.js?v=tc26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=tc26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=tc26a';
-import { Net, newCode, loadTurn } from './net.js?v=tc26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=tc26a';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=ck26f';
+import { World } from './world.js?v=ck26f';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ck26f';
+import { Sound } from './audio.js?v=ck26f';
+import { Particles, Skids } from './fx.js?v=ck26f';
+import { Weather } from './weather.js?v=ck26f';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ck26f';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ck26f';
+import { Net, newCode, loadTurn } from './net.js?v=ck26f';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ck26f';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -194,7 +194,7 @@ function makeField(lineup, skill) {
   const pcls = classFor(TEAMS.length, true);
   const myLiv = { p: PATS[(settings.livery * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
   const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: 1, compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
-  game.cars.push(p); game.player = p;
+  game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
     const tm = TEAMS[teamIdxOf(di)], cls = mate ? pcls : classFor(teamIdxOf(di), false);
@@ -1430,7 +1430,7 @@ function startMp(cfg) {
       const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium', model: CLASSES[mcls].model, livery: { p: PATS[(pl.livery * 5) % PATS.length], c2: acc, c3: '#ffffff' } }), { cls: mcls, spec: CLASSES[mcls] },
         { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
           teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined });
-      game.cars.push(c); if (mine) game.player = c;
+      game.cars.push(c); if (mine) { game.player = c; addLiveMirrors(c, mirrorRT.texture); c.hasMirrors = true; }
     });
     game.mate = null;
     for (const c of game.cars) { resetState(c); c.stints = []; scene.add(c.group); }
@@ -1706,6 +1706,20 @@ function updateCarVisuals(dt) {
   smoke.update(dt); sparks.update(dt);
 }
 
+/* ---------------- Mirrors: a small rear-view picture for the cockpit mirrors ---------------- */
+const mirrorRT = new THREE.WebGLRenderTarget(384, 128);
+mirrorRT.texture.wrapS = THREE.RepeatWrapping; mirrorRT.texture.repeat.x = -1; mirrorRT.texture.offset.x = 1; // mirror image
+const rearCam = new THREE.PerspectiveCamera(46, 3, 0.4, 900);
+let mirrorTick = 0;
+function renderMirrors() {
+  const p = game.player; if (!p || !p.hasMirrors || game.camMode !== 0) return;
+  if (++mirrorTick % (document.body.classList.contains('touchUI') ? 3 : 2)) return;
+  const g = p.group, E = p.eye || [0, 1, 0];
+  g.localToWorld(rearCam.position.set(0, E[1] + 0.05, -0.4)); g.localToWorld(tmpL.set(0, E[1] - 0.25, -30)); rearCam.lookAt(tmpL);
+  const was = p.steering.visible; p.steering.visible = false;
+  renderer.setRenderTarget(mirrorRT); renderer.render(scene, rearCam); renderer.setRenderTarget(null);
+  p.steering.visible = was;
+}
 /* ---------------- Camera ---------------- */
 const tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 function setCam(m, silent) {
@@ -1725,7 +1739,10 @@ function updateCamera(dt, time) {
   const jx = (Math.random() - 0.5) * shake, jy = (Math.random() - 0.5) * shake;
   if (game.camMode === 0) {
     const E = c.eye || [0, 0.92, 0.05];
-    g.localToWorld(tmpV.set(E[0] + jx, E[1] + jy, E[2])); g.localToWorld(tmpL.set(E[0] + c.steer * 0.6, E[1] - (c.dash && !c.closed ? 0.35 : -0.02), 14));
+    const latG = clamp((c.r || 0) * Math.abs(c.v) / 9.81, -4, 4), lonG = c.inp.brake ? 1 : c.inp.throttle && Math.abs(c.v) < 70 ? -0.4 : 0, kk = 1 - Math.exp(-dt * 6);
+    c.headX = (c.headX || 0) + (clamp(-latG * 0.012, -0.045, 0.045) - (c.headX || 0)) * kk;
+    c.headZ = (c.headZ || 0) + (lonG * 0.02 - (c.headZ || 0)) * kk;
+    g.localToWorld(tmpV.set(E[0] + jx + c.headX, E[1] + jy - Math.abs(c.headZ) * 0.4, E[2] + c.headZ)); g.localToWorld(tmpL.set(E[0] + c.steer * 0.6, E[1] - (c.dash && !c.closed ? 0.35 : -0.02), 14));
     camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = c.closed ? 72 : 78;
   } else if (game.camMode === 1) {
     const tc = c.tcam || [0, 1.36, -0.5, 0.8];
@@ -2134,6 +2151,7 @@ function frame(now) {
   renderWeather(dt);
   world.update(dt, focus, camera);
   renderer.render(scene, camera);
+  if (game.state === 'race') renderMirrors();
   updateSound(dt);
 }
 function updateSound(dt) {
@@ -2145,7 +2163,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=tc26a');
+await loadCarModel('js/car.bin?v=ck26f');
 initMenu();
 requestAnimationFrame(frame);
 
@@ -2153,5 +2171,5 @@ requestAnimationFrame(frame);
 window.__apex = {
   deployFlag, game, settings, update, updateCarVisuals, updateCamera, updateHUD, setCam, startWeekend, startRace, startSession, leaveGarage, nextQualiStep, endQualiSession, showStrategy,
   buildTrack, getTrack, world, weather, renderer, scene, camera, standings, positionOf, keys, estimateLap, aiPace,
-  frameOnce: () => { renderWeather(0.016); world.update(0.016, focus.set(game.player ? game.player.x : 0, game.player ? game.player.group.position.y : 0, game.player ? game.player.z : 0), camera); renderer.render(scene, camera); },
+  frameOnce: () => { renderWeather(0.016); world.update(0.016, focus.set(game.player ? game.player.x : 0, game.player ? game.player.group.position.y : 0, game.player ? game.player.z : 0), camera); mirrorTick = 1; renderMirrors(); renderer.render(scene, camera); },
 };

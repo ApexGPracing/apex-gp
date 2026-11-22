@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=tc26a';
+import { canvasTex } from './util.js?v=ck26f';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -322,7 +322,7 @@ export function disposeCar(c) { c.mats.body.dispose(); c.mats.acc.dispose(); c.n
 /* IndyCar: the aeroscreen, a tinted wraparound screen round the front of the cockpit on a titanium frame */
 const SCREEN_GLASS = new THREE.MeshPhysicalMaterial({ color: 0x8fa6b8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
 const AERO_GEO = new THREE.CylinderGeometry(0.36, 0.44, 0.3, 28, 1, true, -Math.PI * 0.56, Math.PI * 1.12);
-const AERO_RIM = new THREE.TorusGeometry(0.36, 0.018, 6, 28, Math.PI * 1.12).rotateX(Math.PI / 2).rotateY(Math.PI * 0.5 - Math.PI * 0.56 + Math.PI);
+const AERO_RIM = new THREE.TorusGeometry(0.36, 0.008, 6, 28, Math.PI * 1.12).rotateX(Math.PI / 2).rotateY(Math.PI * 0.5 - Math.PI * 0.56 + Math.PI);
 function addAeroscreen(g) {
   const sc = new THREE.Mesh(AERO_GEO, SCREEN_GLASS); sc.position.set(0, 0.93, 0.32); sc.renderOrder = 2; g.add(sc);
   const rim = new THREE.Mesh(AERO_RIM, HALO_MAT); rim.position.set(0, 1.08, 0.32); g.add(rim);
@@ -438,13 +438,15 @@ function buildWheel(round, glove) {
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   const scr = new THREE.Mesh(new THREE.PlaneGeometry(round ? 0.1 : 0.12, round ? 0.05 : 0.06), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-  const gloveMat = new THREE.MeshStandardMaterial({ color: glove, roughness: 0.8 });
+  const gloveMat = new THREE.MeshStandardMaterial({ color: 0x23252b, roughness: 0.85 }), cuffMat = new THREE.MeshStandardMaterial({ color: glove, roughness: 0.7 });
+  const cuff = new THREE.CylinderGeometry(0.036, 0.036, 0.03, 12).rotateX(Math.PI / 2);
   const gl = new RoundedBoxGeometry(0.075, 0.11, 0.085, 3, 0.03), thumb = new RoundedBoxGeometry(0.03, 0.05, 0.03, 2, 0.012);
   if (!round) {
     w.add(new THREE.Mesh(new RoundedBoxGeometry(0.29, 0.15, 0.035, 3, 0.02), CARBON));
     for (const sx of [1, -1]) {
       const grip = new THREE.Mesh(new RoundedBoxGeometry(0.065, 0.19, 0.07, 3, 0.03), RUBBER); grip.position.set(sx * 0.16, -0.012, -0.01); w.add(grip);
       const hand = new THREE.Mesh(gl, gloveMat); hand.position.set(sx * 0.165, 0.0, -0.035); w.add(hand);
+      const cf = new THREE.Mesh(cuff, cuffMat); cf.position.set(sx * 0.17, -0.02, 0.025); w.add(cf);
       const th = new THREE.Mesh(thumb, gloveMat); th.position.set(sx * 0.125, 0.035, -0.04); w.add(th);
       for (const [k, y] of [[0, -0.045], [1, 0.01]]) { const kn = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.014, 16).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: KNOB_COLS[(k + (sx > 0 ? 2 : 0)) % 4], roughness: 0.4 })); kn.position.set(sx * 0.085, y, -0.022); w.add(kn); }
       const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.006), CARBON); paddle.position.set(sx * 0.11, 0.02, 0.03); w.add(paddle);
@@ -458,6 +460,7 @@ function buildWheel(round, glove) {
     for (const a of [Math.PI, 0, -Math.PI / 2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.025, 0.02), CARBON); sp.position.set(Math.cos(a) * 0.13, Math.sin(a) * 0.1, 0); sp.rotation.z = a; w.add(sp); }
     for (const sx of [1, -1]) {
       const hand = new THREE.Mesh(gl, gloveMat); hand.position.set(sx * 0.17, 0.02, -0.025); hand.rotation.z = sx * 0.3; w.add(hand);
+      const cf = new THREE.Mesh(cuff, cuffMat); cf.position.set(sx * 0.18, 0.0, 0.03); w.add(cf);
       for (const [k, y] of [[0, -0.03], [1, 0.02]]) { const kn = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.012, 14).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: KNOB_COLS[(k + (sx > 0 ? 1 : 3)) % 4], roughness: 0.4 })); kn.position.set(sx * 0.072, y, -0.022); w.add(kn); }
     }
     scr.position.set(0, 0.008, -0.0185);
@@ -481,8 +484,8 @@ export function updateDash(car, { gear, kmh, rpm, frac, lap, pos, delta }) {
 /* replace a car's simple wheel with the detailed one, placed for its cockpit */
 function fitCockpit(car, kind, glove) {
   const W = buildWheel(kind === 'gt3' || kind === 'hyper', glove);
-  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.97, 0.14, -0.22], eye: [0.32, 1.1, -0.32] }, hyper: { wheel: [0, 0.86, 0.32, -0.3], eye: [0, 1.0, -0.14] } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
-  const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); st.visible = false;
+  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.95, 0.24, -0.3], eye: [0.32, 1.07, -0.18], scale: 0.8 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
+  const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); if (P.scale) W.group.scale.setScalar(P.scale); st.visible = false;
   car.dash = W; car.eye = P.eye;
   // T-cam mount: above the airbox on single-seaters; at the front of the roof, over the windscreen, on closed cars
   car.tcam = { gt3: [0, 1.5, 0.5, 1.05], hyper: [0, 1.32, 0.78, 0.92] }[kind] || [0, 1.36, -0.5, 0.8];
@@ -499,15 +502,41 @@ function addInterior(g, kind) {
     const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.12), dashM); head.position.set(0, 1.255, 0.42); I.add(head);
     const rvm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.02), dashM); rvm.position.set(0, 1.19, 0.4); I.add(rvm);
     const rvg = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.05), MIRROR_MAT); rvg.position.set(0, 1.19, 0.388); rvg.rotation.y = Math.PI; I.add(rvg);
-    const liner = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.02, 1.45), dashM); liner.position.set(0, 1.24, -0.27); I.add(liner);
+    const liner = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.02, 1.2), dashM); liner.position.set(0, 1.245, -0.4); I.add(liner);
     const cage = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 1.3), new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4, metalness: 0.7 })); cage.position.set(0.58, 1.22, -0.3); I.add(cage);
   } else {
     const dash = new THREE.Mesh(new RoundedBoxGeometry(0.82, 0.12, 0.34, 3, 0.04), dashM); dash.position.set(0, 0.82, 0.72); I.add(dash);
     pillar([0.42, 0.84, 1.05], [0.4, 1.09, 0.52], 0.03); pillar([-0.42, 0.84, 1.05], [-0.4, 1.09, 0.52], 0.03);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.04, 0.1), dashM); head.position.set(0, 1.09, 0.5); I.add(head);
-    const liner = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.02, 1.3), dashM); liner.position.set(0, 1.1, -0.15); I.add(liner);
+    const liner = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.02, 0.9), dashM); liner.position.set(0, 1.105, -0.45); I.add(liner);
   }
   g.add(I); return I;
+}
+
+/* ---- working mirrors (player only): they show a live rear-view picture the game renders a few times a
+   second. Single-seaters: two side mirrors; GT3: rear-view mirror plus door mirrors; Hypercar: a rear-camera
+   screen on the dash, as the real cars have. uv halves: the left mirror shows the left side and so on. */
+export function addLiveMirrors(car, tex) {
+  const g = car.group, kind = car.closed || 'open', mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide });
+  const plane = (w, h, u0, u1, x, y, z, ry = Math.PI, rx = 0) => {
+    const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, u0 + (u1 - u0) * uv.getX(i));
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); g.add(m); return m;
+  };
+  const housing = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, 0.015), car.mats.body); m.position.set(x, y, z); g.add(m); };
+  if (kind === 'open') {
+    for (const sx of [1, -1]) {
+      housing(0.27, 0.11, 0.05, sx * 0.48, 0.93, 0.72);
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.18, 8), CARBON); st.position.set(sx * 0.45, 0.83, 0.72); st.rotation.z = sx * 0.3; g.add(st);
+      plane(0.25, 0.09, sx > 0 ? 0 : 0.5, sx > 0 ? 0.5 : 1, sx * 0.48, 0.93, 0.692, Math.PI - sx * 0.3);
+    }
+  } else if (kind === 'gt3') {
+    plane(0.22, 0.05, 0.2, 0.8, 0, 1.19, 0.387);
+    plane(0.13, 0.065, 0, 0.45, 0.94, 1.04, 0.687, Math.PI - 0.25); plane(0.13, 0.065, 0.55, 1, -0.94, 1.04, 0.687, Math.PI + 0.25);
+  } else {
+    const scr = new THREE.Mesh(new RoundedBoxGeometry(0.3, 0.1, 0.03, 2, 0.01), DARK); scr.position.set(0, 0.935, 0.66); scr.rotation.x = -0.25; g.add(scr);
+    plane(0.28, 0.085, 0, 1, 0, 0.937, 0.644, Math.PI, 0.25);
+  }
 }
 
 export function makeSafetyCar() {
