@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=trk26a';
-import { AXLE_F, AXLE_R } from './car.js?v=trk26a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=trk26a';
+import { W, KERB, DS, bankH, elevAt, pitRoad } from './tracks.js?v=elev26a';
+import { AXLE_F, AXLE_R } from './car.js?v=elev26a';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=elev26a';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -385,6 +385,8 @@ export class World {
       const pitMat = new THREE.MeshStandardMaterial({ map: tx.asphalt, color: '#a3a6ad', roughness: 0.9 });
       const k0 = Math.max(0, P.limIn - 8), k1 = Math.min(range.length, P.limOut + 8);
       add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (P.wall - 0.3), 0.016, 0], () => [ps * outer, 0.016, 2]], 6), pitMat);
+      // tarmac between the track and the pit wall along the pit straight (not grass)
+      add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (W - 0.05), 0.012, 0], () => [ps * (P.wall - 0.25), 0.012, 1]], 6), new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#9a9da4', roughness: 0.9 }));
       // entry and exit slip roads, with white edge lines
       const roadMat = new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#bfc2c8', roughness: 0.88 });
       for (const [s0, cnt] of [[(P.entry - 30 + N) % N, P.limIn + 33], [(P.entry + P.limOut - 2) % N, P.len - P.limOut + 33]]) {

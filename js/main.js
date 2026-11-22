@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=trk26a';
-import { World } from './world.js?v=trk26a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=trk26a';
-import { Sound } from './audio.js?v=trk26a';
-import { Particles, Skids } from './fx.js?v=trk26a';
-import { Weather } from './weather.js?v=trk26a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=trk26a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=trk26a';
-import { Net, newCode, loadTurn } from './net.js?v=trk26a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=trk26a';
+import { W, KERB, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=elev26a';
+import { World } from './world.js?v=elev26a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=elev26a';
+import { Sound } from './audio.js?v=elev26a';
+import { Particles, Skids } from './fx.js?v=elev26a';
+import { Weather } from './weather.js?v=elev26a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=elev26a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=elev26a';
+import { Net, newCode, loadTurn } from './net.js?v=elev26a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=elev26a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -431,6 +431,8 @@ function surfaceOf(c, Tr) {
   const s = c.lat > 0 ? 1 : -1;
   // pit entry / exit roads are proper tarmac
   if (Tr.pit && s === Tr.pit.side) { const pr = pitRoad(Tr, c.idx); if (pr && a >= pr.a - 0.6 && a <= pr.b + 0.6) return 0; }
+  // the tarmac strip between the track and the pit wall
+  if (Tr.pit && s === Tr.pit.side) { const P = Tr.pit, kk = (c.idx - P.entry + Tr.N) % Tr.N; if (kk > P.limIn - 8 && kk < P.limOut + 8 && a < P.wall) return 2; }
   if (Tr.street) return 2;
   if (a <= W + KERB + 2.4) return 2;
   if (Tr.gravel[c.idx] === s) return 3;
@@ -2165,7 +2167,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=trk26a');
+await loadCarModel('js/car.bin?v=elev26a');
 initMenu();
 requestAnimationFrame(frame);
 
