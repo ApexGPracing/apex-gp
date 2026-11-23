@@ -7,7 +7,10 @@
      channel instead, at a lower rate.
    For local testing, ?mplocal in the URL swaps Supabase for a BroadcastChannel between tabs of one browser. */
 
+import { TURN_USER, TURN_PASS } from './config.js?v=fw27f';
 let ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
+// Metered TURN relay: UDP and TCP on port 80, TCP on 443, and TLS on 443 (gets through most school firewalls)
+if (TURN_USER && TURN_PASS) ICE = ICE.concat([{ urls: 'stun:stun.relay.metered.ca:80' }, ...['turn:global.relay.metered.ca:80', 'turn:global.relay.metered.ca:80?transport=tcp', 'turn:global.relay.metered.ca:443', 'turns:global.relay.metered.ca:443?transport=tcp'].map(urls => ({ urls, username: TURN_USER, credential: TURN_PASS }))]);
 /* TURN relay (Metered / Open Relay): lets players connect even when a direct link is impossible (mobile data,
    strict routers). Credentials are fetched once from the app's Metered API key if one is configured. */
 let turnLoaded = null;
