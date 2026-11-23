@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { canvasTex } from './util.js?v=vip26h';
+import { canvasTex } from './util.js?v=fw27a';
 
 const VERT = `
 attribute float size; attribute float alpha; attribute vec3 tint;
@@ -93,4 +93,82 @@ export class Skids {
   }
   lift(key) { this.last.delete(key); }
   clear() { this.posA.array.fill(0); this.alA.array.fill(0); this.posA.needsUpdate = this.alA.needsUpdate = true; this.last.clear(); }
+}
+
+/* Firework show for a race win: rockets with trails, peony / willow / ring / crackle bursts, and fans of red and white
+   comets fired up from either side of the track (the Abu Dhabi finale look). Every star leaves a fading streak. */
+const C = (h, s, l, k) => new THREE.Color().setHSL(h, s, l).multiplyScalar(k);
+const PALETTE = [() => C(0, 1, 0.5, 4), () => C(0, 0, 1, 4), () => C(0.11, 1, 0.55, 3.5), () => C(0.58, 1, 0.6, 3.5), () => C(0.83, 1, 0.6, 3.5), () => C(0.33, 1, 0.5, 3.5)];
+export class Fireworks {
+  constructor(scene) { this.fx = new Particles(scene, 24000, true); this.stars = []; this.rockets = []; this.t = 0; this.next = 0; this.vol = 0; }
+  // origin: where the show is centred, h: heading the camera is looking along, dur: seconds, onBoom(dist) for sound
+  start(x, y, z, h, dur, onBoom) { this.o = { x, y, z, h }; this.t = dur; this.dur = dur; this.next = 0; this.vol = 0.4; this.boom = onBoom; }
+  stop() { this.t = 0; this.stars.length = 0; this.rockets.length = 0; this.fx.clear(); }
+  // a point fwd metres ahead and side metres to the side of the show centre
+  at(fwd, side, up) { const o = this.o, s = Math.sin(o.h), c = Math.cos(o.h); return [o.x + s * fwd + c * side, o.y + up, o.z + c * fwd - s * side]; }
+  star(x, y, z, vx, vy, vz, col, o = {}) {
+    if (this.stars.length > 900) return;
+    this.stars.push({ x, y, z, vx, vy, vz, col, age: 0, life: o.life || 2, drag: o.drag ?? 1.1, grav: o.grav ?? 5, size: o.size || 2.8, trail: o.trail ?? 0.8, crackle: !!o.crackle, strobe: !!o.strobe, emit: 0 });
+  }
+  burst(x, y, z) {
+    const kind = Math.random(), c1 = PALETTE[Math.floor(Math.random() * PALETTE.length)](), c2 = Math.random() < 0.5 ? C(0, 0, 1, 4) : PALETTE[Math.floor(Math.random() * PALETTE.length)]();
+    const sphere = (n, sp, f) => { for (let k = 0; k < n; k++) { const u = Math.random() * 2 - 1, t = Math.random() * 6.283, r = Math.sqrt(1 - u * u), v = sp * (0.85 + Math.random() * 0.15); f(r * Math.cos(t) * v, u * v, r * Math.sin(t) * v, k); } };
+    if (kind < 0.3) sphere(120, 36, (a, b, c, k) => this.star(x, y, z, a, b, c, k % 3 ? c1 : c2, { life: 1.8 + Math.random() * 0.5 }));               // peony
+    else if (kind < 0.55) { const gold = C(0.1, 1, 0.5, 3.2); sphere(100, 30, (a, b, c) => this.star(x, y, z, a, b, c, gold, { life: 3.8, drag: 0.9, grav: 7, trail: 1.8, size: 2.2 })); } // gold willow
+    else if (kind < 0.75) { const ax = Math.random() * 6.283, tilt = 0.6 + Math.random() * 0.6; for (let k = 0; k < 70; k++) { const t = k / 70 * 6.283, v = 34; const vx = Math.cos(t) * v, vy = Math.sin(t) * v * Math.cos(tilt), vz = Math.sin(t) * v * Math.sin(tilt); this.star(x, y, z, vx * Math.cos(ax) - vz * Math.sin(ax), vy, vx * Math.sin(ax) + vz * Math.cos(ax), c1, { life: 1.8 }); } sphere(25, 8, (a, b, c) => this.star(x, y, z, a, b, c, c2, { life: 1.4 })); } // ring
+    else sphere(90, 32, (a, b, c) => this.star(x, y, z, a, b, c, C(0, 0, 1, 4), { life: 1.6, crackle: true, strobe: true }));                      // white strobe + crackle
+    // bright flash at the centre
+    for (let k = 0; k < 6; k++) this.fx.spawn(x, y, z, 0, 0, 0, 0.25, 26, 6, 1, C(0, 0, 1, 4), 0);
+    if (this.boom) this.boom(1);
+  }
+  rocket(fwd, side, apex) {
+    const [x, y, z] = this.at(fwd, side, 0), [tx, ty, tz] = this.at(fwd + (Math.random() - 0.5) * 30, side * 0.6, apex), T = 1.6 + Math.random() * 0.4;
+    this.rockets.push({ x, y, z, vx: (tx - x) / T, vy: (ty - y) / T + 9.81 * T / 2, vz: (tz - z) / T, t: T });
+  }
+  // a fan of straight comets fired up from a launcher, alternating red and white
+  fan(fwd, side) {
+    const [x, y, z] = this.at(fwd, side, 6), o = this.o, n = 7, red = C(0, 1, 0.5, 4.5), white = C(0, 0, 1, 4);
+    for (let k = 0; k < n; k++) {
+      const a = (k / (n - 1) - 0.5) * 1.3, v = 55 + Math.random() * 10, up = Math.cos(a) * v, lat = Math.sin(a) * v, fw = (Math.random() - 0.3) * 12;
+      this.star(x, y, z, Math.sin(o.h) * fw + Math.cos(o.h) * lat, up, Math.cos(o.h) * fw - Math.sin(o.h) * lat, k % 2 ? white : red, { life: 1.6 + Math.random() * 0.3, drag: 0.6, grav: 9, trail: 1.2, size: 3.2 });
+    }
+    if (this.boom) this.boom(0.4);
+  }
+  update(dt) {
+    if (this.t > 0) {
+      this.t -= dt; this.next -= dt;
+      if (this.next <= 0) {
+        const el = this.dur - this.t, finale = this.t < 3.5;
+        const r = Math.random();
+        if (r < 0.35 || finale) { const s = Math.random() < 0.5 ? -1 : 1; this.fan(70 + Math.random() * 80, s * (30 + Math.random() * 25)); if (finale || el < 1) this.fan(70 + Math.random() * 80, -s * (30 + Math.random() * 25)); }
+        const shells = finale ? 3 : 1 + (Math.random() < 0.4);
+        for (let k = 0; k < shells; k++) this.rocket(90 + Math.random() * 90, (Math.random() - 0.5) * 120, 55 + Math.random() * 45);
+        this.next = finale ? 0.18 + Math.random() * 0.12 : 0.45 + Math.random() * 0.4;
+      }
+    }
+    // rockets: climb with a sparkly trail, then burst
+    for (let i = this.rockets.length - 1; i >= 0; i--) {
+      const r = this.rockets[i]; r.t -= dt; r.vy -= 9.81 * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt;
+      this.fx.spawn(r.x, r.y, r.z, (Math.random() - 0.5) * 2, -3, (Math.random() - 0.5) * 2, 0.5, 1.4, 0.2, 0.9, C(0.09, 1, 0.6, 2.5), 1, 2);
+      if (r.t <= 0) { this.burst(r.x, r.y, r.z); this.rockets.splice(i, 1); }
+    }
+    // stars: move, leave a streak, flicker or crackle at the end
+    const st = this.stars;
+    for (let i = st.length - 1; i >= 0; i--) {
+      const s = st[i]; s.age += dt;
+      if (s.age >= s.life) {
+        if (s.crackle) for (let k = 0; k < 3; k++) this.fx.spawn(s.x, s.y, s.z, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, 0.12 + Math.random() * 0.15, 2.4, 0.4, 1, C(0.12, 0.3, 0.9, 4), 2, 0);
+        st[i] = st[st.length - 1]; st.pop(); continue;
+      }
+      const k = Math.exp(-s.drag * dt); s.vx *= k; s.vz *= k; s.vy = s.vy * k - s.grav * dt;
+      const px = s.x, py = s.y, pz = s.z; s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
+      const fade = 1 - s.age / s.life, on = !s.strobe || s.age < s.life * 0.5 || Math.random() < 0.5;
+      // streak: two trail points per frame (keeps it a solid line even at speed) + a bright head
+      if (on) {
+        for (const f of [0, 0.5]) this.fx.spawn(px + (s.x - px) * f, py + (s.y - py) * f, pz + (s.z - pz) * f, 0, -0.6, 0, s.trail, s.size * 0.55 * (0.5 + fade * 0.5), 0.1, 0.75 * fade + 0.15, s.col, 0, 0.5);
+        this.fx.spawn(s.x, s.y, s.z, 0, 0, 0, 0.05, s.size * (0.6 + fade * 0.6), s.size * 0.5, 1, s.col, 0, 0);
+      }
+    }
+    this.fx.update(dt);
+  }
 }

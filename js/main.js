@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=vip26h';
-import { World } from './world.js?v=vip26h';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=vip26h';
-import { Sound } from './audio.js?v=vip26h';
-import { Particles, Skids } from './fx.js?v=vip26h';
-import { Weather } from './weather.js?v=vip26h';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=vip26h';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=vip26h';
-import { Net, newCode, loadTurn } from './net.js?v=vip26h';
-import { VIP_CODES } from './codes.js?v=vip26h';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=vip26h';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27a';
+import { World } from './world.js?v=fw27a';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27a';
+import { Sound } from './audio.js?v=fw27a';
+import { Particles, Skids, Fireworks } from './fx.js?v=fw27a';
+import { Weather } from './weather.js?v=fw27a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27a';
+import { Net, newCode, loadTurn } from './net.js?v=fw27a';
+import { VIP_CODES } from './codes.js?v=fw27a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -170,7 +170,7 @@ const world = new World(renderer, scene);
 const weather = new Weather(scene);
 const smoke = new Particles(scene, 1600, false);
 const sparks = new Particles(scene, 500, true);
-const fireworks = new Particles(scene, 2400, true);
+const fireworks = new Fireworks(scene);
 const skids = new Skids(scene);
 
 const settings = Object.assign({ steer: 'normal', series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim' }, store.json('apexgp2-settings', {}));
@@ -450,7 +450,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; game.fwT = 0;
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop();
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -1825,22 +1825,19 @@ function updateCarVisuals(dt) {
     }
     if (game.phase !== 'lights' && game.phase !== 'garage') carEffects(c, dt);
   }
-  smoke.update(dt); sparks.update(dt); fireworks.update(dt);
-  // VIP: fireworks over the track when you finish on the podium
-  if (game.player && game.player.finished && isRace() && !game.fwDone) { game.fwDone = true; if (isVip() && settings.vipFw !== false && positionOf(game.player) <= 3) game.fwT = 10; }
-  if (game.fwT > 0 && game.player) {
-    game.fwT -= dt;
-    if (Math.random() < dt * 2.2) {
-      const p = game.player, a = p.h + (Math.random() - 0.5) * 1.2, d = 40 + Math.random() * 40;
-      const x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d, y = p.group.position.y + 16 + Math.random() * 14;
-      const col = new THREE.Color().setHSL(Math.random(), 1, 0.55).multiplyScalar(3), col2 = new THREE.Color().setHSL(Math.random(), 1, 0.7).multiplyScalar(3);
-      for (let k = 0; k < 140; k++) {
-        const u = Math.random() * 2 - 1, t = Math.random() * 6.283, r = Math.sqrt(1 - u * u), sp = 16 + Math.random() * 6;
-        fireworks.spawn(x, y, z, r * Math.cos(t) * sp, u * sp, r * Math.sin(t) * sp, 1.6 + Math.random() * 0.8, 3.2, 0.8, 1, k % 4 ? col : col2, 1.1, 6);
-      }
-      try { sound.thump && sound.thump(); } catch (e) { /* no sound */ }
+  smoke.update(dt); sparks.update(dt);
+  // fireworks over the track: everyone gets a full show for a race win, VIPs also get one for P2 / P3
+  if (game.player && game.player.finished && isRace() && !game.fwDone) {
+    game.fwDone = true;
+    const pos = positionOf(game.player), on = settings.vipFw !== false;
+    if (on && (pos === 1 || (isVip() && pos <= 3))) {
+      const p = game.player;
+      fireworks.start(p.x, p.group.position.y, p.z, p.h, pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } });
+      if (!game.mp) game.resultsAt = Math.max(game.resultsAt, game.raceTime + (pos === 1 ? 9 : 6)); // let the show play before the results card
     }
   }
+  if (game.player && fireworks.t > 0) { const p = game.player; Object.assign(fireworks.o, { x: p.x, y: p.group.position.y, z: p.z, h: p.h }); }
+  fireworks.update(dt);
 }
 
 /* racing line colours worked out for the player's own car (its class and extra grip), braking as late as it can */
@@ -2192,10 +2189,10 @@ function initMenu() {
   });
   const vipUi = () => {
     document.body.classList.toggle('isvip', isVip());
-    if (isVip()) $('vipMsg').textContent = 'VIP unlocked: 8 special liveries, gold rims, underglow, podium fireworks and a VIP tag online.';
+    if (isVip()) $('vipMsg').textContent = 'VIP unlocked: 8 special liveries, gold rims, underglow, fireworks for every podium and a VIP tag online.';
     $('vipRims').textContent = 'Gold rims: ' + (settings.vipRims ? 'On' : 'Off');
     $('vipGlow').textContent = 'Underglow: ' + GLOW_NAMES[settings.vipGlow || 0];
-    $('vipFw').textContent = 'Podium fireworks: ' + (settings.vipFw === false ? 'Off' : 'On');
+    $('vipFw').textContent = 'Fireworks: ' + (settings.vipFw === false ? 'Off' : 'On');
   };
   $('vipRims').onclick = () => { settings.vipRims = !settings.vipRims; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
@@ -2239,7 +2236,7 @@ function initMenu() {
 function toMenu() {
   engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
-  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear();
+  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear(); fireworks.stop();
   weather.N = 0; weather.lines.visible = false; world.setWeather(0, 0);
   ['hud', 'pause', 'results', 'qres', 'strategy', 'garageBar'].forEach(id => $(id).classList.add('hidden')); $('menu').classList.remove('hidden');
   document.querySelectorAll('.tcard .st').forEach((el, i) => el.innerHTML = cardStats(i));
@@ -2330,7 +2327,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=vip26h');
+await loadCarModel('js/car.bin?v=fw27a');
 initMenu();
 requestAnimationFrame(frame);
 

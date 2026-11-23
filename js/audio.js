@@ -138,6 +138,13 @@ export class Sound {
     src.connect(f); f.connect(g); g.connect(this.master); src.start(t, Math.random()); src.stop(t + dur + 0.05);
   }
 
+  /* firework: a deep boom, a sharp crack and (for big shells) a crackle that follows a moment later */
+  boom(g = 1) {
+    if (!this.ctx || this.muted) return;
+    this.burst(0.9 * g, 1.4, 90, 0.8); this.burst(0.35 * g, 0.25, 900, 0.7);
+    if (g > 0.6) for (let k = 0; k < 6; k++) setTimeout(() => this.burst(0.12, 0.05 + Math.random() * 0.05, 3500 + Math.random() * 2500, 2), 500 + Math.random() * 900);
+  }
+
   /* called every frame */
   update(dt, s) {
     if (!this.ctx) return;
