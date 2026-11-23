@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=ring27g';
-import { World } from './world.js?v=ring27g';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ring27g';
-import { Sound } from './audio.js?v=ring27g';
-import { Particles, Skids, Fireworks } from './fx.js?v=ring27g';
-import { Weather } from './weather.js?v=ring27g';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ring27g';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ring27g';
-import { Net, newCode, loadTurn } from './net.js?v=ring27g';
-import { VIP_CODES } from './codes.js?v=ring27g';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ring27g';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=ring27g';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=dsq27h';
+import { World } from './world.js?v=dsq27h';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=dsq27h';
+import { Sound } from './audio.js?v=dsq27h';
+import { Particles, Skids, Fireworks } from './fx.js?v=dsq27h';
+import { Weather } from './weather.js?v=dsq27h';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=dsq27h';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=dsq27h';
+import { Net, newCode, loadTurn } from './net.js?v=dsq27h';
+import { VIP_CODES } from './codes.js?v=dsq27h';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=dsq27h';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=dsq27h';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -460,7 +460,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop(); game.champ = null;
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop(); game.fwCar = null; game.champ = null;
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -606,6 +606,9 @@ const dragK = c => 0.00028 * ((c.spec && c.spec.drag) || 1) * (c.drsOpen ? 0.58 
 const DYN = { L: 3.6, a: 1.98, b: 1.62, h: 0.3, k2: 2.0, B: 16.7, C: 1.6, brakeF: 0.6, rearGrip: 1.1, muX: 1.35 };
 const tyreCurve = a => Math.sin(DYN.C * Math.atan(DYN.B * a));
 function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
+  // rally cars: a gentler tyre curve that keeps most of its grip at big slip angles, a slightly loose rear,
+  // less yaw damping and four-wheel drive, so they hang the tail out in long, catchable slides
+  const SL = c.spec && c.spec.slide, tB = SL ? SL.B : DYN.B, tC = SL ? SL.C : DYN.C, tyre = SL ? (a => Math.sin(tC * Math.atan(tB * a))) : tyreCurve;
   const P = DYN, sh0 = Math.sin(c.h), ch0 = Math.cos(c.h);
   const vx0 = c.v * Math.sin(c.vh), vz0 = c.v * Math.cos(c.vh);
   let u = vx0 * sh0 + vz0 * ch0, vl = vx0 * ch0 - vz0 * sh0, r = (c.r || 0) + c.spin; c.spin = 0;
@@ -621,7 +624,7 @@ function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
     r += (rk - r) * Math.min(1, dt * 12);
   } else {
     const mu = 2.0 * grip, Ntot = 9 + 0.125 * u + Math.max(0, bankA) / 2;
-    const Cfast = P.B * P.C * mu * Ntot;                       // total cornering stiffness (per rad)
+    const Cfast = tB * tC * mu * Ntot;                       // total cornering stiffness (per rad)
     const n = Math.min(10, Math.max(1, Math.ceil(dt / (0.7 * u / Cfast))));
     const h = dt / n;
     for (let k = 0; k < n; k++) {
@@ -634,20 +637,20 @@ function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
       const Nf = Math.max(0.5, Ntot * 0.45 - dN), Nr = Math.max(0.5, Ntot * 0.55 + dN);
       // speed-sensitive steering: plenty of lock in slow corners, much less at high speed
       // (peak front grip arrives a little before full lock, so there is steering in reserve)
-      const delta = st * clamp(0.05 + 1.2 * P.L * mu * Ntot / (u * u), 0.05, 0.4);
-      const muR = mu * P.rearGrip, xF = P.muX * mu * Nf, xR = P.muX * muR * Nr;
+      const delta = st * clamp(0.05 + 1.2 * P.L * mu * Ntot / (u * u), 0.05, SL ? SL.lock : 0.4);
+      const muR = mu * (SL ? SL.rearGrip : P.rearGrip), xF = P.muX * mu * Nf, xR = P.muX * muR * Nr;
       // braking/driving use up some cornering grip (friction ellipse), never all of it
-      const useF = 0, useR = Math.min(0.85, drive / xR);
+      const useF = SL && SL.awd ? Math.min(0.6, 0.4 * drive / xF) : 0, useR = SL && SL.awd ? Math.min(0.95, 0.75 * drive / xR) : Math.min(0.85, drive / xR);
       const capF = mu * Nf * Math.sqrt(1 - useF * useF), capR = muR * Nr * Math.sqrt(1 - useR * useR);
       const af = Math.atan2(vl + P.a * r, u) - delta, ar = Math.atan2(vl - P.b * r, u);
-      const Fyf = -capF * tyreCurve(af), Fyr = -capR * tyreCurve(ar);
+      const Fyf = -capF * tyre(af), Fyr = -capR * tyre(ar);
       const cd = Math.cos(delta), sd = Math.sin(delta);
       const du = drive - brake - Fyf * sd - drag + vl * r;
       const dvl = Fyf * cd + Fyr - u * r;
       const dr = (P.a * Fyf * cd - P.b * Fyr) / P.k2;
       u = Math.max(0, u + du * h); vl += dvl * h; r += dr * h;
       // yaw damping grows with speed: aero stability keeps the car calm in fast corners
-      r *= Math.exp(-(0.5 + 0.02 * u) * h);
+      r *= Math.exp(-(SL ? SL.yawDamp + 0.008 * u : 0.5 + 0.02 * u) * h);
       c.scrub = Math.max(c.scrub, Math.abs(af) > 0.14 ? Math.min(1, (Math.abs(af) - 0.14) * 6) : 0);
     }
   }
@@ -678,12 +681,28 @@ function wallHit(c, Tr, ni, d, L) {
   if (vn > 4) { c.hitT = Math.min(1, vn / 25); c.hitSide = d; if (c.isPlayer) c.impact = Math.min(1, vn / 20); damage(c, vn, fdot > 0.55 ? 'front' : fdot < -0.55 ? 'rear' : 'side'); }
 }
 
+/* driving the wrong way round the track: warnings, then disqualified after 15 seconds of it */
+function wrongWay(c, dt, Tr) {
+  if (!isRace() || !racing() || c.dnf || c.finished || c.pit) { c.wrongT = 0; return; }
+  const along = c.v * (Math.sin(c.vh) * Tr.tx[c.idx] + Math.cos(c.vh) * Tr.tz[c.idx]);
+  if (along < -2) c.wrongT = (c.wrongT || 0) + dt; else if (along > 3) c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 3);
+  if (!c.isPlayer) return;
+  const left = 15 - (c.wrongT || 0), sec = Math.ceil(left);
+  if (c.wrongT > 2 && sec !== c.wrongSaid && sec >= 1 && (sec % 5 === 0 || sec <= 3)) { c.wrongSaid = sec; radio('WRONG WAY! Turn around or you will be disqualified in ' + sec + ' s.', 'bad', 2.5); }
+  if (c.wrongT >= 15) disqualify(c, 'driving the wrong way');
+}
+function disqualify(c, why) {
+  if (c.dnf) return;
+  c.dsq = why; retire(c, 'dsq');
+  if (c.isPlayer) { radio('You have been DISQUALIFIED for ' + why + '.', 'bad', 8); if (game.mp) net.broadcast('dsq', { why }); }
+  else radio(c.code + ' has been disqualified for ' + why + '.', 'warn', 5);
+}
 /* Car retiring: coast to the side of the track and park */
 function retire(c, why) {
   if (c.dnf) return;
   c.dnf = true; c.drsOpen = false; c.retire = { why, side: c.lat >= 0 ? 1 : -1, dmg: { ...c.dmg } };
-  if (c.isPlayer) { radio(why === 'accident' ? 'Car is too badly damaged. We have to retire it. Sorry.' : 'We have to retire the car.', 'bad', 8); game.resultsAt = game.raceTime + 3; }
-  else if (isRace()) radio('Yellow flag: ' + c.code + ' is out of the race.', 'warn', 4);
+  if (c.isPlayer) { if (why !== 'dsq') radio(why === 'accident' ? 'Car is too badly damaged. We have to retire it. Sorry.' : 'We have to retire the car.', 'bad', 8); game.resultsAt = game.raceTime + 3; }
+  else if (isRace() && why !== 'dsq') radio('Yellow flag: ' + c.code + ' is out of the race.', 'warn', 4);
   if (why === 'accident') incident(c.code + ' has crashed');
 }
 function retireStep(c, dt, Tr) {
@@ -1638,7 +1657,11 @@ async function mpEnter(code, fixed = false) {
 net.on('room', () => renderRoom());
 net.on('peerLink', () => renderRoom());
 net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp && !c.netGone) { c.netGone = true; radio(c.name + ' has lost connection.', 'warn', 4); } renderRoom(); });
-net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); else if (m.t === 'qlap') mpQualiLap(m); });
+net.on('msg', m => {
+  if (m.t === 'start' && m.cfg) startMp(m.cfg); else if (m.t === 'qlap') mpQualiLap(m);
+  else if (m.t === 'dsq' && game.mp) { const c = carByNet(m.from); if (c && !c.dsq) { c.dsq = m.why || 'driving the wrong way'; c.dnf = true; c.retire = { why: 'dsq', side: c.lat >= 0 ? 1 : -1, dmg: { ...c.dmg } }; radio(c.name + ' has been disqualified for ' + c.dsq + '.', 'warn', 5); } }
+  else if (m.t === 'fw' && game.mp) { const c = carByNet(m.from); if (c && !(fireworks.t > 0 && game.fwCar === c)) { game.fwCar = c; fireworks.start(c.x, c.group.position.y, c.z, c.h, m.pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } }); radio(c.name + (m.pos === 1 ? ' wins! VIP fireworks!' : ' is on the podium. VIP fireworks!'), 'good', 4); } }
+});
 
 /* ---------------- Online qualifying: everyone does an out lap + two flying laps on their own track,
    lap times are shared, then the host starts the race with the grid in time order ---------------- */
@@ -1705,7 +1728,7 @@ net.on('data', (id, d) => {
   // insert in sender-time order (packets can arrive out of order)
   let k = c.snaps.length; while (k > 0 && c.snaps[k - 1].t > d.t) k--;
   c.snaps.splice(k, 0, d); if (c.snaps.length > 60) c.snaps.shift();
-  if (c.netGone || c.dnf) { c.netGone = false; c.dnf = false; c.retire = null; c.group.visible = true; }
+  if ((c.netGone || c.dnf) && !c.dsq) { c.netGone = false; c.dnf = false; c.retire = null; c.group.visible = true; }
 });
 function mpHostStart() {
   if (!net.isHost) return;
@@ -1972,6 +1995,7 @@ function update(dt) {
       }
       drsLogic(c, prev, Tr);
       pitDecision(c, prev, Tr);
+      wrongWay(c, h, Tr);
     }
     collide();
     for (const c of game.cars) if (c.active && !c.celebrate) checkLaps(c, Tr);
@@ -1997,6 +2021,13 @@ function updateCarVisuals(dt) {
   for (const c of game.cars) {
     if (!c.group.visible) continue;
     c.group.position.set(c.x, 0, c.z); c.group.rotation.order = 'YXZ'; c.group.rotation.y = c.h;
+    if (c.spec && c.spec.slide && !c.isPlayer && !c.dnf) {
+      // AI rally cars slide too: the nose points into the corner, more the faster and tighter it is
+      const Tr2 = game.T, j = (c.idx + 6) % Tr2.N, turn = angDiff(Math.atan2(Tr2.tx[j], Tr2.tz[j]), Math.atan2(Tr2.tx[c.idx], Tr2.tz[c.idx]));
+      const want = Math.sign(turn) * Math.min(0.38, Math.abs(c.v) * Math.abs(Tr2.rk[c.idx]) * Math.abs(c.v) * 0.012);
+      c.driftVis = (c.driftVis || 0) + (want - (c.driftVis || 0)) * Math.min(1, dt * 3);
+      c.group.rotation.y += c.driftVis; c.scrub = Math.max(c.scrub || 0, Math.min(1, Math.abs(c.driftVis) * 2.5));
+    }
     c.wheelRot += c.v * dt / 0.36;
     for (const w of c.wheels) { w.spin.rotation.x = c.wheelRot; if (w.front) w.pivot.rotation.y = c.steer * 0.32; }
     c.steering.rotation.z = -c.steer * 0.9;
@@ -2027,11 +2058,12 @@ function updateCarVisuals(dt) {
     const pos = positionOf(game.player);
     if (isVip() && settings.vipFw !== false && pos <= 3) {
       const p = game.player;
-      fireworks.start(p.x, p.group.position.y, p.z, p.h, pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } });
+      game.fwCar = p; fireworks.start(p.x, p.group.position.y, p.z, p.h, pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } });
+      if (game.mp) { net.broadcast('fw', { pos }); setTimeout(() => net.broadcast('fw', { pos }), 1500); }   // everyone in the race sees the show
       if (!game.mp) game.resultsAt = Math.max(game.resultsAt, game.raceTime + (pos === 1 ? 9 : 6)); // let the show play before the results card
     }
   }
-  if (game.player && fireworks.t > 0) { const p = game.player; Object.assign(fireworks.o, { x: p.x, y: p.group.position.y, z: p.z, h: p.h }); }
+  if (fireworks.t > 0) { const p = game.fwCar || game.player; if (p) Object.assign(fireworks.o, { x: p.x, y: p.group.position.y, z: p.z, h: p.h }); }
   fireworks.update(dt);
 }
 
@@ -2298,7 +2330,7 @@ function showResults() {
   $('resSub').textContent = (champ ? 'Round ' + (calIdx().indexOf(settings.track) + 1) + ' of ' + calIdx().length + ' · ' : '') + Tr.def.name + ' · ' + game.laps + ' laps';
   let html = '<tr><th>Pos</th><th>Driver</th><th>Team</th><th>Time</th><th>Best lap</th><th>Tyres</th>' + (champ ? '<th>Pts</th>' : '') + '</tr>';
   rows.forEach((r, k) => {
-    const time = r.c.dnf ? 'DNF' : k === 0 ? fmt(r.t) : '+' + (r.t - rows[0].t).toFixed(3) + (r.est ? '*' : '');
+    const time = r.c.dsq ? 'DSQ' : r.c.dnf ? 'DNF' : k === 0 ? fmt(r.t) : '+' + (r.t - rows[0].t).toFixed(3) + (r.est ? '*' : '');
     const pts = !r.c.dnf && POINTS[k] ? POINTS[k] : 0;
     html += '<tr class="' + (r.c.isPlayer ? 'me' : '') + '"><td>' + (r.c.dnf ? '-' : k + 1) + '</td><td><span class="sw" style="background:' + r.c.color + '"></span>' + r.c.name + '</td><td>' + r.c.team + '</td><td>' + time + (r.c.penalty ? ' <span class="pen">(+' + r.c.penalty + 's)</span>' : '') + '</td><td class="' + (r.c.bestLap === fl ? 'fl' : '') + '">' + fmt(r.c.bestLap) + '</td><td>' + (r.c.stints || []).map(s => '<i class="tb sm" style="--tc:' + COMP[s].color + '">' + COMP[s].s + '</i>').join('') + '</td>' + (champ ? '<td><b>' + (pts ? '+' + pts : '') + '</b></td>' : '') + '</tr>';
     r.pts = pts;
@@ -2598,7 +2630,7 @@ function initMenu() {
 function toMenu() {
   engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
-  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear(); fireworks.stop(); game.champ = null;
+  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear(); fireworks.stop(); game.fwCar = null; game.champ = null;
   weather.N = 0; weather.lines.visible = false; world.setWeather(0, 0);
   ['hud', 'pause', 'results', 'qres', 'strategy', 'garageBar'].forEach(id => $(id).classList.add('hidden')); $('menu').classList.remove('hidden');
   document.querySelectorAll('.tcard .st').forEach((el, i) => el.innerHTML = cardStats(i));
@@ -2689,7 +2721,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ring27g');
+await loadCarModel('js/car.bin?v=dsq27h');
 initMenu();
 requestAnimationFrame(frame);
 
