@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=vip27i';
-import { AXLE_F, AXLE_R } from './car.js?v=vip27i';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=vip27i';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=land27j';
+import { AXLE_F, AXLE_R } from './car.js?v=land27j';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=land27j';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -352,6 +352,76 @@ export class World {
         return [o, H + 1 + (4 + 14 * Math.sin(Math.PI * u)) * (0.35 + 0.65 * lift) - bankH(T, i, o) + elevAt(T, i), u * (Lo + Ro) / 12];
       });
       add(ribbon(T, (a - 3 + N) % N, cnt + 6, cols2, 12, { up: false }), shellMat);
+    }
+    const stl = new THREE.MeshStandardMaterial({ color: '#2a2e36', roughness: 0.5, metalness: 0.6 });
+    const frameAt2 = (i, lat) => { const o = new THREE.Object3D(); o.position.set(T.px[i] + T.nx[i] * lat, elevAt(T, i), T.pz[i] + T.nz[i] * lat); o.rotation.y = Math.atan2(T.tx[i], T.tz[i]); return o; };
+    const B0 = (w, h, d, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y + h / 2, z); o.castShadow = q > 0; return o; };
+    // real-life landmarks (def.landmarks): [type, x, z, rotationDeg, scale] at real map positions, or
+    // [type, { m, side, off }] placed by distance along the lap. Pushed back if they would touch the track.
+    {
+      const night = th.night, glassD = new THREE.MeshStandardMaterial({ map: tx.winDay, color: '#cfe0ee', roughness: 0.2, metalness: 0.5 });
+      const glassN = new THREE.MeshStandardMaterial({ color: '#1a2230', roughness: 0.3, metalness: 0.4, emissive: '#ffe2b0', emissiveMap: tx.winNight, emissiveIntensity: 0.8 });
+      const glass = night ? glassN : glassD, stone = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }), metalM = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.35, metalness: 0.7 });
+      const glow = c => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(night ? 2 : 1), toneMapped: !night });
+      const nearTrack = (x, z) => { let best = 1e9; for (let i = 0; i < N; i += 2) { const d = Math.hypot(T.px[i] - x, T.pz[i] - z); if (d < best) best = d; } return best; };
+      const B = (w, h, d, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y + h / 2, z); o.castShadow = q > 0; return o; };
+      const wheel = (R, legH) => { const g = new THREE.Group(), st = metalM('#e8ecf0'); g.add(new THREE.Mesh(new THREE.TorusGeometry(R, 1.2, 8, 64), st)); for (let k = 0; k < 16; k++) { const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, R * 2, 5), st); sp.rotation.z = k * Math.PI / 16; g.add(sp); } const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(2.6, 10, 8), night ? glow('#9fd8ff') : new THREE.MeshStandardMaterial({ color: '#dff3ff', roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }), 28), dd = new THREE.Object3D(); for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2; dd.position.set(Math.cos(a) * R, Math.sin(a) * R, 0); dd.updateMatrix(); cap.setMatrixAt(k, dd.matrix); } g.add(cap); if (night) g.add(new THREE.Mesh(new THREE.TorusGeometry(R + 0.5, 0.5, 6, 64), glow('#4fc3ff'))); g.position.y = legH; const o = new THREE.Group(); o.add(g); for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.4, legH * 1.15, 6), st); l.position.set(sx * legH * 0.28, legH / 2, sz * 4); l.rotation.z = -sx * 0.27; o.add(l); } return o; };
+      const tower = (w, h, d) => B(w, h, d, glass);
+      const BUILD = {
+        // Singapore: Marina Bay Sands, three 194 m towers with the SkyPark across the top
+        mbs: () => { const g = new THREE.Group(); for (const x of [-62, 0, 62]) { g.add(tower(36, 194, 24).translateX(x)); g.add(B(30, 194, 6, glass, x, 0, 13)); } g.add(B(340, 8, 38, stone('#e9edf1'), 10, 194)); g.add(B(80, 3, 30, new THREE.MeshStandardMaterial({ color: '#3fa7d6', roughness: 0.1 }), 150, 202)); return g; },
+        flyer: () => wheel(75, 90), highroller: () => wheel(80, 92),
+        fullerton: () => { const g = new THREE.Group(), c = stone('#efe6d2'); g.add(B(110, 28, 90, c)); for (let k = 0; k < 12; k++) g.add(B(2.4, 18, 2.4, stone('#f8f3e6'), -50 + k * 9, 4, 46)); g.add(B(30, 6, 30, stone('#d9cfb8'), 0, 28)); return g; },
+        // Monaco
+        casino: () => { const g = new THREE.Group(), c = stone('#e7d3b0'), roof = stone('#6f8f7c'); g.add(B(70, 22, 40, c)); for (const x of [-30, 30]) { g.add(B(10, 30, 10, c, x, 0, 16)); const d = new THREE.Mesh(new THREE.ConeGeometry(6, 9, 4), roof); d.position.set(x, 34.5, 16); d.rotation.y = Math.PI / 4; g.add(d); } const dome = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 8, 0, 6.3, 0, 1.5), roof); dome.position.y = 22; g.add(dome); if (night) g.add(B(70.5, 1, 40.5, glow('#ffd27a'), 0, 21)); return g; },
+        hoteldeparis: () => { const g = new THREE.Group(); g.add(B(100, 30, 40, stone('#f3ece0'))); g.add(B(102, 3, 42, stone('#c9b89a'), 0, 30)); return g; },
+        palace: () => { const g = new THREE.Group(), c = stone('#e9d9b6'); g.add(B(160, 55, 120, stone('#8a7a62'))); g.add(B(120, 18, 60, c, 0, 55)); for (let k = 0; k < 10; k++) g.add(B(3, 3, 3, c, -55 + k * 12, 73, 30)); g.add(B(10, 30, 10, c, 50, 55, 20)); return g; },
+        // Las Vegas
+        bellagio: () => { const g = new THREE.Group(); for (let k = 0; k < 7; k++) { const a = (k - 3) * 0.16, t = tower(26, 150 - Math.abs(k - 3) * 12, 30); t.position.set(Math.sin(a) * 90, 0, Math.cos(a) * 90 - 90); t.rotation.y = a; g.add(t); } const lake = new THREE.Mesh(new THREE.PlaneGeometry(260, 90).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#1d4e6b', roughness: 0.05, metalness: 0.6 })); lake.position.set(0, 0.3, 80); g.add(lake); if (night) for (let k = 0; k < 14; k++) g.add(B(1.2, 30 + 20 * Math.sin(k), 1.2, glow('#e8f6ff'), -110 + k * 17, 0.3, 80)); return g; },
+        caesars: () => { const g = new THREE.Group(); g.add(tower(60, 120, 30)); g.add(tower(30, 100, 60).translateX(55)); g.add(B(200, 14, 80, stone('#f1ebe0'), 20, 0, 60)); return g; },
+        // Baku: the three Flame Towers, lit up like flames at night
+        flametowers: () => { const g = new THREE.Group(); for (const [x, z, h] of [[0, 0, 190], [-70, 40, 160], [70, 40, 160]]) { const pts = []; for (let k = 0; k <= 12; k++) { const u = k / 12; pts.push(new THREE.Vector2(26 * Math.pow(1 - u, 0.6) * (1 + 0.15 * Math.sin(u * 3)), u * h)); } const t = new THREE.Mesh(new THREE.LatheGeometry(pts, 24), night ? new THREE.MeshStandardMaterial({ color: '#30150a', emissive: '#ff6a1a', emissiveIntensity: 1.4 }) : glassD); t.position.set(x, 0, z); t.castShadow = q > 0; g.add(t); } return g; },
+        // COTA observation tower: red "veil" of cables round a lift shaft, deck on top
+        cotatower: () => { const g = new THREE.Group(), red = new THREE.MeshStandardMaterial({ color: '#c8102e', roughness: 0.5 }); g.add(B(5, 77, 5, stone('#d9dde2'))); for (let k = 0; k < 18; k++) { const a = k / 18 * Math.PI * 2, A = new THREE.Vector3(Math.cos(a) * 16, 0, Math.sin(a) * 16), Bv = new THREE.Vector3(Math.cos(a) * 3, 74, Math.sin(a) * 3); g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(A, Bv), 1, 0.35, 5), red)); } g.add(B(16, 3, 16, stone('#f4f4f4'), 0, 74)); return g; },
+        sakhirtower: () => { const g = new THREE.Group(); g.add(tower(34, 48, 34)); g.add(B(46, 3, 46, stone('#efe3c8'), 0, 48)); g.add(B(20, 6, 20, stone('#efe3c8'), 0, 51)); return g; },
+        biosphere: () => { const g = new THREE.Group(), sph = new THREE.Mesh(new THREE.IcosahedronGeometry(38, 3), new THREE.MeshStandardMaterial({ color: '#dfe6ee', wireframe: true })); sph.position.y = 30; g.add(sph); const inner = new THREE.Mesh(new THREE.SphereGeometry(37, 24, 16), new THREE.MeshStandardMaterial({ color: '#a8c4d8', transparent: true, opacity: 0.25 })); inner.position.y = 30; g.add(inner); return g; },
+        bull: () => { const g = new THREE.Group(), m = metalM('#9aa3ad'); g.add(B(12, 7, 26, m, 0, 6)); g.add(B(8, 7, 8, m, 0, 9, 15)); for (const sx of [-1, 1]) { for (const z of [-9, 9]) g.add(B(2.2, 6, 2.2, m, sx * 4, 0, z)); const h = new THREE.Mesh(new THREE.ConeGeometry(1, 7, 6), m); h.position.set(sx * 5.5, 17, 16); h.rotation.z = -sx * 0.9; g.add(h); } return g; },
+        hardrock: () => { const g = new THREE.Group(), s2 = new THREE.Mesh(new THREE.CylinderGeometry(130, 105, 42, 40, 1, true), new THREE.MeshStandardMaterial({ map: tx.crowd, side: THREE.BackSide, roughness: 0.9 })); s2.position.y = 21; g.add(s2); const wall = new THREE.Mesh(new THREE.CylinderGeometry(133, 133, 44, 40, 1, true), new THREE.MeshStandardMaterial({ color: '#c9ced6', roughness: 0.6, metalness: 0.3 })); wall.position.y = 22; g.add(wall); g.add(new THREE.Mesh(new THREE.CircleGeometry(104, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#3f8f3a' }))); const roof = new THREE.Mesh(new THREE.RingGeometry(85, 140, 40).rotateX(-Math.PI / 2), stone('#f2f2f2')); roof.position.y = 48; g.add(roof); return g; },
+        ferrariworld: () => { const g = new THREE.Group(), r = new THREE.Mesh(new THREE.CylinderGeometry(330, 360, 30, 3, 1), new THREE.MeshStandardMaterial({ color: '#c4161c', roughness: 0.5 })); r.position.y = 15; r.scale.set(1, 1, 0.6); g.add(r); return g; },
+        skyline: (n = 30, R = 450) => { const g = new THREE.Group(); for (let k = 0; k < n; k++) { const a = r() * 6.28, d = r() * R, h = 60 + r() * r() * 260; g.add(tower(25 + r() * 25, h, 25 + r() * 25).translateX(Math.cos(a) * d).translateZ(Math.sin(a) * d)); } return g; },
+        banking: () => { const g = new THREE.Group(), pts = []; for (let k = 0; k <= 40; k++) { const a = Math.PI * k / 40; pts.push([Math.cos(a) * 160, Math.sin(a) * 160]); } for (let k = 0; k < 40; k++) { const [x0, z0] = pts[k], [x1, z1] = pts[k + 1], L = Math.hypot(x1 - x0, z1 - z0), m2 = new THREE.Mesh(new THREE.BoxGeometry(L + 0.5, 0.6, 14), stone('#b9b4aa')); m2.position.set((x0 + x1) / 2, 4, (z0 + z1) / 2); m2.rotation.set(0, -Math.atan2(z1 - z0, x1 - x0), 0); m2.rotateX(0.75); g.add(m2); } return g; },
+        castle: () => { const g = new THREE.Group(), c = stone('#9b8f7c'); g.add(B(60, 14, 40, c)); g.add(B(14, 34, 14, c, 0, 0, 0)); for (const [x, z] of [[-30, -20], [30, -20], [-30, 20], [30, 20]]) g.add(B(6, 18, 6, c, x, 0, z)); return g; },
+        dunlop: () => { const g = new THREE.Group(), tyre = new THREE.Mesh(new THREE.TorusGeometry(15, 4, 12, 40, Math.PI), new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.9 })); g.add(tyre); const band = new THREE.Mesh(new THREE.BoxGeometry(24, 3, 1), new THREE.MeshStandardMaterial({ color: '#f5c400' })); band.position.set(0, 17, 4.2); g.add(band); return g; },
+      };
+      for (const L of T.def.landmarks || []) {
+        const fn = BUILD[L[0]]; if (!fn) continue;
+        let x, z, rot = 0, sc = 1;
+        if (typeof L[1] === 'object') { const o = L[1], i = Math.round(o.m / DS) % N, sd = o.side || 1, lat = o.center ? 0 : sd * ((sd > 0 ? T.limL[i] : T.limR[i]) + (o.off || 0)); x = T.px[i] + T.nx[i] * lat; z = T.pz[i] + T.nz[i] * lat; rot = Math.atan2(T.tx[i], T.tz[i]) + (o.rot || 0); sc = o.scale || 1; }
+        else { x = L[1]; z = L[2]; rot = (L[3] || 0) * Math.PI / 180; sc = L[4] || 1; }
+        const obj = L[0] === 'skyline' ? fn(L[5], L[6]) : fn(); obj.scale.setScalar(sc);
+        const box = new THREE.Box3().setFromObject(obj), rad = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 * 0.7;
+        // keep it off the track (bridges and arches over the road are allowed)
+        if (!['dunlop'].includes(L[0]) && typeof L[1] !== 'object') { for (let it = 0; it < 30 && nearTrack(x, z) < rad + W + KERB + 6; it++) { let bi = 0, bd = 1e9; for (let i = 0; i < N; i += 2) { const d = Math.hypot(T.px[i] - x, T.pz[i] - z); if (d < bd) { bd = d; bi = i; } } const ux = (x - T.px[bi]) / (bd || 1), uz = (z - T.pz[bi]) / (bd || 1); x += ux * 10; z += uz * 10; } }
+        obj.position.set(x, (L[0] === 'dunlop' ? elevAt(T, Math.round(L[1].m / DS) % N) : height(x, z)) - 0.5, z); obj.rotation.y = rot; G.add(obj);
+        keepOut.push([x, z, rad + 10]);
+      }
+    }
+    // def.stadium: [[from, to, side, height]] steep tiered stands that follow the track round a stadium section (Mexico's Foro Sol)
+    for (const [m0, m1, sd, Hs] of T.def.stadium || []) {
+      const a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS), lim = sideLim(T, sd), D = Hs * 1.35;
+      const crowdM = new THREE.MeshStandardMaterial({ map: tx.crowd, roughness: 0.9, side: THREE.DoubleSide, emissive: th.night ? '#ffffff' : '#000000', emissiveMap: th.night ? tx.crowd : null, emissiveIntensity: 0.12 });
+      add(ribbon(T, a, cnt, [i => [sd * (lim(i) + 2), 0, 0], i => [sd * (lim(i) + 2), 2.2, 0.06], i => [sd * (lim(i) + 2 + D), Hs, 1]], 4), crowdM, { cast: q > 0 });
+      add(ribbon(T, a, cnt, [i => [sd * (lim(i) + 2 + D), Hs, 0], i => [sd * (lim(i) + 2 + D), Hs + 4, 1]], 6, { up: false }), new THREE.MeshStandardMaterial({ color: '#dcdfe4', roughness: 0.8, side: THREE.DoubleSide }));
+      add(ribbon(T, a, cnt, [i => [sd * (lim(i) + 2 + D), 0, 0], i => [sd * (lim(i) + 2 + D), Hs, 1]], 6, { up: false }), new THREE.MeshStandardMaterial({ color: '#8d939c', roughness: 0.9, side: THREE.DoubleSide }));
+      for (let k = 0; k <= cnt; k += 60) { const i = (a + k) % N, l = sd * (lim(i) + 4 + D), lt = new THREE.Group(); lt.add(B0(1.2, Hs + 26, 1.2, stl)); lt.add(B0(8, 3, 1, new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff4dc').multiplyScalar(th.night ? 4 : 1.2), toneMapped: false }), 0, Hs + 26)); lt.position.set(T.px[i] + T.nx[i] * l, elevAt(T, i), T.pz[i] + T.nz[i] * l); lt.rotation.y = Math.atan2(T.tx[i], T.tz[i]); G.add(lt); }
+      for (let k = 0; k <= cnt; k += 8) { const i = (a + k) % N, l = sd * (lim(i) + 2 + D / 2); keepOut.push([T.px[i] + T.nx[i] * l, T.pz[i] + T.nz[i] * l, D / 2 + 4]); }
+    }
+    // def.wings: metres where a grandstand-to-pits bridge with a big curved "wing" roof crosses the main straight (Shanghai)
+    for (const m of T.def.wings || []) {
+      const i = Math.round(m / DS) % N, L = T.limL[i] + 30, R = T.limR[i] + 30, fr = frameAt2(i, (L - R) / 2); G.add(fr);
+      fr.add(B0(L + R, 6, 30, new THREE.MeshStandardMaterial({ map: tx.winDay, color: '#dbe4ec', roughness: 0.3, metalness: 0.4 }), 0, 12));
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(70, 70, 34, 32, 1, true, Math.PI / 2 - 0.55, 1.1), new THREE.MeshStandardMaterial({ color: '#eef2f6', roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide })); w.rotation.set(0, 0, Math.PI / 2); w.position.y = -32; fr.add(w);
+      for (const sx of [-1, 1]) fr.add(B0(3, 12, 3, stl, sx * (L + R) / 2 * 0.95, 0));
     }
     // escape roads straight on through chicanes: asphalt with white edge lines and painted chevrons
     for (const z of T.escapes || []) {
