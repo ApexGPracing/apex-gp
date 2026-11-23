@@ -91,6 +91,33 @@ export class Net {
     if (this.tr) { this.tr.close(); this.tr = null; }
     this.code = null; this.room = [];
   }
+  /* random 1v1 matchmaking: everyone searching waits in one shared channel; the queue (oldest first) is paired
+     off two at a time, and each pair works out the same private room code from their ids. */
+  async matchmake(name, onCount) {
+    await this.leave(); this.cancelMatch();
+    const me = { id: this.id, name, joined: Date.now() };
+    let done = false, finish;
+    const found = new Promise(res => { finish = res; });
+    const onPeers = list => {
+      if (done) return;
+      const q = list.slice().sort((a, b) => a.joined - b.joined || (a.id < b.id ? -1 : 1)), k = q.findIndex(p => p.id === this.id);
+      if (k < 0) return;
+      if (onCount) onCount(q.length);
+      const mate = q[k ^ 1]; if (!mate) return;
+      done = true;
+      const key = [this.id, mate.id].sort().join(':'); let h = 2166136261;
+      for (let j = 0; j < key.length; j++) h = Math.imul(h ^ key.charCodeAt(j), 16777619) >>> 0;
+      let code = ''; for (let j = 0; j < 4; j++) { code += CODE_CHARS[h % CODE_CHARS.length]; h = Math.floor(h / CODE_CHARS.length) ^ Math.imul(h, 2654435761) >>> 0; }
+      finish({ code, mate });
+    };
+    const tr = this.local ? await localTransport('MATCH', me, () => {}, onPeers) : await supabaseTransport(this.url, this.key, 'MATCH', me, () => {}, onPeers);
+    this.matchTr = tr; this.matchCancel = () => finish(null);
+    const res = await found;
+    // stay listed a moment so the partner also sees the pair before we disappear from the queue
+    setTimeout(() => { try { tr.close(); } catch (e) { /* gone */ } if (this.matchTr === tr) this.matchTr = null; }, res ? 700 : 0);
+    return res;
+  }
+  cancelMatch() { if (this.matchCancel) { const f = this.matchCancel; this.matchCancel = null; f(); } }
   setInfo(extra) { if (!this.tr) return; this.me = { ...this.me, ...extra }; this.tr.update(this.me); }
   get isHost() { return this.room.length > 0 && this.room[0].id === this.id; }
 

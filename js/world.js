@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=wall26e';
-import { AXLE_F, AXLE_R } from './car.js?v=wall26e';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=wall26e';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=vip26g';
+import { AXLE_F, AXLE_R } from './car.js?v=vip26g';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=vip26g';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -323,6 +323,36 @@ export class World {
       const [dx2, dz2, rad] = T.def.dome, domeMat = new THREE.MeshStandardMaterial({ color: '#111', emissive: '#ffffff', emissiveMap: canvasTex(512, 256, (g2, w, h) => { const gr = g2.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#ff2bd6'); gr.addColorStop(0.35, '#ffb400'); gr.addColorStop(0.7, '#00d4ff'); gr.addColorStop(1, '#7c3aed'); g2.fillStyle = gr; g2.fillRect(0, 0, w, h); for (let k = 0; k < 600; k++) { g2.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.25) + ')'; g2.fillRect(Math.random() * w, Math.random() * h, 3, 3); } }), emissiveIntensity: 1.6 });
       const dome = new THREE.Mesh(new THREE.SphereGeometry(rad, 48, 24), domeMat); dome.position.set(dx2, height(dx2, dz2) + rad * 0.72, dz2); G.add(dome);
     }
+    // Yas Marina's hotel: two glass wings either side of the track, a bridge across it, and the wavy
+    // diamond-lattice gridshell roof over everything (lit up in changing colours at night)
+    const keepOut = []; this.hotelShell = null;
+    if (T.def.hotel) {
+      const [m0, m1] = T.def.hotel, a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS), H = 38, gap = 3, dep = 20;
+      const facade = th.night ? new THREE.MeshStandardMaterial({ color: '#1d2a3a', roughness: 0.25, metalness: 0.5, emissive: '#cfe6ff', emissiveMap: tx.winNight, emissiveIntensity: 0.7 })
+        : new THREE.MeshStandardMaterial({ map: tx.winDay, color: '#d6e6f4', roughness: 0.15, metalness: 0.55 });
+      const white2 = new THREE.MeshStandardMaterial({ color: '#f4f6f8', roughness: 0.5 });
+      const segs2 = []; for (let k = 0; k <= cnt; k += 3) segs2.push((a + k) % N);
+      const wing = new THREE.InstancedMesh(new THREE.BoxGeometry(8.2, H, dep).translate(0, H / 2, 0), facade, segs2.length * 2), dd = new THREE.Object3D();
+      segs2.forEach((i, k) => { for (const sd of [1, -1]) { const l = sd * (sideLim(T, sd)(i) + gap + dep / 2), x = T.px[i] + T.nx[i] * l, z = T.pz[i] + T.nz[i] * l; dd.position.set(x, elevAt(T, i), z); dd.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]), 0); dd.updateMatrix(); wing.setMatrixAt(k * 2 + (sd > 0 ? 0 : 1), dd.matrix); keepOut.push([x, z, dep]); } });
+      wing.castShadow = q > 0; wing.receiveShadow = true; G.add(wing);
+      // the bridge linking the wings, right over the track
+      const mid = (a + Math.round(cnt * 0.5)) % N, L = sideLim(T, 1)(mid) + gap, R = sideLim(T, -1)(mid) + gap;
+      const br = new THREE.Mesh(new THREE.BoxGeometry(L + R, 7, 16), facade); const cl = (L - R) / 2;
+      br.position.set(T.px[mid] + T.nx[mid] * cl, elevAt(T, mid) + 22, T.pz[mid] + T.nz[mid] * cl); br.rotation.y = Math.atan2(T.tx[mid], T.tz[mid]) + Math.PI / 2; br.castShadow = q > 0; G.add(br);
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(L + R, 0.8, 17), white2); slab.position.copy(br.position); slab.position.y -= 3.9; slab.rotation.copy(br.rotation); G.add(slab);
+      // gridshell: a lattice of glass diamonds over both wings and the track, bulging up in the middle
+      const lat = canvasTex(256, 256, (g2, w, h) => { g2.clearRect(0, 0, w, h); g2.fillStyle = 'rgba(150,190,220,0.18)'; g2.fillRect(0, 0, w, h); g2.strokeStyle = '#f2f5f8'; g2.lineWidth = 7; for (let k = -w; k <= 2 * w; k += 64) { g2.beginPath(); g2.moveTo(k, 0); g2.lineTo(k + h, h); g2.stroke(); g2.beginPath(); g2.moveTo(k, h); g2.lineTo(k + h, 0); g2.stroke(); } });
+      lat.wrapS = lat.wrapT = THREE.RepeatWrapping;
+      const shellMat = new THREE.MeshStandardMaterial({ map: lat, transparent: true, side: THREE.DoubleSide, roughness: 0.3, metalness: 0.3, depthWrite: false, emissive: th.night ? '#ffffff' : '#000000', emissiveMap: th.night ? lat : null, emissiveIntensity: 0.9 });
+      if (th.night) this.hotelShell = shellMat;
+      const C = 15, cols2 = [];
+      for (let c2 = 0; c2 < C; c2++) cols2.push(i => {
+        const u = c2 / (C - 1), t = ((i - a + N) % N) / cnt, Lo = sideLim(T, 1)(i) + gap + dep + 3, Ro = sideLim(T, -1)(i) + gap + dep + 3;
+        const o = -Ro + (Lo + Ro) * u, lift = Math.sin(Math.PI * Math.min(1, Math.max(0, t))) ;
+        return [o, H + 1 + (4 + 14 * Math.sin(Math.PI * u)) * (0.35 + 0.65 * lift) - bankH(T, i, o) + elevAt(T, i), u * (Lo + Ro) / 12];
+      });
+      add(ribbon(T, (a - 3 + N) % N, cnt + 6, cols2, 12, { up: false }), shellMat);
+    }
     // escape roads straight on through chicanes: asphalt with white edge lines and painted chevrons
     for (const z of T.escapes || []) {
       const lat = i => z.off.has(i) ? z.off.get(i) : 0, i0 = z.a, cnt = z.len;
@@ -473,7 +503,7 @@ export class World {
       add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (P.wall + 5.1), 0.02, 0], () => [ps * (P.wall + 5.3), 0.02, 1]], 4), lineMat);
       // wall + debris fence between the pit exit lane and the track (Interlagos), ending where they meet
       if (P.mergeWall) {
-        const w0 = (P.entry + P.len - 8) % N, wn = Math.round(P.merge / DS) + 4, mw = P.mergeWall;
+        const w0 = (P.entry + P.len + P.mergeWallFrom) % N, wn = Math.round(P.merge / DS) - 4 - P.mergeWallFrom, mw = P.mergeWall;
         const cMat = new THREE.MeshStandardMaterial({ color: '#d9dce1', roughness: 0.85, side: THREE.DoubleSide });
         add(ribbon(T, w0, wn, [() => [ps * (mw - 0.3), 0, 0], () => [ps * (mw - 0.3), 1.1, 1]], 6, { up: false }), cMat, { cast: q > 0 });
         add(ribbon(T, w0, wn, [() => [ps * (mw + 0.3), 0, 0], () => [ps * (mw + 0.3), 1.1, 1]], 6, { up: false }), cMat);
@@ -715,6 +745,7 @@ export class World {
         tries++;
         const x = T.minX - extent + r() * (T.maxX - T.minX + 2 * extent), z = T.minZ - extent + r() * (T.maxZ - T.minZ + 2 * extent);
         const d = dist(x, z); if (d < minD || d > maxD) continue;
+        if (keepOut.some(([kx, kz, kr]) => (x - kx) * (x - kx) + (z - kz) * (z - kz) < (kr + 6) * (kr + 6))) continue;
         if (d < minD + 120 && exactNear(x, z, Math.max(minD, clear))) continue;
         const h = height(x, z); if (h < wl) continue;
         out.push([x, h, z, d]);
@@ -837,6 +868,7 @@ export class World {
   setStartLights(n) { this.gantryLights.forEach((m, k) => { m.emissiveIntensity = k < n ? 6 : 0; m.color.set(k < n ? '#ff2a2a' : '#160404'); }); }
 
   update(dt, focus, camera) {
+    if (this.hotelShell) this.hotelShell.emissive.setHSL((performance.now() / 24000) % 1, 0.85, 0.55);
     if (this.clouds) { this.cloudTex.offset.x += dt * 0.0015; this.cloudTex.offset.y += dt * 0.0006; }
     for (const w of this.waters) { w.offset.x += dt * 0.01; w.offset.y += dt * 0.006; }
     this.nightSky.position.copy(camera.position); this.stars.position.copy(camera.position);
