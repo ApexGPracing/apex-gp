@@ -209,7 +209,8 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 .swatches button{width:32px;height:32px;border-radius:50%;border:3px solid transparent}
 .swatches button.on{border-color:#fff}
 .swatches{flex-wrap:wrap}.swatches .vipsw{position:relative;box-shadow:0 0 0 2px #d4af37}.swatches .vipsw::after{content:'🔒';position:absolute;right:-6px;top:-8px;font-size:12px}body.isvip .swatches .vipsw::after{content:''}
-#vipCode{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.08em;font-size:15px;font-weight:700;padding:6px 8px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;color:#fff;font-family:inherit}#vipMsg{font-size:13px;color:var(--muted);margin-top:6px;min-height:1em}.mpp .tag.vip{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300}
+#vipCode{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.08em;font-size:15px;font-weight:700;padding:6px 8px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;color:#fff;font-family:inherit}body:not(.isvip) .vipx{display:none}.vipx{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.vipx .btn{flex:1 1 30%;font-size:12px;padding:6px 4px;border-color:#d4af37}body.isvip .vipRow{display:none}
+#vipMsg{font-size:13px;color:var(--muted);margin-top:6px;min-height:1em}.mpp .tag.vip{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300}
 .keys{font-size:17px;color:var(--muted);line-height:1.6}
 .keys kbd{display:inline-block;min-width:26px;text-align:center;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--text);font-family:inherit;font-weight:700;margin-right:2px}
 #seasonInfo{font-size:19px;line-height:1.35}
@@ -299,7 +300,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
     <div class="opt panel" id="optDmg"><h4>Damage</h4><div class="seg" data-opt="damage"><button data-v="off">Off</button><button data-v="reduced">Reduced</button><button data-v="sim">Simulation</button></div></div>
     <div class="opt panel"><h4>Steering</h4><div class="seg" data-opt="steer"><button data-v="smooth">Smooth</button><button data-v="normal">Normal</button><button data-v="sharp">Sharp</button></div></div>
     <div class="opt panel"><h4>Racing Line <span style="text-transform:none;letter-spacing:0">(L in race)</span></h4><div class="seg" data-opt="line"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
-    <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div><div class="mprow vipRow"><input id="vipCode" maxlength="16" placeholder="VIP code"><button class="btn" id="vipBtn">Redeem</button></div><div id="vipMsg"></div></div>
+    <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div><div class="mprow vipRow"><input id="vipCode" maxlength="16" placeholder="VIP code"><button class="btn" id="vipBtn">Redeem</button></div><div id="vipMsg"></div><div class="vipx"><button class="btn" id="vipRims"></button><button class="btn" id="vipGlow"></button><button class="btn" id="vipFw"></button></div></div>
     <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd>/<kbd>↑</kbd> Throttle &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> Steer · controllers work too &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>R</kbd> Team radio &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
     <button class="btn primary" id="startBtn">Start Race</button>
   </div>
@@ -341,6 +342,6 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=vip26g"></script>
+<script type="module" src="js/main.js?v=vip26h"></script>
 </body>
 </html>
