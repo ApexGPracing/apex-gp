@@ -7,7 +7,10 @@
      channel instead, at a lower rate.
    For local testing, ?mplocal in the URL swaps Supabase for a BroadcastChannel between tabs of one browser. */
 
+import { TURN_USER, TURN_PASS } from './config.js?v=ring27g';
 let ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
+// Metered TURN relay: UDP and TCP on port 80, TCP on 443, and TLS on 443 (gets through most school firewalls)
+if (TURN_USER && TURN_PASS) ICE = ICE.concat([{ urls: 'stun:stun.relay.metered.ca:80' }, ...['turn:global.relay.metered.ca:80', 'turn:global.relay.metered.ca:80?transport=tcp', 'turn:global.relay.metered.ca:443', 'turns:global.relay.metered.ca:443?transport=tcp'].map(urls => ({ urls, username: TURN_USER, credential: TURN_PASS }))]);
 /* TURN relay (Metered / Open Relay): lets players connect even when a direct link is impossible (mobile data,
    strict routers). Credentials are fetched once from the app's Metered API key if one is configured. */
 let turnLoaded = null;
@@ -116,6 +119,13 @@ export class Net {
     // stay listed a moment so the partner also sees the pair before we disappear from the queue
     setTimeout(() => { try { tr.close(); } catch (e) { /* gone */ } if (this.matchTr === tr) this.matchTr = null; }, res ? 700 : 0);
     return res;
+  }
+  /* live count of everyone with the game open: a presence-only channel that every player joins on load */
+  async watchOnline(onCount) {
+    if (!this.available || this.onlineTr) return;
+    const me = { id: this.id + '-o', joined: Date.now() }, onPeers = list => onCount(list.length);
+    try { this.onlineTr = this.local ? await localTransport('ONLINE', me, () => {}, onPeers) : await supabaseTransport(this.url, this.key, 'ONLINE', me, () => {}, onPeers); }
+    catch (e) { this.onlineTr = null; setTimeout(() => this.watchOnline(onCount), 30000); }
   }
   cancelMatch() { if (this.matchCancel) { const f = this.matchCancel; this.matchCancel = null; f(); } }
   setInfo(extra) { if (!this.tr) return; this.me = { ...this.me, ...extra }; this.tr.update(this.me); }

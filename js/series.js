@@ -44,9 +44,9 @@ export const SERIES = {
   },
   indy: {
     id: 'indy', name: 'IndyCar', short: 'INDY', cls: 'indy', laps: 8,
-    // 2026: 18 races; only the Indianapolis 500 venue is in the game so far
-    calendar: ['indianapolis'],
-    missing: ['St. Petersburg', 'Phoenix', 'Arlington', 'Barber', 'Long Beach', 'Indianapolis road course', 'Detroit', 'World Wide Technology Raceway', 'Road America', 'Mid-Ohio', 'Nashville', 'Milwaukee (x2)', 'Markham', 'Portland', 'Washington D.C.', 'Laguna Seca'],
+    // 2026 calendar (Milwaukee's double-header is one round here; Toronto stands in for the new Markham street race)
+    calendar: ['stpete', 'phoenix', 'arlington', 'barber', 'longbeach', 'indyroad', 'indianapolis', 'detroit', 'gateway', 'roadamerica', 'midohio', 'nashville', 'milwaukee', 'toronto', 'portland', 'laguna'],
+    missing: ['Markham (Toronto stands in)', 'Washington D.C.'],
     teams: [T('Team Penske', '#f2f2f2', '#ffd400'), T('Chip Ganassi Racing', '#d40000', '#ffffff'), T('Arrow McLaren', '#ff8000', '#0a2b5c'), T('Andretti Global', '#0b1f4d', '#ff6a13'),
       T('A.J. Foyt Racing', '#c8102e', '#f2f2f2'), T('Ed Carpenter Racing', '#1a1a1a', '#00c2ff'), T('Dale Coyne Racing', '#00a3e0', '#111111'), T('Rahal Letterman Lanigan', '#f5f5f5', '#00843d')],
     drivers: [D('Josef Newgarden', 'NEW', [0.93, 0.85, 0.85, 0.88, 1], 2, 0), D('Scott McLaughlin', 'MCL', [0.93, 0.8, 0.85, 0.9, 0.95], 3, 0), D('David Malukas', 'MLK', [0.9, 0.8, 0.75, 0.85, 1], 12, 0),

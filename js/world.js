@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=ring26i';
-import { AXLE_F, AXLE_R } from './car.js?v=ring26i';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=ring26i';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=ring27g';
+import { AXLE_F, AXLE_R } from './car.js?v=ring27g';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=ring27g';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -672,11 +672,15 @@ export class World {
       // advertising hoardings behind the barrier on the outside of corners (circuits; streets already have ad walls)
       if (!T.street) {
         const spots = [];
-        for (const c of cornersAll) for (let j = c.a; j <= c.b + 30; j += 9) { const i = j % N, sd = c.s; if (!inPit(i) && lim(i, sd) > 8) spots.push([i, sd]); }
+        // each board is 17 m long and runs ALONG the barrier. Skip any spot where either end or the middle would
+        // come close to another part of the track (hairpins, chicanes, parallel straights like Montreal's)
+        const near = (x, z, i0) => { for (let k = 0; k < N; k += 2) { if (Math.abs(((k - i0 + N + N / 2) % N) - N / 2) < 25) continue; const dx = T.px[k] - x, dz = T.pz[k] - z; if (dx * dx + dz * dz < (W + 9) * (W + 9)) return true; } return false; };
+        const clearSpot = (i, sd) => { const l = sd * (lim(i, sd) + 2.2); for (const o of [-8.5, 0, 8.5]) if (near(T.px[i] + T.nx[i] * l + T.tx[i] * o, T.pz[i] + T.nz[i] * l + T.tz[i] * o, i)) return false; return true; };
+        for (const c of cornersAll) for (let j = c.a; j <= c.b + 30; j += 9) { const i = j % N, sd = c.s; if (!inPit(i) && lim(i, sd) > 8 && clearSpot(i, sd)) spots.push([i, sd]); }
         const adMat = new THREE.MeshStandardMaterial({ map: tx.ads, roughness: 0.55, emissive: th.night ? '#ffffff' : '#000000', emissiveMap: th.night ? tx.ads : null, emissiveIntensity: 0.5 });
         const boards = new THREE.InstancedMesh(new THREE.BoxGeometry(17, 1.6, 0.25).translate(0, 1.15, 0), [steel, steel, steel, steel, adMat, adMat], spots.length);
         const legs = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(0.15, 1.2, 0.15).translate(-7.5, 0.4, 0), new THREE.BoxGeometry(0.15, 1.2, 0.15).translate(7.5, 0.4, 0)]), steel, spots.length);
-        spots.forEach(([i, sd], k) => { const l = sd * (lim(i, sd) + 2.2); placeAt(boards, k, i, l, 0, Math.PI / 2 * sd + Math.PI / 2); placeAt(legs, k, i, l, 0, Math.PI / 2 * sd + Math.PI / 2); });
+        spots.forEach(([i, sd], k) => { const l = sd * (lim(i, sd) + 2.2), ry = sd > 0 ? -Math.PI / 2 : Math.PI / 2; placeAt(boards, k, i, l, 0, ry); placeAt(legs, k, i, l, 0, ry); });
         boards.castShadow = q > 0; G.add(boards, legs);
       }
       // marshal posts every ~350 m, alternating sides

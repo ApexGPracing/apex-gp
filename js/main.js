@@ -1,15 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=ring26i';
-import { World } from './world.js?v=ring26i';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ring26i';
-import { Sound } from './audio.js?v=ring26i';
-import { Particles, Skids } from './fx.js?v=ring26i';
-import { Weather } from './weather.js?v=ring26i';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ring26i';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ring26i';
-import { Net, newCode, loadTurn } from './net.js?v=ring26i';
-import { VIP_CODES } from './codes.js?v=ring26i';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ring26i';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=ring27g';
+import { World } from './world.js?v=ring27g';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ring27g';
+import { Sound } from './audio.js?v=ring27g';
+import { Particles, Skids, Fireworks } from './fx.js?v=ring27g';
+import { Weather } from './weather.js?v=ring27g';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ring27g';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ring27g';
+import { Net, newCode, loadTurn } from './net.js?v=ring27g';
+import { VIP_CODES } from './codes.js?v=ring27g';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ring27g';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=ring27g';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -63,7 +64,14 @@ function shuffleTeams() { return FIXED_TEAMS.slice(); }
 /* ---------------- Racing series ---------------- */
 const F1_GRID = { teams: TEAMS, drivers: DRIVERS, nums: CAR_NUMS };
 let SER = SERIES.f1;
-const calIdx = () => SER.calendar.map(id => TRACKS.findIndex(t => t.id === id)).filter(i => i >= 0);
+const realCal = () => SER.calendar.map(id => TRACKS.findIndex(t => t.id === id)).filter(i => i >= 0);
+const idsToIdx = ids => (ids || []).map(id => TRACKS.findIndex(t => t.id === id)).filter(i => i >= 0);
+/* the calendar in play: a custom season's own list, otherwise the series' real one */
+const calIdx = () => { const s = settings.mode === 'champ' && loadSeason(); return s && s.cal && !s.finished ? idsToIdx(s.cal) : realCal(); };
+/* building a custom season in the menu (championship mode, custom picked, no season running) */
+const buildingCustom = () => { if (settings.mode !== 'champ' || settings.champType !== 'custom') return false; const s = loadSeason(); return !s || s.finished; };
+/* a season's own rules (custom seasons store quali / weather / damage), otherwise the menu settings */
+const rule = k => (settings.mode === 'champ' && game.season && game.season[k] !== undefined) ? game.season[k] : settings[k];
 function applySeries(id) {
   SER = SERIES[id] || SERIES.f1;
   if (SER.id === 'f1') { TEAMS = F1_GRID.teams; DRIVERS = F1_GRID.drivers; CAR_NUMS = F1_GRID.nums; SERIES_PERSONA = {}; }
@@ -170,10 +178,10 @@ const world = new World(renderer, scene);
 const weather = new Weather(scene);
 const smoke = new Particles(scene, 1600, false);
 const sparks = new Particles(scene, 500, true);
-const fireworks = new Particles(scene, 2400, true);
+const fireworks = new Fireworks(scene);
 const skids = new Skids(scene);
 
-const settings = Object.assign({ steer: 'normal', series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim' }, store.json('apexgp2-settings', {}));
+const settings = Object.assign({ steer: 'normal', series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim', champType: 'real' }, store.json('apexgp2-settings', {}));
 if (settings.track >= TRACKS.length) settings.track = 0;
 if (typeof settings.diff === 'string') { settings.ai = { easy: 25, medium: 50, hard: 72 }[settings.diff] ?? 50; delete settings.diff; }
 delete settings.gfx;
@@ -202,6 +210,7 @@ function newSeason() {
   const r = rng(Date.now() & 0xfffff);
   const order = DRIVERS.map((d, i) => i).sort(() => r() - 0.5).slice(0, settings.opp);
   const s = { round: 0, laps: settings.laps, ai: settings.ai, opp: settings.opp, lineup: order.map(di => ({ di, rating: 0.99 + r() * 0.02 })), pts: {}, finished: false };
+  if (settings.champType === 'custom' && customCal().length) Object.assign(s, { cal: customCal().slice(), quali: settings.quali, weather: settings.weather, damage: settings.damage });
   s.teamMap = shuffleTeams(r, s.lineup.slice(1).map(l => l.di));
   s.pts.YOU = 0; order.forEach(di => s.pts[DRIVERS[di][1]] = 0);
   saveSeason(s); return s;
@@ -284,7 +293,7 @@ function estimateLap(Tr, pace, prof, boost = 1, spec = CLASSES.f1) {
 
 function startWeekend() {
   const champ = settings.mode === 'champ', tt = settings.mode === 'tt';
-  if (champ) { game.season = loadSeason() || newSeason(); settings.track = calIdx()[game.season.round] ?? calIdx()[0]; }
+  if (champ) { const old = loadSeason(); game.season = old && !old.finished ? old : newSeason(); settings.track = calIdx()[game.season.round] ?? calIdx()[0]; }
   const Tr = game.T = buildTrack(settings.track);
   game.laps = tt ? Infinity : (champ ? game.season.laps : settings.laps);
   game.skill = champ ? (game.season.ai ?? 50) : settings.ai;
@@ -298,12 +307,12 @@ function startWeekend() {
   game.seed = (Date.now() & 0xfffff) + 3;
   game.lapEst = estimateLap(Tr, aiPace(game.skill), null, 1, CLASSES[SER.cls]);
   game.record = recordFor(Tr); game.fastest = Infinity;
-  game.wxMode = tt ? 'dry' : settings.weather;
+  game.wxMode = tt ? 'dry' : rule('weather');
   $('menu').classList.add('hidden'); $('results').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden');
   buildMinimap(Tr);
   audio.init();
   if (tt) return startSession('tt');
-  if (settings.quali === 'on') {
+  if (rule('quali') === 'on') {
     const n = game.cars.length;
     game.q = { stages: n >= 12 ? ['Q1', 'Q2', 'Q3'] : ['Q'], idx: 0, entrants: game.cars.slice(), out: [], results: {} };
     if (n >= 12) { const rest = n - 10; game.q.elim = { Q1: Math.ceil(rest / 2), Q2: rest - Math.ceil(rest / 2), Q3: 0 }; } else game.q.elim = { Q: 0 };
@@ -340,7 +349,7 @@ function startSession(kind) {
     const entrants = game.q.entrants, sess = { name: kind, times: {}, reveal: [] };
     const factor = { Q1: 1, Q2: 0.998, Q3: 0.996, Q: 1 }[kind];
     for (const c of entrants) {
-      if (c.isPlayer) continue;
+      if (c.isPlayer || c.remote) continue;
       const base = estimateLap(Tr, Math.min(1.04, c.pace), profOf(c, Tr), c.boost || 1, c.spec || CLASSES.f1) * factor * 1.012;
       const wetPen = 1 + 0.16 * weather.average();
       const t = base * wetPen * (1 + (Math.random() - 0.5) * 0.006);
@@ -365,6 +374,7 @@ function leaveGarage() {
 
 function endQualiSession() {
   const q = game.q, s = q.cur, p = game.player;
+  if (q.mp) { game.phase = 'idle'; p.active = false; mpQualiTable(); return; }
   for (const r of s.reveal) s.times[r.c.code] = r.t;
   s.times.YOU = p.sessBest;
   const ent = q.entrants.slice().sort((a, b) => (s.times[a.code] ?? 1e9) - (s.times[b.code] ?? 1e9));
@@ -450,7 +460,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; game.fwT = 0;
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop(); game.champ = null;
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -772,8 +782,8 @@ function serviceCar(c) {
 
 /* ---------------- Damage ---------------- */
 function damage(c, impact, where, scale = 1) {
-  if (settings.damage === 'off' || settings.mode === 'tt' || game.mp) return; // time trial: never any damage
-  const k = (settings.damage === 'reduced' ? 0.5 : 1) * scale, d = c.dmg, before = { ...d };
+  if (rule('damage') === 'off' || settings.mode === 'tt' || game.mp) return; // time trial: never any damage
+  const k = (rule('damage') === 'reduced' ? 0.5 : 1) * scale, d = c.dmg, before = { ...d };
   if (impact < 5 || k <= 0) return;
   if (where === 'front') d.fw = Math.min(1, d.fw + impact * k / 22);
   else if (where === 'rear') d.rw = Math.min(1, d.rw + impact * k / 28);
@@ -973,7 +983,7 @@ function computeTow() {
 
 /* ---------------- Collisions (impulse based) ---------------- */
 function collide() {
-  const cars = game.cars.filter(c => c.active && !c.pit && !(c.dnf && Math.abs(c.v) < 1));
+  const cars = game.cars.filter(c => c.active && !c.pit && !c.celebrate && !(c.dnf && Math.abs(c.v) < 1));
   for (let a = 0; a < cars.length; a++) for (let b = a + 1; b < cars.length; b++) {
     const A = cars[a], B = cars[b], dx0 = B.x - A.x, dz0 = B.z - A.z;
     if (dx0 * dx0 + dz0 * dz0 > 64) continue;
@@ -1272,6 +1282,7 @@ function checkLaps(c, Tr) {
         c.timedLaps++;
         if (valid && lt < c.sessBest) c.sessBest = lt;
         if (c.timedLaps >= 2) { radio('Session over for us. ' + (isFinite(c.sessBest) ? 'Best ' + fmt(c.sessBest) + '.' : 'No time set.'), 'info', 4); c.lapInvalid = false; game.sessionEndAt = game.raceTime + 1.2; }
+        if (game.mp) mpSendQuali();
       }
       if (isRace()) lapRadio(c, done);
       c.lapInvalid = false;
@@ -1287,9 +1298,136 @@ function checkLaps(c, Tr) {
 function onPlayerFinish() {
   const p = game.player;
   game.phase = 'finished'; p.autopilot = true; p.pace = 0.8;
+  game.resultsAt = game.raceTime + 3.2;
+  if (willBeChampion()) {
+    flashMsg('WORLD CHAMPION!', 5, (p.finishOrder === 1 ? 'Race win · ' : 'P' + positionOf(p) + ' · ') + fmt(p.finishTime));
+    radio(champCall(), 'good', 9);
+    game.champ = { t: 0 }; game.resultsAt = game.raceTime + 27;
+    return;
+  }
   flashMsg(p.finishOrder === 1 ? 'YOU WIN!' : 'FINISHED P' + positionOf(p), 3, fmt(p.finishTime));
   radio(p.finishOrder === 1 ? 'Get in there! That is the win!' : 'Chequered flag. P' + positionOf(p) + '. Good job.', 'good', 6);
-  game.resultsAt = game.raceTime + 3.2;
+}
+
+/* ---------------- World champion: radio call, donuts, then the driver climbs out and celebrates ---------------- */
+const CHAMP_CALLS = [
+  'MATE, YOU ARE WORLD CHAMPION!!! UNBELIEVABLE!',
+  'GET IN THERE MATE, CHAMPION OF THE WORLD!',
+  'YOU ARE THE WORLD CHAMPION! WORLD CHAMPION! WHAT A SEASON!',
+  'THAT IS IT! YOU HAVE DONE IT! WORLD CHAMPION!',
+  'GET IN THERE!!! YOU ARE A WORLD CHAMPION, MATE! A WORLD CHAMPION!',
+  'WORLD CHAMPION! WORLD CHAMPION! I CANNOT BELIEVE IT, MATE!',
+  'Mate... you are the champion of the world. Take it all in. WORLD CHAMPION!',
+  'YESSS! THE TITLE IS YOURS! CHAMPION OF THE WORLD!',
+  'WHAT A DRIVE, WHAT A YEAR! YOU ARE WORLD CHAMPION, MATE!',
+  'SIMPLY LOVELY! WORLD CHAMPION! The whole team is going mad here!',
+  'YOU ABSOLUTE LEGEND! WORLD CHAMPION! GET IN THERE!',
+  'THE CHAMPIONSHIP IS YOURS! WORLD CHAMPION! UNREAL, MATE, UNREAL!',
+  'From the whole team: thank you. YOU ARE WORLD CHAMPION!',
+  'GET IN!!! THAT IS THE WORLD CHAMPIONSHIP, MATE! YOU DID IT!',
+  'WORLD CHAMPION! Do some donuts, you have earned it!',
+  'NUMBER ONE! NUMBER ONE! YOU ARE THE WORLD CHAMPION!',
+  'THEY WILL REMEMBER THIS ONE FOREVER! WORLD CHAMPION, MATE!',
+  'Get in there, get in there, GET IN THERE! WORLD CHAMPION!',
+  'CHAMPION OF THE WORLD! WE ARE CHAMPIONS OF THE WORLD!',
+  'I am lost for words, mate. WORLD CHAMPION. UNBELIEVABLE!',
+];
+function champCall() {
+  // never the same call twice in a row
+  let k = Math.floor(Math.random() * CHAMP_CALLS.length); const last = +(store.get('apexgp-champcall') ?? -1);
+  if (k === last) k = (k + 1 + Math.floor(Math.random() * (CHAMP_CALLS.length - 1))) % CHAMP_CALLS.length;
+  store.set('apexgp-champcall', String(k)); return CHAMP_CALLS[k];
+}
+/* would the points after this race make you champion, with nobody able to catch you in the rounds left? */
+function willBeChampion() {
+  const s = game.season; if (settings.mode !== 'champ' || !s || game.mp) return false;
+  const pts = Object.assign({}, s.pts);
+  standings().forEach((c, k) => { pts[c.code] = (pts[c.code] || 0) + (!c.dnf && POINTS[k] ? POINTS[k] : 0); });
+  const left = calIdx().length - (s.round + 1), tab = Object.entries(pts).sort((a, b) => b[1] - a[1]);
+  return tab[0][0] === 'YOU' && tab[0][1] - (tab[1] ? tab[1][1] : 0) > left * POINTS[0];
+}
+function makeDriverFigure(suit, helmet) {
+  const g = new THREE.Group(), m = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+  const suitM = m(suit), dark = m('#16181d'), box = (w, h, d, mat, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); o.position.set(x, y, z); o.castShadow = true; return o; };
+  g.add(box(0.42, 0.55, 0.24, suitM, 0, 1.12, 0));                                  // torso
+  g.add(box(0.4, 0.12, 0.25, dark, 0, 0.86, 0));                                    // belt
+  const leg = x => { const p = new THREE.Group(); p.position.set(x, 0.85, 0); p.add(box(0.16, 0.8, 0.18, suitM, 0, -0.4, 0), box(0.18, 0.1, 0.28, dark, 0, -0.8, 0.04)); g.add(p); return p; };
+  const arm = x => { const p = new THREE.Group(); p.position.set(x, 1.36, 0); p.add(box(0.13, 0.62, 0.14, suitM, 0, -0.3, 0), box(0.15, 0.14, 0.15, dark, 0, -0.64, 0)); g.add(p); return p; };
+  const head = new THREE.Group(); head.position.set(0, 1.55, 0);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), new THREE.MeshPhysicalMaterial({ color: helmet, roughness: 0.2, clearcoat: 1 })));
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.162, 20, 8, -0.9, 1.8, 1.2, 0.55), new THREE.MeshStandardMaterial({ color: '#0b0d12', roughness: 0.05, metalness: 0.8 })); visor.rotation.y = 0; head.add(visor);
+  g.add(head);
+  g.userData = { armL: arm(0.28), armR: arm(-0.28), legL: leg(0.1), legR: leg(-0.1), head };
+  return g;
+}
+function updateChamp(dt) {
+  const C = game.champ, p = game.player, Tr = game.T; if (!C || !p) return;
+  C.t += dt; const t = C.t;
+  if (t < 4) { p.pace = 0.55; return; }                                    // a few seconds of cool-down
+  if (!C.pull) {
+    // pull over to the side with more room, slowing down
+    const roomL = Tr.limL[p.idx] - W, roomR = Tr.limR[p.idx] - W, sd = roomL > roomR ? 1 : -1, room = Math.max(roomL, roomR);
+    C.pull = { lat0: p.lat, lat1: room > 7 ? sd * (W + Math.min(room - 5, 10)) : sd * (W - 3), v0: Math.max(Math.abs(p.v), 15), k: p.idx, f: 0, T: 2.5 };
+    p.celebrate = true; p.autopilot = true; C.cam = true; C.ang = p.h + Math.PI * 0.8;
+  }
+  const P = C.pull;
+  if (t < 4 + P.T) {
+    const u = (t - 4) / P.T, v = P.v0 + (8 - P.v0) * u; P.f += v * dt / DS;
+    while (P.f >= 1) { P.f -= 1; P.k = (P.k + 1) % Tr.N; }
+    const i = P.k, lat = P.lat0 + (P.lat1 - P.lat0) * smooth(0, 1, u);
+    p.x = Tr.px[i] + Tr.nx[i] * lat + Tr.tx[i] * P.f * DS; p.z = Tr.pz[i] + Tr.nz[i] * lat + Tr.tz[i] * P.f * DS;
+    p.h = Math.atan2(Tr.tx[i], Tr.tz[i]) - Math.sign(P.lat1 - P.lat0) * 0.15 * Math.sin(Math.PI * u); p.v = v; p.slip = 0; p.steer = 0;
+    p.inp = { throttle: 0.2, brake: 0.3, steer: 0 }; p.idx = i; p.lat = lat;
+    return;
+  }
+  const fx = () => Math.sin(p.h), fz = () => Math.cos(p.h);
+  if (!C.pivot) C.pivot = [p.x + fx() * 1.4, p.z + fz() * 1.4];
+  const tD = t - 4 - P.T;
+  if (tD < 8) {
+    // donuts: the front stays put, the rear swings round in a cloud of smoke
+    const w = 3.4 * Math.min(1, tD / 1.2) * (tD > 7 ? (8 - tD) : 1);
+    p.h += w * dt; p.x = C.pivot[0] - fx() * 1.4; p.z = C.pivot[1] - fz() * 1.4;
+    p.v = 28 * Math.min(1, tD / 0.6); p.steer = 1; p.slip = 0.6; p.inp = { throttle: 1, brake: 0, steer: 1 };
+    const ey = p.group.position.y, lx = Math.cos(p.h), lz = -Math.sin(p.h);
+    for (const [sd, k] of [[1, 0], [-1, 1]]) {
+      const x = p.x + lx * sd * 0.83 + fx() * AXLE_R, z = p.z + lz * sd * 0.83 + fz() * AXLE_R;
+      skids.mark('champ' + k, x, z, fx(), fz(), 0.7, ey);
+      if (Math.random() < dt * 70) smoke.spawn(x, ey + 0.3, z, (Math.random() - 0.5) * 3 - lx * sd * 2, 0.8 + Math.random() * 1.5, (Math.random() - 0.5) * 3 - lz * sd * 2, 1.8 + Math.random() * 1.2, 1.2, 7, 0.45, SMOKE, 0.9);
+    }
+  } else {
+    skids.lift('champ0'); skids.lift('champ1');
+    p.v = 0; p.steer = 0; p.slip = 0; p.inp = { throttle: 0, brake: 0, steer: 0 };
+  }
+  p.idx = locate(Tr, p.x, p.z, p.idx); p.lat = (p.x - Tr.px[p.idx]) * Tr.nx[p.idx] + (p.z - Tr.pz[p.idx]) * Tr.nz[p.idx];
+  // the driver climbs out and celebrates on the car
+  const tO = tD - 9.5; if (tO < 0) return;
+  if (!C.fig) {
+    C.fig = makeDriverFigure(p.color || '#ffcc00', '#ffffff'); p.group.add(C.fig);
+    if (p.helmet) p.helmet.visible = false; C.stand = p.closed ? 1.2 : 0.55;
+    radio(['Go on, get out and celebrate! You have earned it!', 'Enjoy this, mate. Enjoy every second.', 'Look at the fans, mate! They are going mad!'][Math.floor(Math.random() * 3)], 'good', 6);
+  }
+  const F = C.fig, U = F.userData;
+  if (tO < 1.4) {
+    // climb up out of the cockpit (or the door on closed cars)
+    const u = smooth(0, 1, tO / 1.4);
+    if (p.closed) F.position.set(1.4 * (1 - u), C.stand * u + 0.4 * Math.sin(Math.PI * u), 0.1);
+    else F.position.set(0, -0.6 + (C.stand + 0.6) * u + 0.35 * Math.sin(Math.PI * u), 0.35 + 0.3 * u);
+    U.armL.rotation.z = U.armR.rotation.z = 0; F.rotation.y = 0;
+  } else {
+    // jump up and down, fists pumping, turning to the crowd
+    const j = tO - 1.4, hop = Math.abs(Math.sin(j * Math.PI * 1.4));
+    F.position.set(p.closed ? 0 : 0, C.stand + hop * 0.75, p.closed ? 0.1 : 0.65);
+    F.rotation.y = Math.sin(j * 0.6) * 1.2;
+    U.armL.rotation.z = Math.PI - 0.35 + Math.sin(j * 9) * 0.25 * (1 - hop); U.armR.rotation.z = -(Math.PI - 0.35) - Math.sin(j * 9 + 1) * 0.25 * (1 - hop);
+    U.legL.rotation.x = U.legR.rotation.x = -hop * 0.5; U.head.rotation.x = -0.2 * hop;
+  }
+}
+function champCamera(dt) {
+  const C = game.champ, p = game.player;
+  C.ang += dt * (C.fig ? 0.3 : 0.45);
+  const r = C.fig ? 6.5 : 11, y = C.fig ? 2.2 : 3.4, gy = p.group.position.y;
+  camera.position.set(p.x + Math.sin(C.ang) * r, gy + y, p.z + Math.cos(C.ang) * r);
+  camera.lookAt(p.x, gy + (C.fig ? 1.3 : 0.6), p.z); camera.fov = 55; camera.updateProjectionMatrix();
 }
 function standings() {
   const cars = game.cars.filter(c => c.active);
@@ -1413,6 +1551,7 @@ async function refreshLeaderboard() {
 
 /* ---------------- Online multiplayer ---------------- */
 const net = new Net({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+net.watchOnline(n => { $('onlineNow').classList.toggle('hidden', !n); $('onlineNow').querySelector('b').textContent = n; });
 const carByNet = id => game.cars.find(c => c.netId === id);
 const mpName = () => lbName() || 'Driver';
 const mpCode3 = n => (n.replace(/[^A-Za-z]/g, '').toUpperCase() + 'XXX').slice(0, 3);
@@ -1462,7 +1601,7 @@ function renderRoom() {
   const links = net.linkInfo(), host = net.room[0];
   $('mpPlayers').innerHTML = net.room.map((p, k) => '<div class="mpp"><i style="background:' + LIVERIES[p.livery || 0] + '"></i>' + String(p.name || 'Driver').replace(/[<>&]/g, '') + (p.vip ? ' <span class="tag vip">VIP</span>' : '') +
     (k === 0 ? ' <span class="tag">HOST</span>' : '') + (p.id === net.id ? ' <span class="tag you">YOU</span>' : ' <span class="tag ' + (links[p.id] ? 'ok' : '') + '">' + (links[p.id] ? 'DIRECT' : 'RELAY') + '</span>') + '</div>').join('');
-  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + (SERIES[host.series] || SER).name + ' · ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' : (net.isHost ? 'You are the host: pick the track and laps, then press Start.' : '');
+  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + (SERIES[host.series] || SER).name + ' · ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' + (host.quali ? ' · with qualifying' : '') : (net.isHost ? 'You are the host: pick the track, laps and qualifying, then press Start.' : '');
   refreshStartBtn(); mpRandomCheck();
 }
 function refreshStartBtn() {
@@ -1470,32 +1609,85 @@ function refreshStartBtn() {
   const b = $('startBtn');
   b.textContent = !net.available ? 'Online needs the Supabase setup' : !net.code ? 'Create or join a room' : net.isHost ? (net.room.length > 1 ? 'Start online race (' + net.room.length + ' players)' : 'Start (waiting for players…)') : 'Waiting for the host to start';
   b.disabled = !(net.code && net.isHost);
+  // championship race: nobody can start it before the organiser's time; it starts by itself then
+  const P = game.ocPending;
+  if (P && net.code && !game.mp && Date.now() < P.at) { b.textContent = 'Race starts ' + ocIn(P.at - Date.now()) + ' (' + new Date(P.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')'; b.disabled = true; }
+  else if (P && net.code && net.isHost && net.room.length < 2) b.textContent = 'Starts when a second driver joins';
 }
 function mpShareInfo() {
   if (!net.code) return;
-  const info = JSON.stringify([SER.id, settings.track, settings.laps, myLivery(), mpName(), myExtras()]);
-  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), name: mpName() }); }
+  const info = JSON.stringify([SER.id, settings.track, settings.laps, myLivery(), mpName(), myExtras(), settings.quali]);
+  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), name: mpName() }); }
 }
-async function mpEnter(code) {
+async function mpEnter(code, fixed = false) {
   await loadTurn(METERED_APP, METERED_KEY);
   if (!mpName() || mpName() === 'Driver') { mpStatus('Type your driver name in the box above first.'); $('mpName').focus(); $('mpName').classList.add('need'); return; }
   $('mpName').classList.remove('need');
-  mpStatus(code ? 'Joining room ' + code + '…' : 'Creating room…');
+  mpStatus(fixed ? 'Joining the championship race lobby…' : code ? 'Joining room ' + code + '…' : 'Creating room…');
   try {
-    await net.join(code || newCode(), mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), track: settings.track, laps: settings.laps });
-    if (code) {
+    await net.join(code || newCode(), mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, series: SER.id, ocPid: ocMe().id });
+    if (code && !fixed) {
       // joining: make sure somebody is actually in that room (a mistyped code would otherwise make a new, empty room)
       const t0 = performance.now();
       while (net.room.length < 2 && performance.now() - t0 < 6000) await new Promise(r => setTimeout(r, 250));
       if (net.room.length < 2) { await net.leave(); renderRoom(); mpStatus('No room with code ' + code + ' was found. Check the code, and that the host still has the room open.'); return; }
     }
-    mpLastInfo = ''; mpStatus(code ? '' : 'Room ready. Send the code to your friends.'); renderRoom();
+    mpLastInfo = ''; mpStatus(fixed ? 'Championship race: ' + game.ocPending.name + ', round ' + (game.ocPending.round + 1) + '. Starts ' + ocWhen(game.ocPending.at) + ' on its own. No early starts.' : code ? '' : 'Room ready. Send the code to your friends.'); renderRoom();
   } catch (e) { await net.leave(); renderRoom(); mpStatus('Could not connect to the online service (' + (e && e.message || 'error') + '). Check your internet and try again.'); }
 }
 net.on('room', () => renderRoom());
 net.on('peerLink', () => renderRoom());
 net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp && !c.netGone) { c.netGone = true; radio(c.name + ' has lost connection.', 'warn', 4); } renderRoom(); });
-net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); });
+net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); else if (m.t === 'qlap') mpQualiLap(m); });
+
+/* ---------------- Online qualifying: everyone does an out lap + two flying laps on their own track,
+   lap times are shared, then the host starts the race with the grid in time order ---------------- */
+function startMpQuali(cfg) {
+  game.q = { stages: ['Q'], idx: 0, entrants: game.cars.slice(), out: [], results: {}, elim: { Q: 0 }, mp: true };
+  for (const c of game.cars) c.qDone = false;
+  startSession('Q');
+  radio('Online qualifying. Out lap, then two flying laps. Fastest starts on pole!', 'info', 7);
+  clearTimeout(game.mpQualiT);
+  // the host closes qualifying once everyone is done, or after a time limit if someone is stuck or gone
+  if (net.isHost) game.mpQualiT = setTimeout(() => mpQualiFinish(cfg), (game.lapEst * 4.5 + 60) * 1000);
+}
+function mpSendQuali() {
+  const p = game.player; if (!game.mp || !game.q || !p) return;
+  net.broadcast('qlap', { race: game.mp.race, best: isFinite(p.sessBest) ? p.sessBest : null, done: p.timedLaps >= 2 ? 1 : 0 });
+  if (p.timedLaps >= 2) { p.qDone = true; mpQualiCheck(); }
+}
+function mpQualiLap(m) {
+  if (!game.mp || !game.q || !game.q.mp || m.race !== game.mp.race) return;
+  const c = carByNet(m.from); if (!c) return;
+  if (m.best) game.q.cur.times[c.code] = m.best;
+  if (m.done) c.qDone = true;
+  if (!$('qres').classList.contains('hidden')) mpQualiTable();
+  mpQualiCheck();
+}
+function mpQualiCheck() {
+  if (!net.isHost || !game.q || !game.q.mp) return;
+  if (game.cars.every(c => c.qDone || c.netGone)) mpQualiFinish(game.mp);
+}
+function mpQualiOrder() {
+  const t = Object.assign({}, game.q.cur.times, { YOU: game.player.sessBest });
+  return game.cars.slice().sort((a, b) => (isFinite(t[a.code]) ? t[a.code] : 1e9) - (isFinite(t[b.code]) ? t[b.code] : 1e9) || game.mp.grid.indexOf(a.netId) - game.mp.grid.indexOf(b.netId));
+}
+function mpQualiTable() {
+  const ent = mpQualiOrder(), t = Object.assign({}, game.q.cur.times, { YOU: game.player.sessBest });
+  game.q.results.Q = ent.map(c => ({ c, t: t[c.code] }));
+  showQualiResults('Q', ent, 0);
+  const waiting = game.cars.filter(c => !c.qDone && !c.netGone).length;
+  $('qNext').textContent = waiting ? 'Waiting for ' + waiting + ' more driver' + (waiting > 1 ? 's' : '') + '…' : 'Starting the race…';
+  $('qNext').disabled = true;
+}
+function mpQualiFinish(cfg) {
+  if (!game.q || !game.q.mp || game.q.closed || !net.isHost || !game.mp || game.mp.race !== cfg.race) return;
+  game.q.closed = true; clearTimeout(game.mpQualiT);
+  const grid = mpQualiOrder().map(c => c.netId);
+  const race = Object.assign({}, cfg, { quali: false, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() });
+  setTimeout(() => { net.broadcast('start', { cfg: race }); startMp(race); }, 3000);   // a moment to see the final order
+  setTimeout(() => net.broadcast('start', { cfg: race }), 4200); setTimeout(() => net.broadcast('start', { cfg: race }), 6500);
+}
 net.on('data', (id, d) => {
   if (!d || d.k !== 's') return;
   const c = carByNet(id); if (!c || !game.mp) return;
@@ -1517,9 +1709,10 @@ net.on('data', (id, d) => {
 });
 function mpHostStart() {
   if (!net.isHost) return;
-  const players = (mpRandom ? net.room.slice(0, 2) : net.room).map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0, vx: p.vx || null }));
+  if (game.ocPending && Date.now() < game.ocPending.at) return;   // championship races start on time, not early
+  const players = (mpRandom ? net.room.slice(0, 2) : net.room).map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0, vx: p.vx || null, ocPid: p.ocPid || null }));
   const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
-  const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() };
+  const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now(), quali: settings.quali === 'on', oc: game.ocPending ? { id: game.ocPending.id, round: game.ocPending.round } : null };
   net.broadcast('start', { cfg }); startMp(cfg);
   setTimeout(() => net.broadcast('start', { cfg }), 1200); setTimeout(() => net.broadcast('start', { cfg }), 3500);
 }
@@ -1539,7 +1732,7 @@ function startMp(cfg) {
       const mcls = SER.multiClass ? 'hyper' : SER.cls;
       const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium', model: CLASSES[mcls].model, livery: { p: PATS[(pl.livery * 5) % PATS.length], c2: acc, c3: '#ffffff' } }), { cls: mcls, spec: CLASSES[mcls] },
         { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
-          teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined });
+          teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined, ocPid: pl.ocPid || null });
       vipFinish(c, lv); vipExtras(c, mine ? myExtras() : pl.vx);
       game.cars.push(c); if (mine) { game.player = c; addLiveMirrors(c, mirrorRT.texture); c.hasMirrors = true; }
     });
@@ -1552,6 +1745,7 @@ function startMp(cfg) {
     game.grid = cfg.grid.map(carByNet).filter(Boolean);
     game.session = 'race-prep'; weather.setup(Tr, 'dry', game.lapEst * game.laps, 99);
     game.stratOpts = [{ name: 'Mediums', stints: [['medium', 0]] }]; game.stratPick = 0;
+    if (cfg.quali) { startMpQuali(cfg); return; }
     startRace(); game.goAt = cfg.goAt;
     $('radio').innerHTML = '';
     radio('Online race at ' + Tr.def.name + ', ' + game.laps + ' laps, ' + game.cars.length + ' drivers. You start P' + (game.grid.indexOf(game.player) + 1) + '.', 'info', 7);
@@ -1760,11 +1954,12 @@ function update(dt) {
   weather.update(dt, game.raceTime);
   if (game.raceTime > 1 && !$('startLights').classList.contains('hidden')) $('startLights').classList.add('hidden');
   computeTow();
+  updateChamp(dt);
   const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
   if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr, dt); }
   for (let s = 0; s < steps; s++) {
     for (const c of game.cars) {
-      if (!c.active || c.remote) continue;
+      if (!c.active || c.remote || c.celebrate) continue;
       let inp = (c.isPlayer && !c.autopilot) ? playerInput(c, h) : aiInput(c, h, Tr);
       if (c.startDelay > 0) { c.startDelay -= h; inp = { throttle: 0, brake: 0, steer: 0 }; }
       c.inp = inp;
@@ -1779,7 +1974,7 @@ function update(dt) {
       pitDecision(c, prev, Tr);
     }
     collide();
-    for (const c of game.cars) if (c.active) checkLaps(c, Tr);
+    for (const c of game.cars) if (c.active && !c.celebrate) checkLaps(c, Tr);
   }
   // quali: reveal rival lap times as the session goes on
   if (game.q && game.q.cur && !isRace() && game.session !== 'tt') {
@@ -1825,22 +2020,19 @@ function updateCarVisuals(dt) {
     }
     if (game.phase !== 'lights' && game.phase !== 'garage') carEffects(c, dt);
   }
-  smoke.update(dt); sparks.update(dt); fireworks.update(dt);
-  // VIP: fireworks over the track when you finish on the podium
-  if (game.player && game.player.finished && isRace() && !game.fwDone) { game.fwDone = true; if (isVip() && settings.vipFw !== false && positionOf(game.player) <= 3) game.fwT = 10; }
-  if (game.fwT > 0 && game.player) {
-    game.fwT -= dt;
-    if (Math.random() < dt * 2.2) {
-      const p = game.player, a = p.h + (Math.random() - 0.5) * 1.2, d = 40 + Math.random() * 40;
-      const x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d, y = p.group.position.y + 16 + Math.random() * 14;
-      const col = new THREE.Color().setHSL(Math.random(), 1, 0.55).multiplyScalar(3), col2 = new THREE.Color().setHSL(Math.random(), 1, 0.7).multiplyScalar(3);
-      for (let k = 0; k < 140; k++) {
-        const u = Math.random() * 2 - 1, t = Math.random() * 6.283, r = Math.sqrt(1 - u * u), sp = 16 + Math.random() * 6;
-        fireworks.spawn(x, y, z, r * Math.cos(t) * sp, u * sp, r * Math.sin(t) * sp, 1.6 + Math.random() * 0.8, 3.2, 0.8, 1, k % 4 ? col : col2, 1.1, 6);
-      }
-      try { sound.thump && sound.thump(); } catch (e) { /* no sound */ }
+  smoke.update(dt); sparks.update(dt);
+  // VIP: fireworks over the track on the podium, the big 12 s show for a win
+  if (game.player && game.player.finished && isRace() && !game.fwDone) {
+    game.fwDone = true;
+    const pos = positionOf(game.player);
+    if (isVip() && settings.vipFw !== false && pos <= 3) {
+      const p = game.player;
+      fireworks.start(p.x, p.group.position.y, p.z, p.h, pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } });
+      if (!game.mp) game.resultsAt = Math.max(game.resultsAt, game.raceTime + (pos === 1 ? 9 : 6)); // let the show play before the results card
     }
   }
+  if (game.player && fireworks.t > 0) { const p = game.player; Object.assign(fireworks.o, { x: p.x, y: p.group.position.y, z: p.z, h: p.h }); }
+  fireworks.update(dt);
 }
 
 /* racing line colours worked out for the player's own car (its class and extra grip), braking as late as it can */
@@ -1872,6 +2064,7 @@ function setCam(m, silent) {
   if (!silent) flashMsg(CAMS[m], 0.9);
 }
 function updateCamera(dt, time) {
+  if (game.champ && game.champ.cam) { champCamera(dt); return; }
   const c = game.player, g = c.group; g.updateMatrixWorld();
   if (c.pit && c.pit.stage === 'garage') {
     const ps = game.T.pit.side;
@@ -2087,6 +2280,7 @@ function showQualiResults(name, ent, elim) {
   $('qTable').innerHTML = '<tr><th>Pos</th><th>Driver</th><th>Team</th><th>Time</th></tr>' + s.map((r, k) => '<tr class="' + (r.c.isPlayer ? 'me' : '') + (k >= ent.length - elim ? ' ko' : '') + '"><td>' + (k + 1) + '</td><td><span class="sw" style="background:' + r.c.color + '"></span>' + r.c.name + '</td><td>' + r.c.team + '</td><td>' + (isFinite(r.t) ? (k === 0 ? fmt(r.t) : '+' + (r.t - best).toFixed(3)) : 'No time') + '</td></tr>').join('');
   const last = game.q.idx >= game.q.stages.length - 1 || out;
   $('qNext').textContent = last ? 'Continue to strategy' : 'Go to ' + game.q.stages[game.q.idx + 1];
+  $('qNext').disabled = false;
   $('hud').classList.add('hidden'); $('qres').classList.remove('hidden');
 }
 function showResults() {
@@ -2110,6 +2304,7 @@ function showResults() {
     r.pts = pts;
   });
   $('resTable').innerHTML = html;
+  if (game.mp && game.mp.oc) ocSubmitResults(rows);
   $('champBox').classList.add('hidden');
   $('rAgain').textContent = 'Race again';
   if (champ) {
@@ -2128,37 +2323,183 @@ function showResults() {
   $('results').classList.remove('hidden');
 }
 
+
+/* ---------------- Online championships: sign up with a code, vote on race times, race online, points table ---------------- */
+const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const ocWhen = d => new Date(d).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function ocIn(ms) {
+  const m = Math.round(ms / 60000); if (m <= 0) return 'now';
+  if (m < 60) return 'in ' + m + ' min'; const h = Math.floor(m / 60); if (h < 48) return 'in ' + h + 'h ' + (m % 60) + 'm'; return 'in ' + Math.floor(h / 24) + ' days';
+}
+const OC_OPEN_BEFORE = 15 * 60000, OC_OPEN_AFTER = 3 * 3600000;   // the race lobby opens 15 min before the time, closes 3 h after
+const ocUi = { view: 'list', id: null, data: null, open: -1, draft: null, timer: 0, busy: false };
+const ocTrack = id => TRACKS.find(t => t.id === id);
+function ocOpen() { $('ocPanel').classList.remove('hidden'); ocShow(ocUi.id ? 'champ' : 'list'); }
+function ocClose() { $('ocPanel').classList.add('hidden'); clearInterval(ocUi.timer); ocUi.timer = 0; }
+function ocNeedName() {
+  if (mpName() && mpName() !== 'Driver') return false;
+  ocMsg('Type your driver name in the Online box first (it is used in the points table).'); return true;
+}
+function ocMsg(t) { const el = $('ocBody').querySelector('.ocMsg'); if (el) el.textContent = t || ''; }
+async function ocTry(fn) { if (ocUi.busy) return; ocUi.busy = true; ocMsg(''); try { await fn(); } catch (e) { ocMsg(e.message || String(e)); } finally { ocUi.busy = false; } }
+async function ocShow(view, id) {
+  ocUi.view = view; if (id !== undefined) ocUi.id = id;
+  clearInterval(ocUi.timer); ocUi.timer = 0;
+  const B = $('ocBody');
+  if (!OC_ON) { B.innerHTML = '<h2>Online championships</h2><p class="ocSub">Online play is not switched on for this copy of the game.</p>'; return; }
+  if (view === 'list') {
+    B.innerHTML = '<h2>Online championships</h2><div class="ocSub">Run a season with your mates: sign up with a code, you set the time for each race, and the points table fills in as you race.</div>' +
+      '<div class="ocRow"><button class="btn primary" id="ocNew">Create a championship</button><input class="ocIn ocCode" id="ocJoinCode" maxlength="6" placeholder="CODE"><button class="btn" id="ocJoin">Sign up</button></div><div class="ocMsg"></div><h3>Your championships</h3><div id="ocMine" class="ocSub">Loading…</div>';
+    $('ocNew').onclick = () => { if (!ocNeedName()) ocShow('create'); };
+    $('ocJoin').onclick = () => ocTry(async () => {
+      if (ocNeedName()) return; const c = $('ocJoinCode').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (c.length !== 6) return ocMsg('Championship codes are 6 letters or numbers.');
+      const id = await oc.join(mpName(), c, myLivery()); ocShow('champ', id);
+    });
+    try {
+      const list = await oc.mine();
+      if (ocUi.view !== 'list') return;
+      $('ocMine').innerHTML = list.length ? '' : 'None yet. Create one, or sign up with a code from a mate.';
+      for (const c of list) {
+        const el = document.createElement('div'); el.className = 'ocItem';
+        el.innerHTML = '<div><b>' + esc(c.name) + '</b><br><small>' + esc((SERIES[c.series] || SER).name) + ' · ' + c.rounds.length + ' rounds · ' + c.laps + ' laps' + (c.quali ? ' · quali' : '') + '</small></div><small>' + c.code + (c.owner === ocMe().id ? ' · organiser' : '') + '</small>';
+        el.onclick = () => ocShow('champ', c.id); $('ocMine').appendChild(el);
+      }
+    } catch (e) { if ($('ocMine')) $('ocMine').textContent = e.message; }
+    return;
+  }
+  if (view === 'create') {
+    const d = ocUi.draft || (ocUi.draft = { title: '', laps: settings.laps || 5, quali: true, rounds: [] });
+    const cal = realCal(), all = cal.concat(TRACKS.map((_, i) => i).filter(i => !cal.includes(i)));
+    B.innerHTML = '<h2>New championship</h2><div class="ocSub">' + esc(SER.name) + ' cars (change the series in the menu first if you want a different one). Races are online rooms, no AI.</div>' +
+      '<div class="ocRow"><input class="ocIn" id="ocTitle" maxlength="40" placeholder="Championship name" style="flex:1" value="' + esc(d.title) + '"></div>' +
+      '<div class="ocRow">Laps <select class="ocIn" id="ocLaps">' + [3, 5, 8, 10, 15, 20, 30].map(n => '<option' + (n === d.laps ? ' selected' : '') + '>' + n + '</option>').join('') + '</select>' +
+      ' Qualifying <select class="ocIn" id="ocQuali"><option value="1"' + (d.quali ? ' selected' : '') + '>On</option><option value="0"' + (d.quali ? '' : ' selected') + '>Off</option></select></div>' +
+      '<h3>Calendar · ' + d.rounds.length + ' rounds</h3><div id="ocChips" class="ocRow"></div>' +
+      '<div class="ocRow"><select class="ocIn" id="ocPick" style="flex:1">' + all.map(i => '<option value="' + TRACKS[i].id + '">' + esc(TRACKS[i].name) + ' · ' + esc(TRACKS[i].loc) + '</option>').join('') + '</select><button class="btn" id="ocAdd">Add</button><button class="btn" id="ocReal">Use the real ' + esc(SER.short) + ' calendar</button></div>' +
+      '<div class="ocMsg"></div><div class="ocRow"><button class="btn primary" id="ocMake">Create championship</button><button class="btn" id="ocBack">Back</button></div>';
+    const keep = () => { d.title = $('ocTitle').value; d.laps = +$('ocLaps').value; d.quali = $('ocQuali').value === '1'; };
+    $('ocChips').innerHTML = d.rounds.length ? d.rounds.map((id, k) => '<span class="cchip"><b>' + (k + 1) + '</b>' + esc((ocTrack(id) || {}).name || id) + '<button data-k="' + k + '" data-a="up">▲</button><button data-k="' + k + '" data-a="x">✕</button></span>').join('') : '<span class="ocSub">Add tracks below.</span>';
+    $('ocChips').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const k = +b.dataset.k; if (b.dataset.a === 'x') d.rounds.splice(k, 1); else if (k > 0) [d.rounds[k - 1], d.rounds[k]] = [d.rounds[k], d.rounds[k - 1]]; ocShow('create'); });
+    $('ocAdd').onclick = () => { keep(); if (d.rounds.length < 40) d.rounds.push($('ocPick').value); ocShow('create'); };
+    $('ocReal').onclick = () => { keep(); d.rounds = realCal().map(i => TRACKS[i].id); ocShow('create'); };
+    $('ocBack').onclick = () => { keep(); ocShow('list'); };
+    $('ocMake').onclick = () => ocTry(async () => {
+      keep(); if (!d.title.trim()) return ocMsg('Give it a name.'); if (!d.rounds.length) return ocMsg('Add at least one track.');
+      const r = await oc.create(mpName(), d.title, SER.id, d.laps, d.quali, d.rounds, myLivery());
+      ocUi.draft = null; ocShow('champ', r.id);
+    });
+    return;
+  }
+  // one championship
+  B.innerHTML = '<h2>Loading…</h2><div class="ocMsg"></div>';
+  try { ocUi.data = await oc.load(ocUi.id); } catch (e) { B.innerHTML = '<h2>Championship</h2><div class="ocMsg">' + esc(e.message) + '</div><div class="ocRow"><button class="btn" id="ocBack">Back</button></div>'; $('ocBack').onclick = () => { ocUi.id = null; ocShow('list'); }; return; }
+  ocRender();
+  ocUi.timer = setInterval(async () => { if (ocUi.view !== 'champ' || ocUi.busy || document.activeElement && document.activeElement.type === 'datetime-local') return; try { ocUi.data = await oc.load(ocUi.id); ocRender(); } catch (e) { /* keep the last view */ } }, 20000);
+}
+function ocNextRound(data) { const done = new Set(data.results.map(r => r.round)); return data.champ.rounds.findIndex((_, k) => !done.has(k)); }
+function ocRender() {
+  const D = ocUi.data, C = D.champ, me = ocMe().id, isOwner = C.owner === me, member = D.members.some(m => m.player_id === me), now = Date.now();
+  const next = ocNextRound(D); if (ocUi.open < 0) ocUi.open = next;
+  const stand = ocStandings(D, POINTS);
+  let html = '<h2>' + esc(C.name) + '</h2><div class="ocSub">' + esc((SERIES[C.series] || SER).name) + ' · ' + C.rounds.length + ' rounds · ' + C.laps + ' laps · qualifying ' + (C.quali ? 'on' : 'off') + ' · ' + D.members.length + ' signed up</div>' +
+    '<div class="ocShare">Sign-up code <b>' + C.code + '</b> <small>send it to your mates</small></div>' + (member ? '' : '<div class="ocRow"><button class="btn primary" id="ocSignup">Sign up to this championship</button></div>') + '<div class="ocMsg"></div>';
+  html += '<div class="ocGrid"><div><h3>Calendar</h3>';
+  C.rounds.forEach((tid, k) => {
+    const t = ocTrack(tid), res = D.results.find(r => r.round === k), ag = agreedSlot(D.slots, k), open = ocUi.open === k;
+    let status = res ? '🏁 ' + esc((res.results[0] || {}).name || '') + ' won' : ag ? '📅 ' + ocWhen(ag.at) + ' · ' + ocIn(new Date(ag.at) - now) : 'No time set yet';
+    html += '<div class="ocRound' + (k === next ? ' next' : '') + '"><div class="t" data-r="' + k + '"><span><b>R' + (k + 1) + '</b>' + esc(t ? t.name : tid) + '</span><small class="ocSub">' + status + '</small></div>';
+    if (open && !res) {
+      html += '<div class="ocSlot"><span class="v">' + (ag ? '<span class="lk">Race time: </span>' + ocWhen(ag.at) : (isOwner ? 'Pick the date and time for this race:' : 'The organiser has not set a time yet.')) + '</span></div>';
+      if (isOwner) html += '<div class="ocSlot"><input type="datetime-local" class="ocIn" id="ocWhen" style="font-size:14px"><button id="ocProp">' + (ag ? 'Change time' : 'Set race time') + '</button></div>';
+      if (ag && member && now >= new Date(ag.at) - OC_OPEN_BEFORE && now <= +new Date(ag.at) + OC_OPEN_AFTER) html += '<div class="ocRow"><button class="btn ocGo" id="ocRace">Join the race lobby</button></div>';
+      else if (ag) html += '<div class="ocSub" style="font-size:13px">The race lobby opens 15 minutes before the start time.</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div><div><h3>Standings</h3><table class="ocTab">' + stand.map((s, k) => '<tr class="' + (s.pid === me ? 'me' : '') + '"><td>' + (k + 1) + '</td><td><span class="sw" style="background:' + (LIVERIES[s.livery] || '#888') + '"></span>' + esc(s.name) + (s.pid === C.owner ? ' <small class="ocSub">org</small>' : '') + '</td><td>' + (s.wins ? s.wins + '🏆' : '') + '</td><td><b>' + s.pts + '</b></td></tr>').join('') + '</table>' +
+    '<div class="ocSub" style="font-size:13px;margin-top:6px">25-18-15-12-10-8-6-4-2-1 points per race.</div></div></div>' +
+    '<div class="ocRow" style="margin-top:14px"><button class="btn" id="ocBack">All championships</button>' + (member ? '<button class="btn" id="ocLeave">' + (isOwner ? 'Delete championship' : 'Leave') + '</button>' : '') + '</div>';
+  $('ocBody').innerHTML = html;
+  $('ocBack').onclick = () => { ocUi.id = null; ocUi.open = -1; ocShow('list'); };
+  $('ocBody').querySelectorAll('.ocRound .t').forEach(el => el.onclick = () => { ocUi.open = ocUi.open === +el.dataset.r ? -2 : +el.dataset.r; ocRender(); });
+  const reload = async () => { ocUi.data = await oc.load(ocUi.id); ocRender(); };
+  if ($('ocSignup')) $('ocSignup').onclick = () => ocTry(async () => { if (ocNeedName()) return; await oc.join(mpName(), C.code, myLivery()); await reload(); });
+  if ($('ocLeave')) $('ocLeave').onclick = () => ocTry(async () => {
+    const b = $('ocLeave'); if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = isOwner ? 'Sure? Deletes it for everyone' : 'Sure?'; return; }
+    await oc.leave(C.id); ocUi.id = null; ocShow('list');
+  });
+  $('ocBody').querySelectorAll('[data-vote]').forEach(b => b.onclick = () => ocTry(async () => { await oc.vote(+b.dataset.vote, !b.classList.contains('on')); await reload(); }));
+  $('ocBody').querySelectorAll('[data-lock]').forEach(b => b.onclick = () => ocTry(async () => { await oc.lock(+b.dataset.lock); await reload(); }));
+  if ($('ocProp')) $('ocProp').onclick = () => ocTry(async () => { const v = $('ocWhen').value; if (!v) return ocMsg('Pick a date and time first.'); const at = new Date(v); if (at < Date.now()) return ocMsg('Pick a time in the future.'); await oc.propose(C.id, ocUi.open, at); await reload(); });
+  if ($('ocRace')) $('ocRace').onclick = () => ocEnterRace(D, ocUi.open);
+}
+/* go to the round's online room with the championship's car, track, laps and qualifying */
+function ocEnterRace(D, round) {
+  if (ocNeedName()) return;
+  const C = D.champ, ti = TRACKS.findIndex(t => t.id === C.rounds[round]), ag = agreedSlot(D.slots, round);
+  if (ti < 0) return ocMsg('This version of the game does not have that track. Refresh the page to update.');
+  if (C.series !== settings.series) { settings.series = C.series; applySeries(C.series); }
+  Object.assign(settings, { mode: 'mp', track: ti, laps: C.laps, quali: C.quali ? 'on' : 'off' }); saveSettings();
+  game.ocPending = { id: C.id, code: C.code, round, name: C.name, at: +new Date(ag.at) };
+  ocClose(); refreshMenu(); withLoading(() => buildTrack(ti));
+  mpRandom = false; mpEnter(ocRoomCode(C.code, round), true);
+}
+/* host: start the championship race on time once at least two drivers are in */
+function ocAutoStart() {
+  const P = game.ocPending; if (!P || !net.code || game.mp) return;
+  refreshStartBtn();   // keeps the countdown on the button ticking
+  if (!net.isHost || net.room.length < 2) return;
+  if (Date.now() >= P.at) mpHostStart();
+}
+/* after the race: save the finishing order to the championship (the host straight away, others as a backup) */
+function ocSubmitResults(rows) {
+  const O = game.mp && game.mp.oc; if (!O || game.ocSent === game.mp.race) return; game.ocSent = game.mp.race;
+  const list = rows.filter(r => r.c.ocPid).map(r => ({ pid: r.c.ocPid, name: r.c.name, dnf: !!r.c.dnf }));
+  const send = () => oc.result(O.id, O.round, list).then(() => radio('Result saved to the championship.', 'good', 5)).catch(() => {});
+  if (net.isHost) send(); else setTimeout(send, 15000);
+  game.ocPending = null;
+}
+
 /* ---------------- Menu ---------------- */
 function refreshMenu() {
   { // calendar: only this series' tracks, numbered in calendar order
     // championship: the series' real calendar; other modes: every track, the series' own calendar first
-    const cal = calIdx(), list = settings.mode === 'champ' ? cal : cal.concat(TRACKS.map((_, i) => i).filter(i => !cal.includes(i)));
+    const building = buildingCustom(), picks = idsToIdx(customCal());
+    const cal = building ? [...new Set(picks)] : calIdx(), list = settings.mode === 'champ' && !building ? cal : cal.concat(TRACKS.map((_, i) => i).filter(i => !cal.includes(i)));
     if (!list.includes(settings.track) || (TRACKS[settings.track].vip && !isVip())) settings.track = list[0];
     // section headers: the series' calendar, then "Other tracks"
     const head = (id, html, order, show) => { let h = $(id); if (!h) { h = document.createElement('div'); h.id = id; h.className = 'calHead'; $('trackList').appendChild(h); } h.innerHTML = html; h.style.order = order; h.style.display = show ? '' : 'none'; };
-    head('calHead', SER.name + ' 2026 calendar · ' + cal.length + ' rounds' + (SER.missing ? '<small>Not in the game yet: ' + SER.missing.join(', ') + '</small>' : ''), -1, true);
-    head('otherHead', 'Other tracks<small>Race any series here in Quick Race, Time Trial and Online</small>', cal.length * 2 - 1, list.length > cal.length);
-    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = list.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k * 2; el.querySelector('.rnd').textContent = k < cal.length ? String(k + 1).padStart(2, '0') : '–'; el.querySelector('.st').innerHTML = cardStats(i); } });
+    const ss = settings.mode === 'champ' && loadSeason();
+    if (building) head('calHead', 'Your custom calendar · ' + picks.length + ' round' + (picks.length === 1 ? '' : 's') + '<small>Tap any track to add it to the season (twice for a double-header)</small>', -1, true);
+    else if (ss && ss.cal && !ss.finished) head('calHead', 'Custom calendar · ' + cal.length + ' rounds', -1, true);
+    else head('calHead', SER.name + ' 2026 calendar · ' + cal.length + ' rounds' + (SER.missing ? '<small>Not in the game yet: ' + SER.missing.join(', ') + '</small>' : ''), -1, true);
+    head('otherHead', building ? 'Add more tracks' : 'Other tracks<small>Race any series here in Quick Race, Time Trial and Online</small>', cal.length * 2 - 1, list.length > cal.length);
+    document.querySelectorAll('#trackList .tcard').forEach((el, i) => { const k = list.indexOf(i); el.style.display = k < 0 ? 'none' : ''; if (k >= 0) { el.style.order = k * 2; const rounds = building ? picks.map((p, r) => p === i ? r + 1 : 0).filter(Boolean) : []; el.querySelector('.rnd').innerHTML = building ? (rounds.length ? '<span class="cnum">' + rounds.join('·') + '</span>' : '+') : k < cal.length ? String(k + 1).padStart(2, '0') : '–'; el.querySelector('.st').innerHTML = cardStats(i); } });
     $('optLmClass').classList.toggle('hidden', SER.id !== 'lemans');
-    $('menuSub').textContent = SER.name + ' · ' + cal.length + '-round championship · ' + TRACKS.length + ' tracks';
+    $('menuSub').textContent = SER.name + ' · ' + (building ? 'custom ' + picks.length : calIdx().length) + '-round championship · ' + TRACKS.length + ' tracks';
   }
   document.querySelectorAll('.seg').forEach(seg => { const k = seg.dataset.opt; seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(settings[k]) === b.dataset.v)); });
   const mode = settings.mode, s = loadSeason();
-  ['optLaps', 'optOpp', 'optDiff'].forEach(id => $(id).style.opacity = mode === 'tt' || (mode === 'champ' && s && !s.finished) ? 0.35 : 1);
-  $('optQuali').style.opacity = mode === 'tt' ? 0.35 : 1; $('optWx').style.opacity = mode === 'tt' ? 0.35 : 1; $('optDmg').style.opacity = mode === 'tt' ? 0.35 : 1;
+  const running = mode === 'champ' && s && !s.finished;
+  ['optLaps', 'optOpp', 'optDiff'].forEach(id => $(id).style.opacity = mode === 'tt' || running ? 0.35 : 1);
+  ['optQuali', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = mode === 'tt' || (running && s.cal) ? 0.35 : 1);
+  $('customBox').classList.toggle('hidden', mode !== 'champ' || running);
+  if (mode === 'champ' && !running) renderCustomList();
   $('seasonBox').classList.toggle('hidden', mode !== 'champ');
   refreshLeaderboard();
   $('mpBox').classList.toggle('hidden', mode !== 'mp');
-  if (mode === 'mp') { ['optOpp', 'optDiff', 'optQuali', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = 0.35); $('optLaps').style.opacity = 1; mpShareInfo(); renderRoom(); }
+  if (mode === 'mp') { ['optOpp', 'optDiff', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = 0.35); $('optQuali').style.opacity = 1; $('optLaps').style.opacity = 1; mpShareInfo(); renderRoom(); }
   if (mode === 'champ') {
-    if (s && !s.finished) { settings.track = calIdx()[s.round]; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + calIdx().length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
-    else { settings.track = 0; $('seasonInfo').innerHTML = 'A 24-round season. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals and AI skill above. You get a teammate.</small>'; $('newSeason').classList.add('hidden'); }
+    if (s && !s.finished) { settings.track = calIdx()[s.round]; $('seasonInfo').innerHTML = (s.cal ? 'Custom season · ' : '') + 'Round <b>' + (s.round + 1) + '</b> of ' + calIdx().length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals' + (s.cal ? ' · quali ' + (s.quali === 'on' ? 'on' : 'off') + ' · weather ' + s.weather + ' · damage ' + s.damage : '') + ' · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
+    else if (settings.champType === 'custom') { const n = customCal().length; settings.track = idsToIdx(customCal())[0] ?? 0; $('seasonInfo').innerHTML = n ? n + ' rounds, in the order above. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals, AI skill, qualifying, weather and damage you pick here.</small>' : '<small>Pick your tracks from the list on the right.</small>'; $('newSeason').classList.add('hidden'); }
+    else { settings.track = realCal()[0] ?? 0; $('seasonInfo').innerHTML = 'A ' + realCal().length + '-round season. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals and AI skill above. You get a teammate.</small>'; $('newSeason').classList.add('hidden'); }
   }
   $('startBtn').textContent = mode === 'tt' ? 'Start Time Trial' : mode === 'champ' ? (s && !s.finished ? 'Start Round ' + (s.round + 1) : 'Start Season') : 'Start Weekend';
-  $('startBtn').disabled = false; refreshStartBtn();
+  $('startBtn').disabled = mode === 'champ' && !running && settings.champType === 'custom' && !customCal().length; refreshStartBtn();
   document.querySelectorAll('#swatches button').forEach((b, k) => b.classList.toggle('on', k === myLivery()));
   $('aiSlider').value = settings.ai; $('aiVal').textContent = settings.ai; $('aiDesc').textContent = aiLabel(settings.ai);
-  document.querySelectorAll('.tcard').forEach((c, k) => { c.classList.toggle('on', k === settings.track); c.classList.toggle('locked', mode === 'champ'); });
+  document.querySelectorAll('.tcard').forEach((c, k) => { c.classList.toggle('on', k === settings.track); c.classList.toggle('locked', mode === 'champ' && !buildingCustom()); });
   const d = TRACKS[settings.track];
   $('tiName').textContent = d.name; $('tiBlurb').textContent = d.loc + ' · ' + (d.type === 'street' ? 'Street circuit · ' : 'Permanent circuit · ') + d.blurb;
   const on = document.querySelector('.tcard.on'); if (on) on.scrollIntoView({ block: 'nearest' });
@@ -2166,10 +2507,24 @@ function refreshMenu() {
 function aiLabel(s) { return s < 20 ? 'Rookie' : s < 40 ? 'Amateur' : s < 60 ? 'Club racer' : s < 75 ? 'Pro' : s < 90 ? 'Elite: brakes late' : 'Legend: right on the limit'; }
 function showLoading(on) { $('loading').classList.toggle('hidden', !on); }
 function withLoading(fn) { showLoading(true); setTimeout(() => { try { fn(); } finally { showLoading(false); } }, 30); }
+/* custom championship: the picked track ids per series */
+function customCal() { const all = settings.customCals || {}; return all[SER.id] || []; }
+function setCustomCal(list) { settings.customCals = Object.assign({}, settings.customCals, { [SER.id]: list.slice(0, 40) }); saveSettings(); refreshMenu(); }
+function renderCustomList() {
+  const ids = customCal(), el = $('customList');
+  if (settings.champType !== 'custom') { el.innerHTML = ''; return; }
+  el.innerHTML = ids.length ? ids.map((id, k) => { const t = TRACKS.find(x => x.id === id); return '<span class="cchip"><b>' + (k + 1) + '</b>' + (t ? t.name : id) + '<button data-k="' + k + '" data-a="up" title="Move earlier">▲</button><button data-k="' + k + '" data-a="x" title="Remove">✕</button></span>'; }).join('') + '<span class="cchip"><button data-a="clear">Clear all</button></span>'
+    : '<span class="hint">No tracks yet. Tap tracks on the right to build your season.</span>';
+  el.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const l = customCal().slice(), k = +b.dataset.k;
+    if (b.dataset.a === 'x') l.splice(k, 1); else if (b.dataset.a === 'up' && k > 0) [l[k - 1], l[k]] = [l[k], l[k - 1]]; else if (b.dataset.a === 'clear') l.length = 0;
+    setCustomCal(l);
+  });
+}
 function selectTrack(i) {
-  if (settings.mode === 'champ') return;
   if (TRACKS[i].vip && !isVip()) { $('vipMsg').textContent = 'The ' + TRACKS[i].name + ' is VIP only. Enter a VIP code here to unlock it.'; $('vipCode').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('vipCode').focus(); return; }
-  settings.track = i; saveSettings(); refreshMenu(); withLoading(() => buildTrack(i)); }
+  if (buildingCustom()) { setCustomCal(customCal().concat(TRACKS[i].id)); withLoading(() => buildTrack(i)); return; }
+  if (settings.mode === 'champ') return; settings.track = i; saveSettings(); refreshMenu(); withLoading(() => buildTrack(i)); }
 function cardStats(i) {
   const d = TRACKS[i], pv = previewPoints(d, 60), rec = parseFloat(store.get('apexgp2-best-' + serKey(d.id)));
   return '<b>' + (pv.length / 1000).toFixed(2) + ' km</b> · ' + (d.oval ? 'Oval' : d.type === 'street' ? 'Street' : 'Circuit') + (isFinite(rec) ? ' · <b>' + fmt(rec) + '</b>' : '') + (d.vip ? ' · <span class="viptrk">' + (isVip() ? 'VIP' : '🔒 VIP only') + '</span>' : '');
@@ -2195,10 +2550,10 @@ function initMenu() {
   });
   const vipUi = () => {
     document.body.classList.toggle('isvip', isVip());
-    if (isVip()) $('vipMsg').textContent = 'VIP unlocked: 8 special liveries, gold rims, underglow, podium fireworks and a VIP tag online.';
+    if (isVip()) $('vipMsg').textContent = 'VIP unlocked: 8 special liveries, gold rims, underglow, fireworks for every podium and a VIP tag online.';
     $('vipRims').textContent = 'Gold rims: ' + (settings.vipRims ? 'On' : 'Off');
     $('vipGlow').textContent = 'Underglow: ' + GLOW_NAMES[settings.vipGlow || 0];
-    $('vipFw').textContent = 'Podium fireworks: ' + (settings.vipFw === false ? 'Off' : 'On');
+    $('vipFw').textContent = 'Fireworks: ' + (settings.vipFw === false ? 'Off' : 'On');
   };
   $('vipRims').onclick = () => { settings.vipRims = !settings.vipRims; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
@@ -2223,7 +2578,8 @@ function initMenu() {
   $('mpCreate').onclick = () => { takeName(); mpRandom = false; mpEnter(null); };
   $('mpRandom').onclick = () => { takeName(); mpRandomLobby(); };
   $('mpJoin').onclick = () => { takeName(); const c = $('mpCode').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length === 4) { mpRandom = false; mpEnter(c); } else mpStatus('Room codes are 4 letters or numbers.'); };
-  $('mpLeave').onclick = async () => { mpRandom = false; clearTimeout(mpAutoT); mpAutoT = null; await net.leave(); renderRoom(); refreshStartBtn(); mpStatus(''); };
+  $('ocOpen').onclick = ocOpen; $('ocClose').onclick = ocClose; setInterval(ocAutoStart, 1000);
+  $('mpLeave').onclick = async () => { game.ocPending = null; mpRandom = false; clearTimeout(mpAutoT); mpAutoT = null; await net.leave(); renderRoom(); refreshStartBtn(); mpStatus(''); };
   $('newSeason').onclick = () => { store.del(seasonKey()); refreshMenu(); withLoading(() => buildTrack(settings.track)); };
   for (let k = 0; k < 5; k++) { const pod = document.createElement('div'); pod.className = 'pod'; pod.innerHTML = '<i></i><i></i>'; $('startLights').appendChild(pod); }
   for (let k = 0; k < 10; k++) $('shift').appendChild(document.createElement('i'));
@@ -2232,7 +2588,7 @@ function initMenu() {
   $('pEnd').onclick = () => { togglePause(false); if (!isRace() && game.session !== 'tt') { game.player.lapInvalid = false; endQualiSession(); } };
   $('pQuit').onclick = toMenu; $('rMenu').onclick = toMenu;
   $('rAgain').onclick = () => { if (game.mp) return toMenu(); if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del(seasonKey()); } withLoading(startWeekend); };
-  $('qNext').onclick = () => { $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
+  $('qNext').onclick = () => { if (game.mp) return; $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
   $('stratGo').onclick = () => withLoading(startRace);
   $('leaveGarage').onclick = leaveGarage;
   applySeries(settings.series);
@@ -2242,7 +2598,7 @@ function initMenu() {
 function toMenu() {
   engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
-  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear();
+  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear(); fireworks.stop(); game.champ = null;
   weather.N = 0; weather.lines.visible = false; world.setWeather(0, 0);
   ['hud', 'pause', 'results', 'qres', 'strategy', 'garageBar'].forEach(id => $(id).classList.add('hidden')); $('menu').classList.remove('hidden');
   document.querySelectorAll('.tcard .st').forEach((el, i) => el.innerHTML = cardStats(i));
@@ -2333,7 +2689,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=ring26i');
+await loadCarModel('js/car.bin?v=ring27g');
 initMenu();
 requestAnimationFrame(frame);
 
