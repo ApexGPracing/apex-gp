@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=pit26c';
-import { World } from './world.js?v=pit26c';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=pit26c';
-import { Sound } from './audio.js?v=pit26c';
-import { Particles, Skids } from './fx.js?v=pit26c';
-import { Weather } from './weather.js?v=pit26c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=pit26c';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=pit26c';
-import { Net, newCode, loadTurn } from './net.js?v=pit26c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=pit26c';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=spa26d';
+import { World } from './world.js?v=spa26d';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=spa26d';
+import { Sound } from './audio.js?v=spa26d';
+import { Particles, Skids } from './fx.js?v=spa26d';
+import { Weather } from './weather.js?v=spa26d';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=spa26d';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=spa26d';
+import { Net, newCode, loadTurn } from './net.js?v=spa26d';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=spa26d';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -841,7 +841,7 @@ function aiInput(c, dt, Tr) {
   let off = clamp(Tr.race[ti] + c.laneOff, -edge, edge);
   const pathAhead = pitPathLat(c, ti, Tr), pathHere = pitPathLat(c, c.idx, Tr);
   if (pathAhead !== null) off = pathAhead;
-  const wide = Math.abs(c.lat) - (W - 0.5);
+  const wide = pathHere !== null || pathAhead !== null ? 0 : Math.abs(c.lat) - (W - 0.5);   // on a pit road: not running wide
   if (wide > 0) off -= Math.sign(c.lat) * Math.min(3, wide * 2);
   let tgtH = Math.atan2(Tr.px[ti] + Tr.nx[ti] * off - c.x, Tr.pz[ti] + Tr.nz[ti] * off - c.z);
   // after a spin, line the car back up with the track before going again
@@ -850,13 +850,15 @@ function aiInput(c, dt, Tr) {
   const err = angDiff(tgtH, c.h) - c.slip * 0.6;
   const maxYaw = Math.max(0.05, Math.min(sp0 * Math.tan(0.42) / 3.6, (18 + 0.25 * sp0) * (c.gripNow || 1) / sp0));
   const ahead = (c.idx + Math.round(sp0 * 0.06 / DS)) % N;
-  const ff = pathHere !== null ? 0 : Tr.rk[ahead] * sp0 / maxYaw;
+  const ff = (pathHere !== null ? pitPathK(c, ahead, Tr) : Tr.rk[ahead]) * sp0 / maxYaw;
   const latErr = (pathHere !== null ? pathHere : clamp(Tr.race[c.idx] + c.laneOff, -edge, edge)) - c.lat;
   const want = clamp(ff + err * 2.2 + latErr * (pathHere !== null ? 0.12 : 0.05), -1, 1);
   c.steer += clamp(want - c.steer, -10 * dt, 10 * dt);
   let target = Infinity;
   const pp = speedProfiles(Tr, c.spec || CLASSES.f1), prof = c.lateBrake ? pp[1] : pp[0];
   for (let k = 1; k <= 6; k++) target = Math.min(target, prof[(c.idx + k) % N]);
+  // on a pit road (Spa: the exit lane round the inside of La Source) the corner speed is set by that road's own radius
+  if (pathHere !== null) for (let k = 0; k <= 12; k += 3) { const kp = Math.abs(pitPathK(c, (c.idx + k) % N, Tr)); if (kp > 1e-3) target = Math.min(target, Math.sqrt(17 * (c.gripNow || 1) / kp)); }
   // going over the limit only pays in slow corners; in fast sweepers the best AI drive exactly on it
   const pace = c.pace > 1 ? 1 + (c.pace - 1) * clamp((72 - target) / 30, 0, 1) : c.pace;
   target = Math.min(target * pace * Math.sqrt(Math.min(1.04, c.gripTD || 1) * (c.boost || 1)) * (c.yieldT > 0 ? 0.9 : 1), follow);
@@ -885,6 +887,13 @@ function aiInput(c, dt, Tr) {
   return { throttle, brake, steer: c.steer };
 }
 
+/* signed curvature of an AI car's pit road path at sample i (same convention as the racing line's Tr.rk) */
+function pitPathK(c, i, Tr) {
+  const N = Tr.N, pt = j => { j = (j + N) % N; const l = pitPathLat(c, j, Tr) ?? Tr.race[j]; return [Tr.px[j] + Tr.nx[j] * l, Tr.pz[j] + Tr.nz[j] * l]; };
+  const [ax, az] = pt(i - 4), [bx, bz] = pt(i), [cx, cz] = pt(i + 4);
+  const cross = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d = Math.hypot(bx - ax, bz - az) * Math.hypot(cx - bx, cz - bz) * Math.hypot(cx - ax, cz - az);
+  return d > 0 ? -2 * cross / d : 0;
+}
 /* lateral target for an AI car on the pit entry or pit exit road (null when not relevant) */
 function pitPathLat(c, i, Tr) {
   const P = Tr.pit, N = Tr.N, kk = (i - P.entry + N) % N, before = (P.entry - i + N) % N, edge = P.side * (W + 0.6);
@@ -892,7 +901,7 @@ function pitPathLat(c, i, Tr) {
     if (before > 0 && before < 75) return Tr.race[i] + (edge - Tr.race[i]) * smooth(75, 0, before);
     if (kk <= P.limIn + 2) return edge + (P.fast - edge) * smooth(0, P.limIn - 6, kk);
   }
-  if (P.merge && !c.pit && game.raceTime - (c.pitExitT ?? -99) < 25 && kk >= P.limOut - 2 && kk <= P.len + Math.round(P.merge / DS) + 30) { const r2 = pitRoad(Tr, i); if (r2) return P.side * (r2.a + r2.b) / 2; }
+  if (P.merge && !c.pit && game.raceTime - (c.pitExitT ?? -99) < 25 && kk >= P.limOut - 2 && kk <= P.len + Math.round(P.merge / DS) + 30) { const r2 = pitRoad(Tr, i); if (r2) return P.side * (r2.c ?? (r2.a + r2.b) / 2); }
   if (c.inPitRoad && !c.pit && kk >= P.limOut - 2 && kk < P.len) return P.fast + (P.side * (W - 1.5) - P.fast) * smooth(P.limOut, P.len - 4, kk);
   return null;
 }
@@ -2202,7 +2211,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=pit26c');
+await loadCarModel('js/car.bin?v=spa26d');
 initMenu();
 requestAnimationFrame(frame);
 
