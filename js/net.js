@@ -117,6 +117,13 @@ export class Net {
     setTimeout(() => { try { tr.close(); } catch (e) { /* gone */ } if (this.matchTr === tr) this.matchTr = null; }, res ? 700 : 0);
     return res;
   }
+  /* live count of everyone with the game open: a presence-only channel that every player joins on load */
+  async watchOnline(onCount) {
+    if (!this.available || this.onlineTr) return;
+    const me = { id: this.id + '-o', joined: Date.now() }, onPeers = list => onCount(list.length);
+    try { this.onlineTr = this.local ? await localTransport('ONLINE', me, () => {}, onPeers) : await supabaseTransport(this.url, this.key, 'ONLINE', me, () => {}, onPeers); }
+    catch (e) { this.onlineTr = null; setTimeout(() => this.watchOnline(onCount), 30000); }
+  }
   cancelMatch() { if (this.matchCancel) { const f = this.matchCancel; this.matchCancel = null; f(); } }
   setInfo(extra) { if (!this.tr) return; this.me = { ...this.me, ...extra }; this.tr.update(this.me); }
   get isHost() { return this.room.length > 0 && this.room[0].id === this.id; }

@@ -340,7 +340,7 @@ function startSession(kind) {
     const entrants = game.q.entrants, sess = { name: kind, times: {}, reveal: [] };
     const factor = { Q1: 1, Q2: 0.998, Q3: 0.996, Q: 1 }[kind];
     for (const c of entrants) {
-      if (c.isPlayer) continue;
+      if (c.isPlayer || c.remote) continue;
       const base = estimateLap(Tr, Math.min(1.04, c.pace), profOf(c, Tr), c.boost || 1, c.spec || CLASSES.f1) * factor * 1.012;
       const wetPen = 1 + 0.16 * weather.average();
       const t = base * wetPen * (1 + (Math.random() - 0.5) * 0.006);
@@ -365,6 +365,7 @@ function leaveGarage() {
 
 function endQualiSession() {
   const q = game.q, s = q.cur, p = game.player;
+  if (q.mp) { game.phase = 'idle'; p.active = false; mpQualiTable(); return; }
   for (const r of s.reveal) s.times[r.c.code] = r.t;
   s.times.YOU = p.sessBest;
   const ent = q.entrants.slice().sort((a, b) => (s.times[a.code] ?? 1e9) - (s.times[b.code] ?? 1e9));
@@ -450,7 +451,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop();
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop(); game.champ = null;
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -973,7 +974,7 @@ function computeTow() {
 
 /* ---------------- Collisions (impulse based) ---------------- */
 function collide() {
-  const cars = game.cars.filter(c => c.active && !c.pit && !(c.dnf && Math.abs(c.v) < 1));
+  const cars = game.cars.filter(c => c.active && !c.pit && !c.celebrate && !(c.dnf && Math.abs(c.v) < 1));
   for (let a = 0; a < cars.length; a++) for (let b = a + 1; b < cars.length; b++) {
     const A = cars[a], B = cars[b], dx0 = B.x - A.x, dz0 = B.z - A.z;
     if (dx0 * dx0 + dz0 * dz0 > 64) continue;
@@ -1272,6 +1273,7 @@ function checkLaps(c, Tr) {
         c.timedLaps++;
         if (valid && lt < c.sessBest) c.sessBest = lt;
         if (c.timedLaps >= 2) { radio('Session over for us. ' + (isFinite(c.sessBest) ? 'Best ' + fmt(c.sessBest) + '.' : 'No time set.'), 'info', 4); c.lapInvalid = false; game.sessionEndAt = game.raceTime + 1.2; }
+        if (game.mp) mpSendQuali();
       }
       if (isRace()) lapRadio(c, done);
       c.lapInvalid = false;
@@ -1287,9 +1289,136 @@ function checkLaps(c, Tr) {
 function onPlayerFinish() {
   const p = game.player;
   game.phase = 'finished'; p.autopilot = true; p.pace = 0.8;
+  game.resultsAt = game.raceTime + 3.2;
+  if (willBeChampion()) {
+    flashMsg('WORLD CHAMPION!', 5, (p.finishOrder === 1 ? 'Race win · ' : 'P' + positionOf(p) + ' · ') + fmt(p.finishTime));
+    radio(champCall(), 'good', 9);
+    game.champ = { t: 0 }; game.resultsAt = game.raceTime + 27;
+    return;
+  }
   flashMsg(p.finishOrder === 1 ? 'YOU WIN!' : 'FINISHED P' + positionOf(p), 3, fmt(p.finishTime));
   radio(p.finishOrder === 1 ? 'Get in there! That is the win!' : 'Chequered flag. P' + positionOf(p) + '. Good job.', 'good', 6);
-  game.resultsAt = game.raceTime + 3.2;
+}
+
+/* ---------------- World champion: radio call, donuts, then the driver climbs out and celebrates ---------------- */
+const CHAMP_CALLS = [
+  'MATE, YOU ARE WORLD CHAMPION!!! UNBELIEVABLE!',
+  'GET IN THERE MATE, CHAMPION OF THE WORLD!',
+  'YOU ARE THE WORLD CHAMPION! WORLD CHAMPION! WHAT A SEASON!',
+  'THAT IS IT! YOU HAVE DONE IT! WORLD CHAMPION!',
+  'GET IN THERE!!! YOU ARE A WORLD CHAMPION, MATE! A WORLD CHAMPION!',
+  'WORLD CHAMPION! WORLD CHAMPION! I CANNOT BELIEVE IT, MATE!',
+  'Mate... you are the champion of the world. Take it all in. WORLD CHAMPION!',
+  'YESSS! THE TITLE IS YOURS! CHAMPION OF THE WORLD!',
+  'WHAT A DRIVE, WHAT A YEAR! YOU ARE WORLD CHAMPION, MATE!',
+  'SIMPLY LOVELY! WORLD CHAMPION! The whole team is going mad here!',
+  'YOU ABSOLUTE LEGEND! WORLD CHAMPION! GET IN THERE!',
+  'THE CHAMPIONSHIP IS YOURS! WORLD CHAMPION! UNREAL, MATE, UNREAL!',
+  'From the whole team: thank you. YOU ARE WORLD CHAMPION!',
+  'GET IN!!! THAT IS THE WORLD CHAMPIONSHIP, MATE! YOU DID IT!',
+  'WORLD CHAMPION! Do some donuts, you have earned it!',
+  'NUMBER ONE! NUMBER ONE! YOU ARE THE WORLD CHAMPION!',
+  'THEY WILL REMEMBER THIS ONE FOREVER! WORLD CHAMPION, MATE!',
+  'Get in there, get in there, GET IN THERE! WORLD CHAMPION!',
+  'CHAMPION OF THE WORLD! WE ARE CHAMPIONS OF THE WORLD!',
+  'I am lost for words, mate. WORLD CHAMPION. UNBELIEVABLE!',
+];
+function champCall() {
+  // never the same call twice in a row
+  let k = Math.floor(Math.random() * CHAMP_CALLS.length); const last = +(store.get('apexgp-champcall') ?? -1);
+  if (k === last) k = (k + 1 + Math.floor(Math.random() * (CHAMP_CALLS.length - 1))) % CHAMP_CALLS.length;
+  store.set('apexgp-champcall', String(k)); return CHAMP_CALLS[k];
+}
+/* would the points after this race make you champion, with nobody able to catch you in the rounds left? */
+function willBeChampion() {
+  const s = game.season; if (settings.mode !== 'champ' || !s || game.mp) return false;
+  const pts = Object.assign({}, s.pts);
+  standings().forEach((c, k) => { pts[c.code] = (pts[c.code] || 0) + (!c.dnf && POINTS[k] ? POINTS[k] : 0); });
+  const left = calIdx().length - (s.round + 1), tab = Object.entries(pts).sort((a, b) => b[1] - a[1]);
+  return tab[0][0] === 'YOU' && tab[0][1] - (tab[1] ? tab[1][1] : 0) > left * POINTS[0];
+}
+function makeDriverFigure(suit, helmet) {
+  const g = new THREE.Group(), m = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+  const suitM = m(suit), dark = m('#16181d'), box = (w, h, d, mat, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); o.position.set(x, y, z); o.castShadow = true; return o; };
+  g.add(box(0.42, 0.55, 0.24, suitM, 0, 1.12, 0));                                  // torso
+  g.add(box(0.4, 0.12, 0.25, dark, 0, 0.86, 0));                                    // belt
+  const leg = x => { const p = new THREE.Group(); p.position.set(x, 0.85, 0); p.add(box(0.16, 0.8, 0.18, suitM, 0, -0.4, 0), box(0.18, 0.1, 0.28, dark, 0, -0.8, 0.04)); g.add(p); return p; };
+  const arm = x => { const p = new THREE.Group(); p.position.set(x, 1.36, 0); p.add(box(0.13, 0.62, 0.14, suitM, 0, -0.3, 0), box(0.15, 0.14, 0.15, dark, 0, -0.64, 0)); g.add(p); return p; };
+  const head = new THREE.Group(); head.position.set(0, 1.55, 0);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), new THREE.MeshPhysicalMaterial({ color: helmet, roughness: 0.2, clearcoat: 1 })));
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.162, 20, 8, -0.9, 1.8, 1.2, 0.55), new THREE.MeshStandardMaterial({ color: '#0b0d12', roughness: 0.05, metalness: 0.8 })); visor.rotation.y = 0; head.add(visor);
+  g.add(head);
+  g.userData = { armL: arm(0.28), armR: arm(-0.28), legL: leg(0.1), legR: leg(-0.1), head };
+  return g;
+}
+function updateChamp(dt) {
+  const C = game.champ, p = game.player, Tr = game.T; if (!C || !p) return;
+  C.t += dt; const t = C.t;
+  if (t < 4) { p.pace = 0.55; return; }                                    // a few seconds of cool-down
+  if (!C.pull) {
+    // pull over to the side with more room, slowing down
+    const roomL = Tr.limL[p.idx] - W, roomR = Tr.limR[p.idx] - W, sd = roomL > roomR ? 1 : -1, room = Math.max(roomL, roomR);
+    C.pull = { lat0: p.lat, lat1: room > 7 ? sd * (W + Math.min(room - 5, 10)) : sd * (W - 3), v0: Math.max(Math.abs(p.v), 15), k: p.idx, f: 0, T: 2.5 };
+    p.celebrate = true; p.autopilot = true; C.cam = true; C.ang = p.h + Math.PI * 0.8;
+  }
+  const P = C.pull;
+  if (t < 4 + P.T) {
+    const u = (t - 4) / P.T, v = P.v0 + (8 - P.v0) * u; P.f += v * dt / DS;
+    while (P.f >= 1) { P.f -= 1; P.k = (P.k + 1) % Tr.N; }
+    const i = P.k, lat = P.lat0 + (P.lat1 - P.lat0) * smooth(0, 1, u);
+    p.x = Tr.px[i] + Tr.nx[i] * lat + Tr.tx[i] * P.f * DS; p.z = Tr.pz[i] + Tr.nz[i] * lat + Tr.tz[i] * P.f * DS;
+    p.h = Math.atan2(Tr.tx[i], Tr.tz[i]) - Math.sign(P.lat1 - P.lat0) * 0.15 * Math.sin(Math.PI * u); p.v = v; p.slip = 0; p.steer = 0;
+    p.inp = { throttle: 0.2, brake: 0.3, steer: 0 }; p.idx = i; p.lat = lat;
+    return;
+  }
+  const fx = () => Math.sin(p.h), fz = () => Math.cos(p.h);
+  if (!C.pivot) C.pivot = [p.x + fx() * 1.4, p.z + fz() * 1.4];
+  const tD = t - 4 - P.T;
+  if (tD < 8) {
+    // donuts: the front stays put, the rear swings round in a cloud of smoke
+    const w = 3.4 * Math.min(1, tD / 1.2) * (tD > 7 ? (8 - tD) : 1);
+    p.h += w * dt; p.x = C.pivot[0] - fx() * 1.4; p.z = C.pivot[1] - fz() * 1.4;
+    p.v = 28 * Math.min(1, tD / 0.6); p.steer = 1; p.slip = 0.6; p.inp = { throttle: 1, brake: 0, steer: 1 };
+    const ey = p.group.position.y, lx = Math.cos(p.h), lz = -Math.sin(p.h);
+    for (const [sd, k] of [[1, 0], [-1, 1]]) {
+      const x = p.x + lx * sd * 0.83 + fx() * AXLE_R, z = p.z + lz * sd * 0.83 + fz() * AXLE_R;
+      skids.mark('champ' + k, x, z, fx(), fz(), 0.7, ey);
+      if (Math.random() < dt * 70) smoke.spawn(x, ey + 0.3, z, (Math.random() - 0.5) * 3 - lx * sd * 2, 0.8 + Math.random() * 1.5, (Math.random() - 0.5) * 3 - lz * sd * 2, 1.8 + Math.random() * 1.2, 1.2, 7, 0.45, SMOKE, 0.9);
+    }
+  } else {
+    skids.lift('champ0'); skids.lift('champ1');
+    p.v = 0; p.steer = 0; p.slip = 0; p.inp = { throttle: 0, brake: 0, steer: 0 };
+  }
+  p.idx = locate(Tr, p.x, p.z, p.idx); p.lat = (p.x - Tr.px[p.idx]) * Tr.nx[p.idx] + (p.z - Tr.pz[p.idx]) * Tr.nz[p.idx];
+  // the driver climbs out and celebrates on the car
+  const tO = tD - 9.5; if (tO < 0) return;
+  if (!C.fig) {
+    C.fig = makeDriverFigure(p.color || '#ffcc00', '#ffffff'); p.group.add(C.fig);
+    if (p.helmet) p.helmet.visible = false; C.stand = p.closed ? 1.2 : 0.55;
+    radio(['Go on, get out and celebrate! You have earned it!', 'Enjoy this, mate. Enjoy every second.', 'Look at the fans, mate! They are going mad!'][Math.floor(Math.random() * 3)], 'good', 6);
+  }
+  const F = C.fig, U = F.userData;
+  if (tO < 1.4) {
+    // climb up out of the cockpit (or the door on closed cars)
+    const u = smooth(0, 1, tO / 1.4);
+    if (p.closed) F.position.set(1.4 * (1 - u), C.stand * u + 0.4 * Math.sin(Math.PI * u), 0.1);
+    else F.position.set(0, -0.6 + (C.stand + 0.6) * u + 0.35 * Math.sin(Math.PI * u), 0.35 + 0.3 * u);
+    U.armL.rotation.z = U.armR.rotation.z = 0; F.rotation.y = 0;
+  } else {
+    // jump up and down, fists pumping, turning to the crowd
+    const j = tO - 1.4, hop = Math.abs(Math.sin(j * Math.PI * 1.4));
+    F.position.set(p.closed ? 0 : 0, C.stand + hop * 0.75, p.closed ? 0.1 : 0.65);
+    F.rotation.y = Math.sin(j * 0.6) * 1.2;
+    U.armL.rotation.z = Math.PI - 0.35 + Math.sin(j * 9) * 0.25 * (1 - hop); U.armR.rotation.z = -(Math.PI - 0.35) - Math.sin(j * 9 + 1) * 0.25 * (1 - hop);
+    U.legL.rotation.x = U.legR.rotation.x = -hop * 0.5; U.head.rotation.x = -0.2 * hop;
+  }
+}
+function champCamera(dt) {
+  const C = game.champ, p = game.player;
+  C.ang += dt * (C.fig ? 0.3 : 0.45);
+  const r = C.fig ? 6.5 : 11, y = C.fig ? 2.2 : 3.4, gy = p.group.position.y;
+  camera.position.set(p.x + Math.sin(C.ang) * r, gy + y, p.z + Math.cos(C.ang) * r);
+  camera.lookAt(p.x, gy + (C.fig ? 1.3 : 0.6), p.z); camera.fov = 55; camera.updateProjectionMatrix();
 }
 function standings() {
   const cars = game.cars.filter(c => c.active);
@@ -1413,6 +1542,7 @@ async function refreshLeaderboard() {
 
 /* ---------------- Online multiplayer ---------------- */
 const net = new Net({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+net.watchOnline(n => { $('onlineNow').classList.toggle('hidden', !n); $('onlineNow').querySelector('b').textContent = n; });
 const carByNet = id => game.cars.find(c => c.netId === id);
 const mpName = () => lbName() || 'Driver';
 const mpCode3 = n => (n.replace(/[^A-Za-z]/g, '').toUpperCase() + 'XXX').slice(0, 3);
@@ -1462,7 +1592,7 @@ function renderRoom() {
   const links = net.linkInfo(), host = net.room[0];
   $('mpPlayers').innerHTML = net.room.map((p, k) => '<div class="mpp"><i style="background:' + LIVERIES[p.livery || 0] + '"></i>' + String(p.name || 'Driver').replace(/[<>&]/g, '') + (p.vip ? ' <span class="tag vip">VIP</span>' : '') +
     (k === 0 ? ' <span class="tag">HOST</span>' : '') + (p.id === net.id ? ' <span class="tag you">YOU</span>' : ' <span class="tag ' + (links[p.id] ? 'ok' : '') + '">' + (links[p.id] ? 'DIRECT' : 'RELAY') + '</span>') + '</div>').join('');
-  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + (SERIES[host.series] || SER).name + ' · ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' : (net.isHost ? 'You are the host: pick the track and laps, then press Start.' : '');
+  $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + (SERIES[host.series] || SER).name + ' · ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' + (host.quali ? ' · with qualifying' : '') : (net.isHost ? 'You are the host: pick the track, laps and qualifying, then press Start.' : '');
   refreshStartBtn(); mpRandomCheck();
 }
 function refreshStartBtn() {
@@ -1473,8 +1603,8 @@ function refreshStartBtn() {
 }
 function mpShareInfo() {
   if (!net.code) return;
-  const info = JSON.stringify([SER.id, settings.track, settings.laps, myLivery(), mpName(), myExtras()]);
-  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), name: mpName() }); }
+  const info = JSON.stringify([SER.id, settings.track, settings.laps, myLivery(), mpName(), myExtras(), settings.quali]);
+  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), name: mpName() }); }
 }
 async function mpEnter(code) {
   await loadTurn(METERED_APP, METERED_KEY);
@@ -1482,7 +1612,7 @@ async function mpEnter(code) {
   $('mpName').classList.remove('need');
   mpStatus(code ? 'Joining room ' + code + '…' : 'Creating room…');
   try {
-    await net.join(code || newCode(), mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), track: settings.track, laps: settings.laps });
+    await net.join(code || newCode(), mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, series: SER.id });
     if (code) {
       // joining: make sure somebody is actually in that room (a mistyped code would otherwise make a new, empty room)
       const t0 = performance.now();
@@ -1495,7 +1625,56 @@ async function mpEnter(code) {
 net.on('room', () => renderRoom());
 net.on('peerLink', () => renderRoom());
 net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp && !c.netGone) { c.netGone = true; radio(c.name + ' has lost connection.', 'warn', 4); } renderRoom(); });
-net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); });
+net.on('msg', m => { if (m.t === 'start' && m.cfg) startMp(m.cfg); else if (m.t === 'qlap') mpQualiLap(m); });
+
+/* ---------------- Online qualifying: everyone does an out lap + two flying laps on their own track,
+   lap times are shared, then the host starts the race with the grid in time order ---------------- */
+function startMpQuali(cfg) {
+  game.q = { stages: ['Q'], idx: 0, entrants: game.cars.slice(), out: [], results: {}, elim: { Q: 0 }, mp: true };
+  for (const c of game.cars) c.qDone = false;
+  startSession('Q');
+  radio('Online qualifying. Out lap, then two flying laps. Fastest starts on pole!', 'info', 7);
+  clearTimeout(game.mpQualiT);
+  // the host closes qualifying once everyone is done, or after a time limit if someone is stuck or gone
+  if (net.isHost) game.mpQualiT = setTimeout(() => mpQualiFinish(cfg), (game.lapEst * 4.5 + 60) * 1000);
+}
+function mpSendQuali() {
+  const p = game.player; if (!game.mp || !game.q || !p) return;
+  net.broadcast('qlap', { race: game.mp.race, best: isFinite(p.sessBest) ? p.sessBest : null, done: p.timedLaps >= 2 ? 1 : 0 });
+  if (p.timedLaps >= 2) { p.qDone = true; mpQualiCheck(); }
+}
+function mpQualiLap(m) {
+  if (!game.mp || !game.q || !game.q.mp || m.race !== game.mp.race) return;
+  const c = carByNet(m.from); if (!c) return;
+  if (m.best) game.q.cur.times[c.code] = m.best;
+  if (m.done) c.qDone = true;
+  if (!$('qres').classList.contains('hidden')) mpQualiTable();
+  mpQualiCheck();
+}
+function mpQualiCheck() {
+  if (!net.isHost || !game.q || !game.q.mp) return;
+  if (game.cars.every(c => c.qDone || c.netGone)) mpQualiFinish(game.mp);
+}
+function mpQualiOrder() {
+  const t = Object.assign({}, game.q.cur.times, { YOU: game.player.sessBest });
+  return game.cars.slice().sort((a, b) => (isFinite(t[a.code]) ? t[a.code] : 1e9) - (isFinite(t[b.code]) ? t[b.code] : 1e9) || game.mp.grid.indexOf(a.netId) - game.mp.grid.indexOf(b.netId));
+}
+function mpQualiTable() {
+  const ent = mpQualiOrder(), t = Object.assign({}, game.q.cur.times, { YOU: game.player.sessBest });
+  game.q.results.Q = ent.map(c => ({ c, t: t[c.code] }));
+  showQualiResults('Q', ent, 0);
+  const waiting = game.cars.filter(c => !c.qDone && !c.netGone).length;
+  $('qNext').textContent = waiting ? 'Waiting for ' + waiting + ' more driver' + (waiting > 1 ? 's' : '') + '…' : 'Starting the race…';
+  $('qNext').disabled = true;
+}
+function mpQualiFinish(cfg) {
+  if (!game.q || !game.q.mp || game.q.closed || !net.isHost || !game.mp || game.mp.race !== cfg.race) return;
+  game.q.closed = true; clearTimeout(game.mpQualiT);
+  const grid = mpQualiOrder().map(c => c.netId);
+  const race = Object.assign({}, cfg, { quali: false, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() });
+  setTimeout(() => { net.broadcast('start', { cfg: race }); startMp(race); }, 3000);   // a moment to see the final order
+  setTimeout(() => net.broadcast('start', { cfg: race }), 4200); setTimeout(() => net.broadcast('start', { cfg: race }), 6500);
+}
 net.on('data', (id, d) => {
   if (!d || d.k !== 's') return;
   const c = carByNet(id); if (!c || !game.mp) return;
@@ -1519,7 +1698,7 @@ function mpHostStart() {
   if (!net.isHost) return;
   const players = (mpRandom ? net.room.slice(0, 2) : net.room).map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0, vx: p.vx || null }));
   const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
-  const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now() };
+  const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now(), quali: settings.quali === 'on' };
   net.broadcast('start', { cfg }); startMp(cfg);
   setTimeout(() => net.broadcast('start', { cfg }), 1200); setTimeout(() => net.broadcast('start', { cfg }), 3500);
 }
@@ -1552,6 +1731,7 @@ function startMp(cfg) {
     game.grid = cfg.grid.map(carByNet).filter(Boolean);
     game.session = 'race-prep'; weather.setup(Tr, 'dry', game.lapEst * game.laps, 99);
     game.stratOpts = [{ name: 'Mediums', stints: [['medium', 0]] }]; game.stratPick = 0;
+    if (cfg.quali) { startMpQuali(cfg); return; }
     startRace(); game.goAt = cfg.goAt;
     $('radio').innerHTML = '';
     radio('Online race at ' + Tr.def.name + ', ' + game.laps + ' laps, ' + game.cars.length + ' drivers. You start P' + (game.grid.indexOf(game.player) + 1) + '.', 'info', 7);
@@ -1760,11 +1940,12 @@ function update(dt) {
   weather.update(dt, game.raceTime);
   if (game.raceTime > 1 && !$('startLights').classList.contains('hidden')) $('startLights').classList.add('hidden');
   computeTow();
+  updateChamp(dt);
   const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
   if (game.mp) { for (const c of game.cars) if (c.remote && c.active && !c.dnf) remoteStep(c, Tr, dt); }
   for (let s = 0; s < steps; s++) {
     for (const c of game.cars) {
-      if (!c.active || c.remote) continue;
+      if (!c.active || c.remote || c.celebrate) continue;
       let inp = (c.isPlayer && !c.autopilot) ? playerInput(c, h) : aiInput(c, h, Tr);
       if (c.startDelay > 0) { c.startDelay -= h; inp = { throttle: 0, brake: 0, steer: 0 }; }
       c.inp = inp;
@@ -1779,7 +1960,7 @@ function update(dt) {
       pitDecision(c, prev, Tr);
     }
     collide();
-    for (const c of game.cars) if (c.active) checkLaps(c, Tr);
+    for (const c of game.cars) if (c.active && !c.celebrate) checkLaps(c, Tr);
   }
   // quali: reveal rival lap times as the session goes on
   if (game.q && game.q.cur && !isRace() && game.session !== 'tt') {
@@ -1826,11 +2007,11 @@ function updateCarVisuals(dt) {
     if (game.phase !== 'lights' && game.phase !== 'garage') carEffects(c, dt);
   }
   smoke.update(dt); sparks.update(dt);
-  // fireworks over the track: everyone gets a full show for a race win, VIPs also get one for P2 / P3
+  // VIP: fireworks over the track on the podium, the big 12 s show for a win
   if (game.player && game.player.finished && isRace() && !game.fwDone) {
     game.fwDone = true;
-    const pos = positionOf(game.player), on = settings.vipFw !== false;
-    if (on && (pos === 1 || (isVip() && pos <= 3))) {
+    const pos = positionOf(game.player);
+    if (isVip() && settings.vipFw !== false && pos <= 3) {
       const p = game.player;
       fireworks.start(p.x, p.group.position.y, p.z, p.h, pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } });
       if (!game.mp) game.resultsAt = Math.max(game.resultsAt, game.raceTime + (pos === 1 ? 9 : 6)); // let the show play before the results card
@@ -1869,6 +2050,7 @@ function setCam(m, silent) {
   if (!silent) flashMsg(CAMS[m], 0.9);
 }
 function updateCamera(dt, time) {
+  if (game.champ && game.champ.cam) { champCamera(dt); return; }
   const c = game.player, g = c.group; g.updateMatrixWorld();
   if (c.pit && c.pit.stage === 'garage') {
     const ps = game.T.pit.side;
@@ -2084,6 +2266,7 @@ function showQualiResults(name, ent, elim) {
   $('qTable').innerHTML = '<tr><th>Pos</th><th>Driver</th><th>Team</th><th>Time</th></tr>' + s.map((r, k) => '<tr class="' + (r.c.isPlayer ? 'me' : '') + (k >= ent.length - elim ? ' ko' : '') + '"><td>' + (k + 1) + '</td><td><span class="sw" style="background:' + r.c.color + '"></span>' + r.c.name + '</td><td>' + r.c.team + '</td><td>' + (isFinite(r.t) ? (k === 0 ? fmt(r.t) : '+' + (r.t - best).toFixed(3)) : 'No time') + '</td></tr>').join('');
   const last = game.q.idx >= game.q.stages.length - 1 || out;
   $('qNext').textContent = last ? 'Continue to strategy' : 'Go to ' + game.q.stages[game.q.idx + 1];
+  $('qNext').disabled = false;
   $('hud').classList.add('hidden'); $('qres').classList.remove('hidden');
 }
 function showResults() {
@@ -2146,7 +2329,7 @@ function refreshMenu() {
   $('seasonBox').classList.toggle('hidden', mode !== 'champ');
   refreshLeaderboard();
   $('mpBox').classList.toggle('hidden', mode !== 'mp');
-  if (mode === 'mp') { ['optOpp', 'optDiff', 'optQuali', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = 0.35); $('optLaps').style.opacity = 1; mpShareInfo(); renderRoom(); }
+  if (mode === 'mp') { ['optOpp', 'optDiff', 'optWx', 'optDmg'].forEach(id => $(id).style.opacity = 0.35); $('optQuali').style.opacity = 1; $('optLaps').style.opacity = 1; mpShareInfo(); renderRoom(); }
   if (mode === 'champ') {
     if (s && !s.finished) { settings.track = calIdx()[s.round]; $('seasonInfo').innerHTML = 'Round <b>' + (s.round + 1) + '</b> of ' + calIdx().length + ' · You have <b>' + (s.pts.YOU || 0) + '</b> pts<br><small>' + s.laps + ' laps · AI ' + (s.ai ?? 50) + '/100 · ' + s.opp + ' rivals · your teammate: ' + DRIVERS[s.lineup[0].di][0] + '</small>'; $('newSeason').classList.remove('hidden'); }
     else { settings.track = 0; $('seasonInfo').innerHTML = 'A 24-round season. 25-18-15-12-10-8-6-4-2-1 points.<br><small>Uses the laps, rivals and AI skill above. You get a teammate.</small>'; $('newSeason').classList.add('hidden'); }
@@ -2226,7 +2409,7 @@ function initMenu() {
   $('pEnd').onclick = () => { togglePause(false); if (!isRace() && game.session !== 'tt') { game.player.lapInvalid = false; endQualiSession(); } };
   $('pQuit').onclick = toMenu; $('rMenu').onclick = toMenu;
   $('rAgain').onclick = () => { if (game.mp) return toMenu(); if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del(seasonKey()); } withLoading(startWeekend); };
-  $('qNext').onclick = () => { $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
+  $('qNext').onclick = () => { if (game.mp) return; $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
   $('stratGo').onclick = () => withLoading(startRace);
   $('leaveGarage').onclick = leaveGarage;
   applySeries(settings.series);
@@ -2236,7 +2419,7 @@ function initMenu() {
 function toMenu() {
   engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
-  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear(); fireworks.stop();
+  game.mp = null; game.state = 'menu'; game.paused = false; game.phase = 'idle'; game.session = null; audio.set(0, 0, false); clearCars(); smoke.clear(); sparks.clear(); skids.clear(); fireworks.stop(); game.champ = null;
   weather.N = 0; weather.lines.visible = false; world.setWeather(0, 0);
   ['hud', 'pause', 'results', 'qres', 'strategy', 'garageBar'].forEach(id => $(id).classList.add('hidden')); $('menu').classList.remove('hidden');
   document.querySelectorAll('.tcard .st').forEach((el, i) => el.innerHTML = cardStats(i));
