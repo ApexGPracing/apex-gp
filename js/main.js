@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27a';
-import { World } from './world.js?v=fw27a';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27a';
-import { Sound } from './audio.js?v=fw27a';
-import { Particles, Skids, Fireworks } from './fx.js?v=fw27a';
-import { Weather } from './weather.js?v=fw27a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27a';
-import { Net, newCode, loadTurn } from './net.js?v=fw27a';
-import { VIP_CODES } from './codes.js?v=fw27a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27a';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27b';
+import { World } from './world.js?v=fw27b';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27b';
+import { Sound } from './audio.js?v=fw27b';
+import { Particles, Skids, Fireworks } from './fx.js?v=fw27b';
+import { Weather } from './weather.js?v=fw27b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27b';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27b';
+import { Net, newCode, loadTurn } from './net.js?v=fw27b';
+import { VIP_CODES } from './codes.js?v=fw27b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -2510,7 +2510,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=fw27a');
+await loadCarModel('js/car.bin?v=fw27b');
 initMenu();
 requestAnimationFrame(frame);
 
