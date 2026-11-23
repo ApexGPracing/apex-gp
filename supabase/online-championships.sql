@@ -37,7 +37,7 @@ create table if not exists oc_members (
   primary key (champ_id, player_id)
 );
 
--- proposed start times for each round; members vote, the organiser can lock one in
+-- the start time the organiser has set for each round
 create table if not exists oc_slots (
   id bigserial primary key,
   champ_id uuid not null references oc_champs(id) on delete cascade,
@@ -147,13 +147,12 @@ create or replace function oc_propose(p_id text, p_secret text, p_champ uuid, p_
 language plpgsql security definer set search_path = public as $$
 declare sid bigint;
 begin
+  -- only the organiser sets a round's start time; setting it again replaces the old one
   perform oc_auth(p_id, p_secret);
-  if not oc_is_member(p_champ, p_id) then raise exception 'sign up to this championship first'; end if;
+  if (select owner from oc_champs where id = p_champ) is distinct from p_id then raise exception 'only the organiser can set race times'; end if;
   if p_at < now() - interval '10 minutes' or p_at > now() + interval '1 year' then raise exception 'pick a time in the future'; end if;
-  if (select count(*) from oc_slots where champ_id = p_champ and round = p_round) >= 12 then raise exception 'too many times proposed for this round'; end if;
-  insert into oc_slots(champ_id, round, at, proposed_by) values (p_champ, p_round, date_trunc('minute', p_at), p_id)
-    on conflict (champ_id, round, at) do update set at = excluded.at returning id into sid;
-  insert into oc_votes(slot_id, player_id) values (sid, p_id) on conflict do nothing;
+  delete from oc_slots where champ_id = p_champ and round = p_round;
+  insert into oc_slots(champ_id, round, at, proposed_by, locked) values (p_champ, p_round, date_trunc('minute', p_at), p_id, true) returning id into sid;
   return sid;
 end $$;
 

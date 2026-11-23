@@ -1,8 +1,8 @@
 /* Online championships (Supabase): people sign up with a code, vote on a start time for each round,
    race in a normal online room at that time, and the finishing order is saved for the points table.
    The tables and functions are set up once from supabase/online-championships.sql. */
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=fw27c';
-import { store } from './util.js?v=fw27c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=fw27d';
+import { store } from './util.js?v=fw27d';
 
 export const OC_ON = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 const H = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json', ...(SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.startsWith('eyJ') ? { Authorization: 'Bearer ' + SUPABASE_ANON_KEY } : {}) };
@@ -60,12 +60,10 @@ export const oc = {
   },
 };
 
-/* the start time a round is set for: the organiser's locked pick, otherwise the most-voted (earliest on a tie) */
+/* the start time the organiser has set for a round */
 export function agreedSlot(slots, round) {
-  const rs = slots.filter(s => s.round === round); if (!rs.length) return null;
-  const lock = rs.find(s => s.locked); if (lock) return { ...lock, final: true };
-  const best = rs.slice().sort((a, b) => b.votes.length - a.votes.length || new Date(a.at) - new Date(b.at))[0];
-  return { ...best, final: false };
+  const s = slots.filter(x => x.round === round && x.locked).sort((a, b) => new Date(b.at) - new Date(a.at))[0];
+  return s ? { ...s, final: true } : null;
 }
 /* points table from the saved results: 25-18-15-12-10-8-6-4-2-1, nothing for a DNF */
 export function ocStandings(data, points) {

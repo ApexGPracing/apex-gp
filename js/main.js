@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27c';
-import { World } from './world.js?v=fw27c';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27c';
-import { Sound } from './audio.js?v=fw27c';
-import { Particles, Skids, Fireworks } from './fx.js?v=fw27c';
-import { Weather } from './weather.js?v=fw27c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27c';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27c';
-import { Net, newCode, loadTurn } from './net.js?v=fw27c';
-import { VIP_CODES } from './codes.js?v=fw27c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27c';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=fw27c';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27d';
+import { World } from './world.js?v=fw27d';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27d';
+import { Sound } from './audio.js?v=fw27d';
+import { Particles, Skids, Fireworks } from './fx.js?v=fw27d';
+import { Weather } from './weather.js?v=fw27d';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27d';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27d';
+import { Net, newCode, loadTurn } from './net.js?v=fw27d';
+import { VIP_CODES } from './codes.js?v=fw27d';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27d';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=fw27d';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -2343,7 +2343,7 @@ async function ocShow(view, id) {
   const B = $('ocBody');
   if (!OC_ON) { B.innerHTML = '<h2>Online championships</h2><p class="ocSub">Online play is not switched on for this copy of the game.</p>'; return; }
   if (view === 'list') {
-    B.innerHTML = '<h2>Online championships</h2><div class="ocSub">Run a season with your mates: sign up with a code, agree a time for each race, and the points table fills in as you race.</div>' +
+    B.innerHTML = '<h2>Online championships</h2><div class="ocSub">Run a season with your mates: sign up with a code, you set the time for each race, and the points table fills in as you race.</div>' +
       '<div class="ocRow"><button class="btn primary" id="ocNew">Create a championship</button><input class="ocIn ocCode" id="ocJoinCode" maxlength="6" placeholder="CODE"><button class="btn" id="ocJoin">Sign up</button></div><div class="ocMsg"></div><h3>Your championships</h3><div id="ocMine" class="ocSub">Loading…</div>';
     $('ocNew').onclick = () => { if (!ocNeedName()) ocShow('create'); };
     $('ocJoin').onclick = () => ocTry(async () => {
@@ -2402,14 +2402,13 @@ function ocRender() {
   html += '<div class="ocGrid"><div><h3>Calendar</h3>';
   C.rounds.forEach((tid, k) => {
     const t = ocTrack(tid), res = D.results.find(r => r.round === k), ag = agreedSlot(D.slots, k), open = ocUi.open === k;
-    let status = res ? '🏁 ' + esc((res.results[0] || {}).name || '') + ' won' : ag ? (ag.final ? '📅 ' : '🗳 ') + ocWhen(ag.at) + ' · ' + ocIn(new Date(ag.at) - now) : 'No time yet';
+    let status = res ? '🏁 ' + esc((res.results[0] || {}).name || '') + ' won' : ag ? '📅 ' + ocWhen(ag.at) + ' · ' + ocIn(new Date(ag.at) - now) : 'No time set yet';
     html += '<div class="ocRound' + (k === next ? ' next' : '') + '"><div class="t" data-r="' + k + '"><span><b>R' + (k + 1) + '</b>' + esc(t ? t.name : tid) + '</span><small class="ocSub">' + status + '</small></div>';
     if (open && !res) {
-      const rs = D.slots.filter(s => s.round === k);
-      html += rs.map(s => { const mine = s.votes.includes(me); return '<div class="ocSlot"><span class="v">' + (s.locked ? '<span class="lk">🔒 </span>' : '') + ocWhen(s.at) + ' <small class="ocSub">· ' + s.votes.length + ' can make it</small></span>' + (member ? '<button data-vote="' + s.id + '" class="' + (mine ? 'on' : '') + '">' + (mine ? '✓ I can make it' : 'I can make it') + '</button>' : '') + (isOwner ? '<button data-lock="' + s.id + '">' + (s.locked ? 'Unlock' : 'Lock in') + '</button>' : '') + '</div>'; }).join('');
-      if (member) html += '<div class="ocSlot"><input type="datetime-local" class="ocIn" id="ocWhen" style="font-size:14px"><button id="ocProp">Suggest this time</button></div>';
+      html += '<div class="ocSlot"><span class="v">' + (ag ? '<span class="lk">Race time: </span>' + ocWhen(ag.at) : (isOwner ? 'Pick the date and time for this race:' : 'The organiser has not set a time yet.')) + '</span></div>';
+      if (isOwner) html += '<div class="ocSlot"><input type="datetime-local" class="ocIn" id="ocWhen" style="font-size:14px"><button id="ocProp">' + (ag ? 'Change time' : 'Set race time') + '</button></div>';
       if (ag && member && now >= new Date(ag.at) - OC_OPEN_BEFORE && now <= +new Date(ag.at) + OC_OPEN_AFTER) html += '<div class="ocRow"><button class="btn ocGo" id="ocRace">Join the race lobby</button></div>';
-      else if (ag) html += '<div class="ocSub" style="font-size:13px">The race lobby opens 15 minutes before the start time.' + (isOwner ? '' : ' The organiser can lock in a time.') + '</div>';
+      else if (ag) html += '<div class="ocSub" style="font-size:13px">The race lobby opens 15 minutes before the start time.</div>';
     }
     html += '</div>';
   });
@@ -2682,7 +2681,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=fw27c');
+await loadCarModel('js/car.bin?v=fw27d');
 initMenu();
 requestAnimationFrame(frame);
 
