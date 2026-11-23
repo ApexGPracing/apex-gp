@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad } from './tracks.js?v=spa26d';
-import { AXLE_F, AXLE_R } from './car.js?v=spa26d';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=spa26d';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=wall26e';
+import { AXLE_F, AXLE_R } from './car.js?v=wall26e';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=wall26e';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -471,6 +471,16 @@ export class World {
         add(ribbon(T, s0, cnt, [i => [ps * Math.max(ed(i, 0), ed(i, 1) - 0.35), 0.036, 0], i => [ps * Math.max(ed(i, 0), ed(i, 1) - 0.1), 0.036, 1]], 4), lineMat);
       }
       add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (P.wall + 5.1), 0.02, 0], () => [ps * (P.wall + 5.3), 0.02, 1]], 4), lineMat);
+      // wall + debris fence between the pit exit lane and the track (Interlagos), ending where they meet
+      if (P.mergeWall) {
+        const w0 = (P.entry + P.len - 8) % N, wn = Math.round(P.merge / DS) + 4, mw = P.mergeWall;
+        const cMat = new THREE.MeshStandardMaterial({ color: '#d9dce1', roughness: 0.85, side: THREE.DoubleSide });
+        add(ribbon(T, w0, wn, [() => [ps * (mw - 0.3), 0, 0], () => [ps * (mw - 0.3), 1.1, 1]], 6, { up: false }), cMat, { cast: q > 0 });
+        add(ribbon(T, w0, wn, [() => [ps * (mw + 0.3), 0, 0], () => [ps * (mw + 0.3), 1.1, 1]], 6, { up: false }), cMat);
+        add(ribbon(T, w0, wn, [() => [ps * (mw - 0.3), 1.1, 0], () => [ps * (mw + 0.3), 1.1, 1]], 6), cMat);
+        const ft = tx.fence.clone(); ft.needsUpdate = true;
+        add(ribbon(T, w0, wn, [() => [ps * mw, 1.1, 0], () => [ps * mw, 3.6, 1]], 3.05, { up: false }), new THREE.MeshStandardMaterial({ map: ft, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 }), { recv: false });
+      }
       // pit-lane speed limit lines
       for (const k of [P.limIn, P.limOut]) add(ribbon(T, (P.entry + k) % N, 1, [() => [ps * (P.wall - 0.3), 0.021, 0], () => [ps * outer, 0.021, 1]], 2), new THREE.MeshStandardMaterial({ color: '#2563eb', roughness: 0.7 }));
       const conc = new THREE.MeshStandardMaterial({ color: '#c9cdd3', roughness: 0.85, side: THREE.DoubleSide });

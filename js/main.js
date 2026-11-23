@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, speedProfiles } from './tracks.js?v=spa26d';
-import { World } from './world.js?v=spa26d';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=spa26d';
-import { Sound } from './audio.js?v=spa26d';
-import { Particles, Skids } from './fx.js?v=spa26d';
-import { Weather } from './weather.js?v=spa26d';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=spa26d';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=spa26d';
-import { Net, newCode, loadTurn } from './net.js?v=spa26d';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=spa26d';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=wall26e';
+import { World } from './world.js?v=wall26e';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=wall26e';
+import { Sound } from './audio.js?v=wall26e';
+import { Particles, Skids } from './fx.js?v=wall26e';
+import { Weather } from './weather.js?v=wall26e';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=wall26e';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=wall26e';
+import { Net, newCode, loadTurn } from './net.js?v=wall26e';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=wall26e';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -535,6 +535,9 @@ function stepCar(c, inp, dt, Tr) {
     if (pl > P.outer - 1.05) wallHit(c, Tr, ni, s, P.outer - 1.05);
     else if (!gap && c.inPitRoad) wallHit(c, Tr, ni, -s, -(P.wall + 1.65));
   } else if (Math.abs(c.lat) > lim) wallHit(c, Tr, ni, s, lim);
+  // the wall between a pit exit lane and the track (Interlagos): solid from both sides
+  const mw = mergeWallAt(Tr, ni);
+  if (mw && s === P.side) { const p2 = P.side * c.lat; if (p2 < mw) wallHit(c, Tr, ni, s, mw - 1.05); else wallHit(c, Tr, ni, -s, -(mw + 1.05)); }
 }
 /* ---- Player chassis model ----
    Bicycle model with Pacejka-style tyres: separate front/rear slip angles, a friction circle per axle
@@ -2211,7 +2214,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=spa26d');
+await loadCarModel('js/car.bin?v=wall26e');
 initMenu();
 requestAnimationFrame(frame);
 
