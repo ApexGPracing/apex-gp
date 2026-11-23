@@ -214,6 +214,8 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 .swatches{flex-wrap:wrap}.swatches .vipsw{position:relative;box-shadow:0 0 0 2px #d4af37}.swatches .vipsw::after{content:'🔒';position:absolute;right:-6px;top:-8px;font-size:12px}body.isvip .swatches .vipsw::after{content:''}
 #vipCode{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.08em;font-size:15px;font-weight:700;padding:6px 8px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;color:#fff;font-family:inherit}body:not(.isvip) .vipx{display:none}.vipx{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.vipx .btn{flex:1 1 30%;font-size:12px;padding:6px 4px;border-color:#d4af37}body.isvip .vipRow{display:none}
 .viptrk{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300;font-weight:800;padding:0 5px;border-radius:4px;font-size:11px}
+.vipin{flex:1 1 30%;display:flex;align-items:center;gap:6px;font-size:12px;color:#f5d36b}.vipin.wide{flex-basis:100%}.vipin input{flex:1;min-width:0;padding:5px 6px;background:rgba(255,255,255,.08);border:1px solid #d4af37;border-radius:6px;color:#fff;font:inherit;font-weight:700}
+.vipn{color:#f5d36b!important;text-shadow:0 0 6px rgba(212,175,55,.6)}
 #vipMsg{font-size:13px;color:var(--muted);margin-top:6px;min-height:1em}.mpp .tag.vip{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300}
 .keys{font-size:17px;color:var(--muted);line-height:1.6}
 .keys kbd{display:inline-block;min-width:26px;text-align:center;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--text);font-family:inherit;font-weight:700;margin-right:2px}
@@ -320,7 +322,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
     <div class="opt panel" id="optDmg"><h4>Damage</h4><div class="seg" data-opt="damage"><button data-v="off">Off</button><button data-v="reduced">Reduced</button><button data-v="sim">Simulation</button></div></div>
     <div class="opt panel"><h4>Steering</h4><div class="seg" data-opt="steer"><button data-v="smooth">Smooth</button><button data-v="normal">Normal</button><button data-v="sharp">Sharp</button></div></div>
     <div class="opt panel"><h4>Racing Line <span style="text-transform:none;letter-spacing:0">(L in race)</span></h4><div class="seg" data-opt="line"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
-    <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div><div class="mprow vipRow"><input id="vipCode" maxlength="16" placeholder="VIP code"><button class="btn" id="vipBtn">Redeem</button></div><div id="vipMsg"></div><div class="vipx"><button class="btn" id="vipRims"></button><button class="btn" id="vipGlow"></button><button class="btn" id="vipFw"></button></div></div>
+    <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div><div class="mprow vipRow"><input id="vipCode" maxlength="16" placeholder="VIP code"><button class="btn" id="vipBtn">Redeem</button></div><div id="vipMsg"></div><div class="vipx"><button class="btn" id="vipRims"></button><button class="btn" id="vipGlow"></button><button class="btn" id="vipFw"></button><button class="btn" id="vipHelmet"></button><button class="btn" id="vipNight"></button><button class="btn" id="vipDonuts"></button><button class="btn" id="vipGhost"></button><label class="vipin">Car number <input id="vipNum" type="number" min="1" max="99" placeholder="1"></label><label class="vipin wide">Win message <input id="vipMsgIn" maxlength="40" placeholder="e.g. Too easy!"></label></div></div>
     <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd>/<kbd>↑</kbd> Throttle &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> Steer · controllers work too &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>R</kbd> Team radio &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
     <button class="btn primary" id="startBtn">Start Race</button>
   </div>
@@ -350,7 +352,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 
 <div id="loading" class="hidden"><span>LOADING CIRCUIT</span></div>
 
-<div id="verTag">build 2026-11-19 · online 5 · ai 2 · series 1 · cars 2 · grids 2026 · cockpit 3 · hills 1 · tracks 11 · rally 1</div>
+<div id="verTag">build 2026-11-19 · online 5 · ai 2 · series 1 · cars 2 · grids 2026 · cockpit 3 · hills 1 · tracks 13 · rally 2 · vip 3</div>
 <div id="splash">
   <div class="logo">APEX<span>GP</span></div>
   <div class="warn">THIS GAME IS FOR<br>BREAK TIME ONLY</div>
@@ -363,6 +365,6 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=dsq27h"></script>
+<script type="module" src="js/main.js?v=vip27i"></script>
 </body>
 </html>

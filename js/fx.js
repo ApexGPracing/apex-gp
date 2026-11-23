@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { canvasTex } from './util.js?v=dsq27h';
+import { canvasTex } from './util.js?v=vip27i';
 
 const VERT = `
 attribute float size; attribute float alpha; attribute vec3 tint;

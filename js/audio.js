@@ -145,6 +145,18 @@ export class Sound {
     if (g > 0.6) for (let k = 0; k < 6; k++) setTimeout(() => this.burst(0.12, 0.05 + Math.random() * 0.05, 3500 + Math.random() * 2500, 2), 500 + Math.random() * 900);
   }
 
+  /* VIP win horn: a two-tone "beep beep" */
+  horn() {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    for (const [t0, d] of [[0, 0.22], [0.3, 0.45]]) {
+      const g = ctx.createGain(), lp = ctx.createBiquadFilter(), t = ctx.currentTime + t0; lp.type = 'lowpass'; lp.frequency.value = 2400;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.02); g.gain.setValueAtTime(0.32, t + d - 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      for (const f of [440, 554]) { const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f; o.connect(lp); o.start(t); o.stop(t + d + 0.02); }
+      lp.connect(g); g.connect(this.master);
+    }
+  }
+
   /* called every frame */
   update(dt, s) {
     if (!this.ctx) return;

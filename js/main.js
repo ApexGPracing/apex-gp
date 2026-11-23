@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=dsq27h';
-import { World } from './world.js?v=dsq27h';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=dsq27h';
-import { Sound } from './audio.js?v=dsq27h';
-import { Particles, Skids, Fireworks } from './fx.js?v=dsq27h';
-import { Weather } from './weather.js?v=dsq27h';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=dsq27h';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=dsq27h';
-import { Net, newCode, loadTurn } from './net.js?v=dsq27h';
-import { VIP_CODES } from './codes.js?v=dsq27h';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=dsq27h';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=dsq27h';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=vip27i';
+import { World } from './world.js?v=vip27i';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=vip27i';
+import { Sound } from './audio.js?v=vip27i';
+import { Particles, Skids, Fireworks } from './fx.js?v=vip27i';
+import { Weather } from './weather.js?v=vip27i';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=vip27i';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=vip27i';
+import { Net, newCode, loadTurn } from './net.js?v=vip27i';
+import { VIP_CODES } from './codes.js?v=vip27i';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=vip27i';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=vip27i';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -124,6 +124,39 @@ function vipFinish(car, k) {
   m.metalness = v.metal; m.roughness = v.rough; if (v.glow && m.emissive) { m.emissive.set(v.glow); m.emissiveIntensity = 0.35; }
   m.needsUpdate = true;
 }
+/* more VIP perks: own car number, helmet design, night racing, victory donuts, Time Trial ghost, win horn and message */
+const HELMETS = [['White & black', '#f4f4f4', '#111111'], ['Gold', '#d4af37', '#111111'], ['Black & gold', '#111111', '#d4af37'], ['Red', '#e10600', '#ffffff'], ['Blue', '#1e5fd0', '#ffffff'], ['Neon', '#39ff14', '#111111'], ['Pink', '#ff2bd6', '#ffffff'], ['Chrome', '#c9ced6', '#e10600']];
+const myNum = () => isVip() && settings.vipNum ? settings.vipNum : 1;
+const myHelmet = () => isVip() ? (settings.vipHelmet || 0) : -1;
+const myNight = () => isVip() && !!settings.vipNight;
+const vipMsgText = () => String(settings.vipMsg || '').replace(/[<>&]/g, '').slice(0, 40);
+const helmetTex = {};
+function helmetDesign(car, k) {
+  const H = HELMETS[k]; if (!H || !car || !car.helmet) return;
+  if (!helmetTex[k]) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const g = cv.getContext('2d');
+    g.fillStyle = H[1]; g.fillRect(0, 0, 256, 128);
+    g.fillStyle = H[2]; g.fillRect(0, 40, 256, 14); g.fillRect(116, 0, 24, 128);              // band and crown stripe
+    g.fillStyle = H[1] === '#d4af37' || H[2] === '#d4af37' ? '#f7e7a1' : H[2]; for (let x = 0; x < 256; x += 32) { g.beginPath(); g.arc(x + 16, 92, 6, 0, 7); g.fill(); }
+    helmetTex[k] = new THREE.CanvasTexture(cv); helmetTex[k].colorSpace = THREE.SRGBColorSpace;
+  }
+  car.helmet.traverse(o => { if (o.isMesh && o.material && o.material.clearcoat === 1 && o.material.color) { o.material = o.material.clone(); o.material.color.set('#ffffff'); o.material.map = helmetTex[k]; o.material.metalness = k === 7 ? 0.9 : 0.3; o.material.needsUpdate = true; } });
+}
+function nightTheme(th) {
+  if (th.night) return th;
+  return Object.assign({}, th, { night: true, lights: true, nightSky: ['#03050d', '#1b2340'], exposure: Math.max(0.9, th.exposure || 0), bloom: Math.max(0.5, th.bloom || 0), fog: '#0b1020' });
+}
+let vipNames = null;
+async function loadVipNames() {
+  if (vipNames || !LB_ON) return vipNames || new Set();
+  try { const r = await fetch(SUPABASE_URL + '/rest/v1/vip_names?select=name&limit=2000', { headers: lbHeaders }); vipNames = new Set(r.ok ? (await r.json()).map(x => x.name) : []); } catch (e) { vipNames = new Set(); }
+  return vipNames;
+}
+function registerVipName() {
+  const n = lbName(); if (!n || !isVip() || !LB_ON) return;
+  fetch(SUPABASE_URL + '/rest/v1/vip_names', { method: 'POST', headers: { ...lbHeaders, Prefer: 'return=minimal,resolution=ignore-duplicates' }, body: JSON.stringify({ name: n }) }).catch(() => {});
+  if (vipNames) vipNames.add(n);
+}
 const accentFor = k => VIP_LIV[k] && VIP_LIV[k].c2 ? VIP_LIV[k].c2 : LIVERIES[k] === '#111827' ? '#ffcc00' : '#111827';
 async function redeemVip(raw) {
   const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -189,10 +222,12 @@ const saveSettings = () => store.set('apexgp2-settings', JSON.stringify(settings
 
 let builtFor = null;
 function buildTrack(i) {
-  if (builtFor === i) return getTrack(i);
+  const key = i + (myNight() ? ':night' : '');
+  if (builtFor === key) return getTrack(i);
   const T = getTrack(i);
+  T.baseTheme = T.baseTheme || T.theme; T.theme = myNight() ? nightTheme(T.baseTheme) : T.baseTheme;   // VIP: night racing anywhere
   world.build(T, 0, TEAMS.map(t => t.color), TEAMS.map(t => t.name));
-  builtFor = i;
+  builtFor = key;
   smoke.clear(); sparks.clear(); skids.clear();
   return T;
 }
@@ -248,8 +283,8 @@ function makeField(lineup, skill) {
   const lv = myLivery(), colr = LIVERIES[lv], acc = accentFor(lv);
   const pcls = classFor(TEAMS.length, true);
   const myLiv = { p: PATS[(lv * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
-  const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: 1, compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
-  vipFinish(p, lv); vipExtras(p, myExtras()); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
+  const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: myNum(), compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
+  vipFinish(p, lv); vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
     const tm = TEAMS[teamIdxOf(di)], cls = mate ? pcls : classFor(teamIdxOf(di), false);
@@ -681,6 +716,38 @@ function wallHit(c, Tr, ni, d, L) {
   if (vn > 4) { c.hitT = Math.min(1, vn / 25); c.hitSide = d; if (c.isPlayer) c.impact = Math.min(1, vn / 20); damage(c, vn, fdot > 0.55 ? 'front' : fdot < -0.55 ? 'rear' : 'side'); }
 }
 
+/* VIP Time Trial ghost: your best lap is recorded and replayed as a see-through car to race against */
+const ghostKey = () => 'apexgp-ghost-' + serKey(game.T.def.id);
+function ghostLap(lt, valid) {
+  const G = game.ghost || (game.ghost = { rec: [], start: null });
+  if (valid && G.rec.length > 20 && G.start !== null) {
+    let best = null; try { best = JSON.parse(store.get(ghostKey()) || 'null'); } catch (e) { /* none */ }
+    if (!best || lt < best.t) { const data = { t: lt, f: G.rec }; try { store.set(ghostKey(), JSON.stringify(data)); } catch (e) { /* storage full */ } G.data = data; if (isVip() && settings.vipGhost !== false) flashMsg('GHOST SAVED', 1.5, fmt(lt)); }
+  }
+  G.rec = []; G.start = game.raceTime;
+}
+function ghostTick(dt) {
+  const p = game.player, on = p && game.session === 'tt' && isVip() && settings.vipGhost !== false && !game.mp;
+  const G = game.ghost;
+  if (!on) { if (G && G.car) { scene.remove(G.car.group); disposeCar(G.car); G.car = null; } return; }
+  const g = game.ghost || (game.ghost = { rec: [], start: null });
+  if (g.key !== ghostKey()) { g.key = ghostKey(); g.data = null; try { g.data = JSON.parse(store.get(g.key) || 'null'); } catch (e) { g.data = null; } if (g.car) { scene.remove(g.car.group); disposeCar(g.car); g.car = null; } }
+  if (g.start === null) return;
+  const t = game.raceTime - g.start; if (t < 0) { g.start = null; g.rec = []; return; }
+  // record this lap (10 per second)
+  if (!g.rec.length || t - g.rec[g.rec.length - 1][0] >= 0.1) g.rec.push([+t.toFixed(2), +p.x.toFixed(1), +p.z.toFixed(1), +p.h.toFixed(3), +p.group.position.y.toFixed(2)]);
+  if (!g.data || !g.data.f || g.data.f.length < 2) return;
+  if (!g.car) {
+    g.car = makeCar({ color: '#ffffff', accent: '#d4af37', number: myNum(), model: p.spec ? p.spec.model : 'f1' });
+    g.car.group.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.28; o.material.depthWrite = false; } });
+    scene.add(g.car.group);
+  }
+  const F = g.data.f; let k = g.ki || 0; if (k >= F.length || F[k][0] > t) k = 0; while (k < F.length - 2 && F[k + 1][0] <= t) k++; g.ki = k;
+  const a = F[k], b = F[Math.min(F.length - 1, k + 1)], u = b[0] > a[0] ? clamp((t - a[0]) / (b[0] - a[0]), 0, 1) : 0;
+  g.car.group.visible = t <= F[F.length - 1][0];
+  g.car.group.position.set(a[1] + (b[1] - a[1]) * u, a[4] + (b[4] - a[4]) * u, a[2] + (b[2] - a[2]) * u);
+  g.car.group.rotation.set(0, a[3] + angDiff(b[3], a[3]) * u, 0);
+}
 /* driving the wrong way round the track: warnings, then disqualified after 15 seconds of it */
 function wrongWay(c, dt, Tr) {
   if (!isRace() || !racing() || c.dnf || c.finished || c.pit) { c.wrongT = 0; return; }
@@ -1279,11 +1346,12 @@ function checkLaps(c, Tr) {
   if (bucket > c.lastBucket) { c.splits[bucket] = game.raceTime; c.lastBucket = bucket; }
   trackLimits(c);
   if (done <= c.maxDone) return;
-  if (done === 0 && !isRace()) { c.lapStart = game.raceTime; c.lapInvalid = false; if (c.isPlayer && game.session !== 'tt') radio('Flying lap. Push now.', 'info', 2.5); }
+  if (done === 0 && !isRace()) { c.lapStart = game.raceTime; c.lapInvalid = false; if (c.isPlayer && game.session === 'tt') ghostLap(0, false); if (c.isPlayer && game.session !== 'tt') radio('Flying lap. Push now.', 'info', 2.5); }
   if (done >= 1) {
     const lt = game.raceTime - c.lapStart, valid = !(c.isPlayer && c.lapInvalid);
     c.lastLap = lt; c.lapTimes.push(lt);
     if (valid && lt < c.bestLap) c.bestLap = lt;
+    if (c.isPlayer && game.session === 'tt') ghostLap(lt, valid);
     c.lapStart = game.raceTime;
     if (isRace() && valid && lt < game.fastest && done >= 1) { game.fastest = lt; if (c.isPlayer && done > 1) radio('Purple! Fastest lap of the race: ' + fmt(lt) + '.', 'good', 4); }
     const notTimed = c.isPlayer && !isRace() && (c.pit || c.outLap);
@@ -1291,7 +1359,7 @@ function checkLaps(c, Tr) {
     else if (c.isPlayer) {
       if (valid && game.session === 'tt' && LB_ON && lt <= c.bestLap) {
         if (!lbName()) radio('Set your driver name in the Time Trial menu to go on the global leaderboard.', 'info', 6);
-        else lbSubmit(serKey(Tr.def.id), lt).then(pos => { if (pos) radio('Lap ' + fmt(lt) + ' is P' + pos + ' on the global leaderboard!', pos <= 3 ? 'good' : 'info', 6); });
+        else { registerVipName(); } if (lbName()) lbSubmit(serKey(Tr.def.id), lt).then(pos => { if (pos) radio('Lap ' + fmt(lt) + ' is P' + pos + ' on the global leaderboard!', pos <= 3 ? 'good' : 'info', 6); });
       }
       if (valid && (!game.record || lt < game.record) && (game.session === 'tt' || !isRace())) { game.record = lt; store.set(bestKey(Tr), String(lt)); flashMsg('NEW RECORD', 2.5, fmt(lt)); }
       else if (!valid) flashMsg('LAP INVALID', 2, fmt(lt) + ' · track limits');
@@ -1560,12 +1628,12 @@ async function refreshLeaderboard() {
   const box = $('lbBox'); if (!box) return;
   const show = settings.mode === 'tt'; box.classList.toggle('hidden', !show); if (!show) return;
   if (!LB_ON) { $('lbList').innerHTML = '<small>The global leaderboard is not switched on yet.</small>'; return; }
-  const id = serKey(TRACKS[settings.track].id), req = ++lbReq; $('lbTitle').textContent = 'Global leaderboard · ' + SER.short + ' · ' + TRACKS[settings.track].name;
+  const id = serKey(TRACKS[settings.track].id), req = ++lbReq; $('lbTitle').textContent = (TRACKS[settings.track].vip ? '★ VIP leaderboard · ' : 'Global leaderboard · ') + SER.short + ' · ' + TRACKS[settings.track].name;
   $('lbList').innerHTML = '<small>Loading…</small>';
   const rows = await lbFetch(id); if (req !== lbReq) return;
   if (!rows) { $('lbList').innerHTML = '<small>Could not reach the leaderboard.</small>'; return; }
-  const me = lbName();
-  $('lbList').innerHTML = rows.length ? '<table class="lb">' + rows.map((r, k) => '<tr' + (r.name === me ? ' class="me"' : '') + '><td>' + (k + 1) + '</td><td>' + r.name.replace(/[<>&]/g, '') + '</td><td>' + fmt(r.time_ms / 1000) + '</td></tr>').join('') + '</table>' : '<small>No times yet. Set the first one!</small>';
+  const me = lbName(), vn = await loadVipNames(); if (req !== lbReq) return;
+  $('lbList').innerHTML = rows.length ? '<table class="lb">' + rows.map((r, k) => '<tr' + (r.name === me ? ' class="me"' : '') + '><td>' + (k + 1) + '</td><td' + (vn.has(r.name) || (r.name === me && isVip()) ? ' class="vipn"' : '') + '>' + r.name.replace(/[<>&]/g, '') + '</td><td>' + fmt(r.time_ms / 1000) + '</td></tr>').join('') + '</table>' : '<small>No times yet. Set the first one!</small>';
 }
 
 /* ---------------- Online multiplayer ---------------- */
@@ -1589,7 +1657,7 @@ async function mpRandomLobby() {
       const m = await net.matchmake(mpName(), n => mpStatus(n > 1 ? 'Opponent found, setting up the race…' : 'Searching for an opponent… (you are first in the queue)'));
       if (!m) { mpStatus('Search cancelled.'); break; }
       mpRandom = true;
-      await net.join(m.code, mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), track: settings.track, laps: settings.laps, rand: 1 });
+      await net.join(m.code, mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), num: isVip() ? myNum() : 0, hel: myHelmet(), track: settings.track, laps: settings.laps, rand: 1 });
       const t0 = performance.now();
       while (net.room.length < 2 && performance.now() - t0 < 8000) await new Promise(r => setTimeout(r, 250));
       if (net.room.length >= 2 && net.room.findIndex(p => p.id === net.id) < 2) { mpLastInfo = ''; renderRoom(); break; }
@@ -1618,7 +1686,7 @@ function renderRoom() {
   if (!inRoom) return;
   $('mpCodeShow').textContent = mpRandom ? 'RANDOM 1v1' : net.code;
   const links = net.linkInfo(), host = net.room[0];
-  $('mpPlayers').innerHTML = net.room.map((p, k) => '<div class="mpp"><i style="background:' + LIVERIES[p.livery || 0] + '"></i>' + String(p.name || 'Driver').replace(/[<>&]/g, '') + (p.vip ? ' <span class="tag vip">VIP</span>' : '') +
+  $('mpPlayers').innerHTML = net.room.map((p, k) => '<div class="mpp"><i style="background:' + LIVERIES[p.livery || 0] + '"></i>' + (p.vip ? '<span class="vipn">' : '') + String(p.name || 'Driver').replace(/[<>&]/g, '') + (p.vip ? '</span> <span class="tag vip">VIP</span>' : '') +
     (k === 0 ? ' <span class="tag">HOST</span>' : '') + (p.id === net.id ? ' <span class="tag you">YOU</span>' : ' <span class="tag ' + (links[p.id] ? 'ok' : '') + '">' + (links[p.id] ? 'DIRECT' : 'RELAY') + '</span>') + '</div>').join('');
   $('mpHostInfo').textContent = host && host.id !== net.id && host.track !== undefined ? 'Host has picked ' + (SERIES[host.series] || SER).name + ' · ' + TRACKS[host.track].name + ' · ' + host.laps + ' laps' + (host.quali ? ' · with qualifying' : '') : (net.isHost ? 'You are the host: pick the track, laps and qualifying, then press Start.' : '');
   refreshStartBtn(); mpRandomCheck();
@@ -1635,8 +1703,8 @@ function refreshStartBtn() {
 }
 function mpShareInfo() {
   if (!net.code) return;
-  const info = JSON.stringify([SER.id, settings.track, settings.laps, myLivery(), mpName(), myExtras(), settings.quali]);
-  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), name: mpName() }); }
+  const info = JSON.stringify([SER.id, settings.track, settings.laps, myLivery(), mpName(), myExtras(), settings.quali, myNum(), myHelmet()]);
+  if (info !== mpLastInfo) { mpLastInfo = info; net.setInfo({ series: SER.id, track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), num: isVip() ? myNum() : 0, hel: myHelmet(), name: mpName() }); }
 }
 async function mpEnter(code, fixed = false) {
   await loadTurn(METERED_APP, METERED_KEY);
@@ -1644,7 +1712,7 @@ async function mpEnter(code, fixed = false) {
   $('mpName').classList.remove('need');
   mpStatus(fixed ? 'Joining the championship race lobby…' : code ? 'Joining room ' + code + '…' : 'Creating room…');
   try {
-    await net.join(code || newCode(), mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, series: SER.id, ocPid: ocMe().id });
+    await net.join(code || newCode(), mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), num: isVip() ? myNum() : 0, hel: myHelmet(), track: settings.track, laps: settings.laps, quali: settings.quali === 'on' ? 1 : 0, series: SER.id, ocPid: ocMe().id });
     if (code && !fixed) {
       // joining: make sure somebody is actually in that room (a mistyped code would otherwise make a new, empty room)
       const t0 = performance.now();
@@ -1660,7 +1728,13 @@ net.on('peerLeft', id => { const c = carByNet(id); if (c && game.mp && !c.netGon
 net.on('msg', m => {
   if (m.t === 'start' && m.cfg) startMp(m.cfg); else if (m.t === 'qlap') mpQualiLap(m);
   else if (m.t === 'dsq' && game.mp) { const c = carByNet(m.from); if (c && !c.dsq) { c.dsq = m.why || 'driving the wrong way'; c.dnf = true; c.retire = { why: 'dsq', side: c.lat >= 0 ? 1 : -1, dmg: { ...c.dmg } }; radio(c.name + ' has been disqualified for ' + c.dsq + '.', 'warn', 5); } }
-  else if (m.t === 'fw' && game.mp) { const c = carByNet(m.from); if (c && !(fireworks.t > 0 && game.fwCar === c)) { game.fwCar = c; fireworks.start(c.x, c.group.position.y, c.z, c.h, m.pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } }); radio(c.name + (m.pos === 1 ? ' wins! VIP fireworks!' : ' is on the podium. VIP fireworks!'), 'good', 4); } }
+  else if (m.t === 'fw' && game.mp) {
+    const c = carByNet(m.from); if (!c || c.fwSeen === game.mp.race) return; c.fwSeen = game.mp.race;
+    const msg = String(m.msg || '').replace(/[<>&]/g, '').slice(0, 40);
+    try { sound.horn(); } catch (e) { /* no sound */ }
+    if (m.fw !== false) { game.fwCar = c; fireworks.start(c.x, c.group.position.y, c.z, c.h, m.pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } }); }
+    radio(c.name + (m.pos === 1 ? ' wins!' : ' is on the podium!') + (msg ? ' "' + msg + '"' : (m.fw !== false ? ' VIP fireworks!' : '')), 'good', 6);
+  }
 });
 
 /* ---------------- Online qualifying: everyone does an out lap + two flying laps on their own track,
@@ -1733,7 +1807,7 @@ net.on('data', (id, d) => {
 function mpHostStart() {
   if (!net.isHost) return;
   if (game.ocPending && Date.now() < game.ocPending.at) return;   // championship races start on time, not early
-  const players = (mpRandom ? net.room.slice(0, 2) : net.room).map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0, vx: p.vx || null, ocPid: p.ocPid || null }));
+  const players = (mpRandom ? net.room.slice(0, 2) : net.room).map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0, vx: p.vx || null, vip: !!p.vip, num: p.num || 0, hel: p.hel ?? -1, ocPid: p.ocPid || null }));
   const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
   const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now(), quali: settings.quali === 'on', oc: game.ocPending ? { id: game.ocPending.id, round: game.ocPending.round } : null };
   net.broadcast('start', { cfg }); startMp(cfg);
@@ -1753,10 +1827,10 @@ function startMp(cfg) {
     cfg.players.forEach((pl, k) => {
       const lv = LIVERIES[pl.livery] ? pl.livery : 0, colr = LIVERIES[lv], acc = accentFor(lv), mine = pl.id === net.id;
       const mcls = SER.multiClass ? 'hyper' : SER.cls;
-      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: k + 1, compound: 'medium', model: CLASSES[mcls].model, livery: { p: PATS[(pl.livery * 5) % PATS.length], c2: acc, c3: '#ffffff' } }), { cls: mcls, spec: CLASSES[mcls] },
+      const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: pl.num || k + 1, compound: 'medium', model: CLASSES[mcls].model, livery: { p: PATS[(pl.livery * 5) % PATS.length], c2: acc, c3: '#ffffff' } }), { cls: mcls, spec: CLASSES[mcls] },
         { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
           teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined, ocPid: pl.ocPid || null });
-      vipFinish(c, lv); vipExtras(c, mine ? myExtras() : pl.vx);
+      vipFinish(c, lv); vipExtras(c, mine ? myExtras() : pl.vx); helmetDesign(c, mine ? myHelmet() : (pl.hel ?? -1)); c.vip = mine ? isVip() : !!pl.vip;
       game.cars.push(c); if (mine) { game.player = c; addLiveMirrors(c, mirrorRT.texture); c.hasMirrors = true; }
     });
     game.mate = null;
@@ -2052,14 +2126,21 @@ function updateCarVisuals(dt) {
     if (game.phase !== 'lights' && game.phase !== 'garage') carEffects(c, dt);
   }
   smoke.update(dt); sparks.update(dt);
+  ghostTick(dt);
   // VIP: fireworks over the track on the podium, the big 12 s show for a win
   if (game.player && game.player.finished && isRace() && !game.fwDone) {
     game.fwDone = true;
     const pos = positionOf(game.player);
+    if (isVip() && pos <= 3) {
+      const fw = settings.vipFw !== false, msg = vipMsgText();
+      try { sound.horn(); } catch (e) { /* no sound */ }
+      if (msg) radio('You: "' + msg + '"', 'good', 5);
+      if (pos === 1 && settings.vipDonuts !== false && !game.champ) { game.champ = { t: 0, vip: true }; if (!game.mp) game.resultsAt = Math.max(game.resultsAt, game.raceTime + 22); }
+      if (game.mp) { net.broadcast('fw', { pos, fw, msg }); setTimeout(() => net.broadcast('fw', { pos, fw, msg }), 1500); }   // everyone in the race sees and hears it
+    }
     if (isVip() && settings.vipFw !== false && pos <= 3) {
       const p = game.player;
       game.fwCar = p; fireworks.start(p.x, p.group.position.y, p.z, p.h, pos === 1 ? 12 : 8, g => { try { sound.boom(g); } catch (e) { /* no sound */ } });
-      if (game.mp) { net.broadcast('fw', { pos }); setTimeout(() => net.broadcast('fw', { pos }), 1500); }   // everyone in the race sees the show
       if (!game.mp) game.resultsAt = Math.max(game.resultsAt, game.raceTime + (pos === 1 ? 9 : 6)); // let the show play before the results card
     }
   }
@@ -2286,7 +2367,7 @@ function raceBoard() {
     else if (c.finished && L.finished) gap = '+' + (c.finishTime - L.finishTime).toFixed(1);
     else if (L.prog - c.prog >= Tr.N) gap = '+' + Math.floor((L.prog - c.prog) / Tr.N) + ' LAP';
     else { const b = c.lastBucket, tl = L.splits[b], tc = c.splits[b]; gap = (tl !== undefined && tc !== undefined) ? '+' + Math.max(0, tc - tl).toFixed(1) : '—'; }
-    html += '<div class="r' + (c.isPlayer ? ' me' : '') + (c.mate ? ' mate' : '') + (c.dnf ? ' out' : '') + '"><span class="p">' + (k + 1) + '</span><span class="c" style="background:' + c.color + '"></span><span class="n">' + c.code + (SER.multiClass && c.spec ? '<i class="cls ' + c.cls + '">' + (c.cls === 'gt3' ? 'GT3' : 'HY') + '</i>' : '') + '<i class="ty" style="--tc:' + COMP[c.tyre.comp].color + '">' + COMP[c.tyre.comp].s + '</i>' + (c.drsOpen ? '<i class="d">DRS</i>' : '') + (c.penalty ? '<i class="pen">+' + c.penalty + '</i>' : '') + '</span><span class="g">' + gap + '</span></div>';
+    html += '<div class="r' + (c.isPlayer ? ' me' : '') + (c.mate ? ' mate' : '') + (c.dnf ? ' out' : '') + '"><span class="p">' + (k + 1) + '</span><span class="c" style="background:' + c.color + '"></span><span class="n' + (c.vip ? ' vipn' : '') + '">' + c.code + (SER.multiClass && c.spec ? '<i class="cls ' + c.cls + '">' + (c.cls === 'gt3' ? 'GT3' : 'HY') + '</i>' : '') + '<i class="ty" style="--tc:' + COMP[c.tyre.comp].color + '">' + COMP[c.tyre.comp].s + '</i>' + (c.drsOpen ? '<i class="d">DRS</i>' : '') + (c.penalty ? '<i class="pen">+' + c.penalty + '</i>' : '') + '</span><span class="g">' + gap + '</span></div>';
   });
   $('board').innerHTML = html;
 }
@@ -2300,7 +2381,7 @@ function qualiBoard() {
   let html = '';
   ent.forEach((c, k) => {
     const t = times[c.code], tStr = t && isFinite(t) ? (k === 0 ? fmt(t) : '+' + (t - best).toFixed(3)) : 'NO TIME';
-    html += (k === cut ? '<div class="cut">KNOCK-OUT ZONE</div>' : '') + '<div class="r' + (c.isPlayer ? ' me' : '') + (k >= cut ? ' ko' : '') + '"><span class="p">' + (k + 1) + '</span><span class="c" style="background:' + c.color + '"></span><span class="n">' + c.code + '</span><span class="g">' + tStr + '</span></div>';
+    html += (k === cut ? '<div class="cut">KNOCK-OUT ZONE</div>' : '') + '<div class="r' + (c.isPlayer ? ' me' : '') + (k >= cut ? ' ko' : '') + '"><span class="p">' + (k + 1) + '</span><span class="c" style="background:' + c.color + '"></span><span class="n' + (c.vip ? ' vipn' : '') + '">' + c.code + '</span><span class="g">' + tStr + '</span></div>';
   });
   $('board').innerHTML = html;
 }
@@ -2586,7 +2667,19 @@ function initMenu() {
     $('vipRims').textContent = 'Gold rims: ' + (settings.vipRims ? 'On' : 'Off');
     $('vipGlow').textContent = 'Underglow: ' + GLOW_NAMES[settings.vipGlow || 0];
     $('vipFw').textContent = 'Fireworks: ' + (settings.vipFw === false ? 'Off' : 'On');
+    $('vipHelmet').textContent = 'Helmet: ' + HELMETS[settings.vipHelmet || 0][0];
+    $('vipNight').textContent = 'Night racing: ' + (settings.vipNight ? 'On' : 'Off');
+    $('vipDonuts').textContent = 'Win donuts: ' + (settings.vipDonuts === false ? 'Off' : 'On');
+    $('vipGhost').textContent = 'Time Trial ghost: ' + (settings.vipGhost === false ? 'Off' : 'On');
+    if (document.activeElement !== $('vipNum')) $('vipNum').value = settings.vipNum || '';
+    if (document.activeElement !== $('vipMsgIn')) $('vipMsgIn').value = settings.vipMsg || '';
   };
+  $('vipHelmet').onclick = () => { settings.vipHelmet = ((settings.vipHelmet || 0) + 1) % HELMETS.length; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipNight').onclick = () => { settings.vipNight = !settings.vipNight; saveSettings(); vipUi(); withLoading(() => buildTrack(settings.track)); };
+  $('vipDonuts').onclick = () => { settings.vipDonuts = settings.vipDonuts === false; saveSettings(); vipUi(); };
+  $('vipGhost').onclick = () => { settings.vipGhost = settings.vipGhost === false; saveSettings(); vipUi(); };
+  $('vipNum').onchange = () => { const v = Math.round(+$('vipNum').value); settings.vipNum = v >= 1 && v <= 99 ? v : null; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
   $('vipRims').onclick = () => { settings.vipRims = !settings.vipRims; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipFw').onclick = () => { settings.vipFw = settings.vipFw === false; saveSettings(); vipUi(); };
@@ -2721,7 +2814,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=dsq27h');
+await loadCarModel('js/car.bin?v=vip27i');
 initMenu();
 requestAnimationFrame(frame);
 
