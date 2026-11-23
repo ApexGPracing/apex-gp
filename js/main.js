@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27d';
-import { World } from './world.js?v=fw27d';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27d';
-import { Sound } from './audio.js?v=fw27d';
-import { Particles, Skids, Fireworks } from './fx.js?v=fw27d';
-import { Weather } from './weather.js?v=fw27d';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27d';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27d';
-import { Net, newCode, loadTurn } from './net.js?v=fw27d';
-import { VIP_CODES } from './codes.js?v=fw27d';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27d';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=fw27d';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=fw27e';
+import { World } from './world.js?v=fw27e';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=fw27e';
+import { Sound } from './audio.js?v=fw27e';
+import { Particles, Skids, Fireworks } from './fx.js?v=fw27e';
+import { Weather } from './weather.js?v=fw27e';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=fw27e';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=fw27e';
+import { Net, newCode, loadTurn } from './net.js?v=fw27e';
+import { VIP_CODES } from './codes.js?v=fw27e';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=fw27e';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=fw27e';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1609,6 +1609,10 @@ function refreshStartBtn() {
   const b = $('startBtn');
   b.textContent = !net.available ? 'Online needs the Supabase setup' : !net.code ? 'Create or join a room' : net.isHost ? (net.room.length > 1 ? 'Start online race (' + net.room.length + ' players)' : 'Start (waiting for players…)') : 'Waiting for the host to start';
   b.disabled = !(net.code && net.isHost);
+  // championship race: nobody can start it before the organiser's time; it starts by itself then
+  const P = game.ocPending;
+  if (P && net.code && !game.mp && Date.now() < P.at) { b.textContent = 'Race starts ' + ocIn(P.at - Date.now()) + ' (' + new Date(P.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')'; b.disabled = true; }
+  else if (P && net.code && net.isHost && net.room.length < 2) b.textContent = 'Starts when a second driver joins';
 }
 function mpShareInfo() {
   if (!net.code) return;
@@ -1628,7 +1632,7 @@ async function mpEnter(code, fixed = false) {
       while (net.room.length < 2 && performance.now() - t0 < 6000) await new Promise(r => setTimeout(r, 250));
       if (net.room.length < 2) { await net.leave(); renderRoom(); mpStatus('No room with code ' + code + ' was found. Check the code, and that the host still has the room open.'); return; }
     }
-    mpLastInfo = ''; mpStatus(fixed ? 'Championship race: ' + game.ocPending.name + ', round ' + (game.ocPending.round + 1) + '. Starts ' + ocWhen(game.ocPending.at) + ' (the host can also start it early).' : code ? '' : 'Room ready. Send the code to your friends.'); renderRoom();
+    mpLastInfo = ''; mpStatus(fixed ? 'Championship race: ' + game.ocPending.name + ', round ' + (game.ocPending.round + 1) + '. Starts ' + ocWhen(game.ocPending.at) + ' on its own. No early starts.' : code ? '' : 'Room ready. Send the code to your friends.'); renderRoom();
   } catch (e) { await net.leave(); renderRoom(); mpStatus('Could not connect to the online service (' + (e && e.message || 'error') + '). Check your internet and try again.'); }
 }
 net.on('room', () => renderRoom());
@@ -1705,6 +1709,7 @@ net.on('data', (id, d) => {
 });
 function mpHostStart() {
   if (!net.isHost) return;
+  if (game.ocPending && Date.now() < game.ocPending.at) return;   // championship races start on time, not early
   const players = (mpRandom ? net.room.slice(0, 2) : net.room).map(p => ({ id: p.id, name: String(p.name || 'Driver').slice(0, 16), livery: p.livery || 0, vx: p.vx || null, ocPid: p.ocPid || null }));
   const grid = players.map(p => p.id).sort(() => Math.random() - 0.5);
   const cfg = { series: SER.id, track: settings.track, laps: settings.laps, players, grid, goAt: 5.6 + Math.random() * 1.4, race: Date.now(), quali: settings.quali === 'on', oc: game.ocPending ? { id: game.ocPending.id, round: game.ocPending.round } : null };
@@ -2442,7 +2447,9 @@ function ocEnterRace(D, round) {
 }
 /* host: start the championship race on time once at least two drivers are in */
 function ocAutoStart() {
-  const P = game.ocPending; if (!P || !net.code || game.mp || !net.isHost || net.room.length < 2) return;
+  const P = game.ocPending; if (!P || !net.code || game.mp) return;
+  refreshStartBtn();   // keeps the countdown on the button ticking
+  if (!net.isHost || net.room.length < 2) return;
   if (Date.now() >= P.at) mpHostStart();
 }
 /* after the race: save the finishing order to the championship (the host straight away, others as a backup) */
@@ -2681,7 +2688,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=fw27d');
+await loadCarModel('js/car.bin?v=fw27e');
 initMenu();
 requestAnimationFrame(frame);
 
