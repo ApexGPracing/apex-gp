@@ -210,6 +210,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 .swatches button.on{border-color:#fff}
 .swatches{flex-wrap:wrap}.swatches .vipsw{position:relative;box-shadow:0 0 0 2px #d4af37}.swatches .vipsw::after{content:'🔒';position:absolute;right:-6px;top:-8px;font-size:12px}body.isvip .swatches .vipsw::after{content:''}
 #vipCode{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.08em;font-size:15px;font-weight:700;padding:6px 8px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:8px;color:#fff;font-family:inherit}body:not(.isvip) .vipx{display:none}.vipx{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.vipx .btn{flex:1 1 30%;font-size:12px;padding:6px 4px;border-color:#d4af37}body.isvip .vipRow{display:none}
+.viptrk{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300;font-weight:800;padding:0 5px;border-radius:4px;font-size:11px}
 #vipMsg{font-size:13px;color:var(--muted);margin-top:6px;min-height:1em}.mpp .tag.vip{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300}
 .keys{font-size:17px;color:var(--muted);line-height:1.6}
 .keys kbd{display:inline-block;min-width:26px;text-align:center;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--text);font-family:inherit;font-weight:700;margin-right:2px}
@@ -282,7 +283,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 <div id="menu">
   <div class="left">
     <div><div class="logo">APEX<span>GP</span></div><div class="tag" id="menuSub">Formula 1 · 24-round championship</div></div>
-    <div class="opt panel"><h4>Series</h4><div class="seg" data-opt="series"><button data-v="f1">F1</button><button data-v="f2">F2</button><button data-v="indy">IndyCar</button><button data-v="gt3">GT3</button><button data-v="lemans">Le Mans</button></div></div>
+    <div class="opt panel"><h4>Series</h4><div class="seg" data-opt="series"><button data-v="f1">F1</button><button data-v="f2">F2</button><button data-v="indy">IndyCar</button><button data-v="gt3">GT3</button><button data-v="lemans">Le Mans</button><button data-v="rally">Rally</button></div></div>
     <div class="opt panel hidden" id="optLmClass"><h4>Your Le Mans car</h4><div class="seg" data-opt="lmClass"><button data-v="hyper">Hypercar</button><button data-v="gt3">GT3</button></div></div>
     <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button><button data-v="mp">Online</button></div></div>
     <div class="opt panel hidden" id="mpBox"><h4>Online race</h4>
@@ -329,7 +330,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 
 <div id="loading" class="hidden"><span>LOADING CIRCUIT</span></div>
 
-<div id="verTag">build 2026-11-19 · online 5 · ai 2 · series 1 · cars 2 · grids 2026 · cockpit 3 · hills 1 · tracks 10</div>
+<div id="verTag">build 2026-11-19 · online 5 · ai 2 · series 1 · cars 2 · grids 2026 · cockpit 3 · hills 1 · tracks 11 · rally 1</div>
 <div id="splash">
   <div class="logo">APEX<span>GP</span></div>
   <div class="warn">THIS GAME IS FOR<br>BREAK TIME ONLY</div>
@@ -342,6 +343,6 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=vip26h"></script>
+<script type="module" src="js/main.js?v=ring26i"></script>
 </body>
 </html>

@@ -9,6 +9,8 @@ export const CLASSES = {
   f2: { label: 'F2', model: 'f1', drag: 1, vmax: 0.9, power: 0.84, grip: 0.9, brake: 0.92, drs: true, eng: { lo: 5200, hi: 10500, cyl: 6, roar: 1.25, scream: 0.55 } },
   indy: { label: 'INDY', model: 'indy', drag: 0.55, vmax: 1.12, power: 0.95, grip: 0.88, brake: 0.85, drs: false, eng: { lo: 6500, hi: 12000, cyl: 6, roar: 1.1, scream: 0.8 } },
   gt3: { label: 'GT3', model: 'gt3', drag: 0.85, vmax: 0.8, power: 0.6, grip: 0.74, brake: 0.74, drs: false, eng: { lo: 3500, hi: 8800, cyl: 8, roar: 1.6, scream: 0.35 } },
+  // Rally1: ~380 hp turbo four, light and short, big mechanical grip from 4WD but little downforce
+  rally: { label: 'RALLY1', model: 'rally', drag: 0.95, vmax: 0.62, power: 0.5, grip: 0.68, brake: 0.7, drs: false, eng: { lo: 3200, hi: 8500, cyl: 4, roar: 1.7, scream: 0.3 } },
   hyper: { label: 'HYPERCAR', model: 'hyper', drag: 0.72, vmax: 0.95, power: 0.8, grip: 0.86, brake: 0.86, drs: false, eng: { lo: 4800, hi: 10000, cyl: 6, roar: 1.3, scream: 0.6 } },
 };
 
@@ -93,5 +95,18 @@ export const SERIES = {
       D('Maxime Martin', 'MAR', [0.9, 0.75, 0.8, 0.9, 0.95], 61, 11), D('Matteo Cressoni', 'CRE', [0.86, 0.7, 0.75, 0.86, 1], 79, 11),
       D('Nicky Catsburg', 'CAT', [0.91, 0.8, 0.8, 0.88, 0.95], 33, 12)],
   },
+  rally: {
+    id: 'rally', name: 'Rally', short: 'RALLY', cls: 'rally', laps: 4,
+    // WRC Rally1 cars racing on circuits, Race of Champions style: the real rallies' gravel, snow and tarmac
+    // stages are not in the game yet
+    calendar: ['estoril', 'portimao', 'mugello', 'kyalami', 'nurburgring', 'buenosaires', 'watkinsglen', 'magnycours'],
+    missing: ['Rallye Monte-Carlo', 'Rally Sweden', 'Safari Rally Kenya', 'Croatia Rally', 'Rally Islas Canarias', 'Rally de Portugal', 'Rally Japan', 'Acropolis Rally', 'Rally Estonia', 'Rally Finland', 'Rally del Paraguay', 'Rally Chile', 'Rally Italia Sardegna', 'Rally Saudi Arabia'],
+    teams: [T('Toyota Gazoo Racing WRT', '#f2f2f2', '#e60012'), T('Hyundai Shell Mobis WRT', '#0b1a3a', '#00a3e0'), T('M-Sport Ford WRT', '#ffffff', '#1f4fd1')],
+    drivers: [D('Elfyn Evans', 'EVA', [0.93, 0.75, 0.85, 0.92, 0.95], 33, 0), D('Sébastien Ogier', 'OGI', [0.96, 0.8, 0.85, 0.93, 0.9], 17, 0),
+      D('Oliver Solberg', 'SOL', [0.91, 0.85, 0.75, 0.86, 1], 99, 0), D('Takamoto Katsuta', 'KAT', [0.89, 0.8, 0.7, 0.85, 1], 18, 0), D('Sami Pajari', 'PAJ', [0.87, 0.75, 0.75, 0.85, 1], 5, 0),
+      D('Thierry Neuville', 'NEU', [0.94, 0.85, 0.75, 0.9, 0.95], 11, 1), D('Adrien Fourmaux', 'FOU', [0.9, 0.8, 0.75, 0.87, 1], 16, 1),
+      D('Esapekka Lappi', 'LAP', [0.89, 0.75, 0.8, 0.88, 1], 4, 1), D('Dani Sordo', 'SOR', [0.88, 0.7, 0.85, 0.9, 0.95], 6, 1),
+      D('Josh McErlean', 'MCE', [0.86, 0.8, 0.7, 0.83, 1], 55, 2), D('Jon Armstrong', 'ARM', [0.85, 0.8, 0.7, 0.82, 1], 22, 2), D('Grégoire Munster', 'MUN', [0.85, 0.75, 0.7, 0.83, 1], 13, 2)],
+  },
 };
-export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans'];
+export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans', 'rally'];

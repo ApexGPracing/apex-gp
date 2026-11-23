@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=vip26h';
-import { AXLE_F, AXLE_R } from './car.js?v=vip26h';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=vip26h';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=ring26i';
+import { AXLE_F, AXLE_R } from './car.js?v=ring26i';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=ring26i';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -776,6 +776,23 @@ export class World {
       const place = (d, p, k) => { d.scale.set(sc[k], sc[k] * (0.9 + r() * 0.3), sc[k]); d.rotation.y = r() * 6.28; };
       inst(new THREE.CylinderGeometry(0.3, 0.45, 4, 6).translate(0, 2, 0), bark, pts, place);
       inst(crown, leaf, pts, place, { colors: th.snowLine === 1 ? ['#2b5a40', '#e9f0f4', '#3a6a4a'] : th.foliage });
+    }
+    // def.woods (Nordschleife): thick forest right behind the barriers along the whole lap
+    if (T.def.woods) {
+      const pinesW = [], leafyW = [], step = Math.max(2, Math.round(9 / mult / DS));
+      for (let i = 0; i < N; i += step) for (const sd of [1, -1]) for (let rep = 0; rep < 2; rep++) {
+        const l = sd * (sideLim(T, sd)(i) + 5 + r() * (rep ? 45 : 18)), j = (i + Math.floor(r() * step)) % N;
+        const x = T.px[j] + T.nx[j] * l + (r() - 0.5) * 6, z = T.pz[j] + T.nz[j] * l + (r() - 0.5) * 6;
+        if (exactNear(x, z, W + KERB + 9)) continue;
+        (r() < 0.6 ? pinesW : leafyW).push([x, height(x, z), z]);
+      }
+      const cone = mergeGeometries([new THREE.ConeGeometry(3.2, 7, 7).translate(0, 6, 0), new THREE.ConeGeometry(2.6, 6, 7).translate(0, 9.5, 0), new THREE.ConeGeometry(1.8, 5, 7).translate(0, 13, 0)]);
+      const ball = mergeGeometries([new THREE.IcosahedronGeometry(3.4, 0).translate(0, 8.5, 0), new THREE.IcosahedronGeometry(2.6, 0).translate(1.5, 7.2, 0.6), new THREE.IcosahedronGeometry(2.4, 0).translate(-1.4, 7.6, -0.8)]);
+      for (const [list, crown, trunkH, cols] of [[pinesW, cone, 4, ['#1f4a32', '#2b5a3c', '#24503a']], [leafyW, ball, 6, th.foliage]]) {
+        const sc = list.map(() => 0.8 + r() * 0.8), ry = list.map(() => r() * 6.28), place = (d, p, k) => { d.scale.set(sc[k], sc[k] * (0.9 + r() * 0.35), sc[k]); d.rotation.y = ry[k]; };
+        inst(new THREE.CylinderGeometry(0.3, 0.45, trunkH, 5).translate(0, trunkH / 2, 0), bark, list, place, { cast: false });
+        inst(crown, leaf, list, place, { colors: cols });
+      }
     }
     if (sc2.palms) {
       const pts = scatter(Math.round(sc2.palms * mult), minTree - 2, 700);

@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=vip26h';
-import { World } from './world.js?v=vip26h';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=vip26h';
-import { Sound } from './audio.js?v=vip26h';
-import { Particles, Skids } from './fx.js?v=vip26h';
-import { Weather } from './weather.js?v=vip26h';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=vip26h';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=vip26h';
-import { Net, newCode, loadTurn } from './net.js?v=vip26h';
-import { VIP_CODES } from './codes.js?v=vip26h';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=vip26h';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=ring26i';
+import { World } from './world.js?v=ring26i';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ring26i';
+import { Sound } from './audio.js?v=ring26i';
+import { Particles, Skids } from './fx.js?v=ring26i';
+import { Weather } from './weather.js?v=ring26i';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ring26i';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ring26i';
+import { Net, newCode, loadTurn } from './net.js?v=ring26i';
+import { VIP_CODES } from './codes.js?v=ring26i';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ring26i';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -2133,7 +2133,7 @@ function refreshMenu() {
   { // calendar: only this series' tracks, numbered in calendar order
     // championship: the series' real calendar; other modes: every track, the series' own calendar first
     const cal = calIdx(), list = settings.mode === 'champ' ? cal : cal.concat(TRACKS.map((_, i) => i).filter(i => !cal.includes(i)));
-    if (!list.includes(settings.track)) settings.track = list[0];
+    if (!list.includes(settings.track) || (TRACKS[settings.track].vip && !isVip())) settings.track = list[0];
     // section headers: the series' calendar, then "Other tracks"
     const head = (id, html, order, show) => { let h = $(id); if (!h) { h = document.createElement('div'); h.id = id; h.className = 'calHead'; $('trackList').appendChild(h); } h.innerHTML = html; h.style.order = order; h.style.display = show ? '' : 'none'; };
     head('calHead', SER.name + ' 2026 calendar · ' + cal.length + ' rounds' + (SER.missing ? '<small>Not in the game yet: ' + SER.missing.join(', ') + '</small>' : ''), -1, true);
@@ -2166,10 +2166,13 @@ function refreshMenu() {
 function aiLabel(s) { return s < 20 ? 'Rookie' : s < 40 ? 'Amateur' : s < 60 ? 'Club racer' : s < 75 ? 'Pro' : s < 90 ? 'Elite: brakes late' : 'Legend: right on the limit'; }
 function showLoading(on) { $('loading').classList.toggle('hidden', !on); }
 function withLoading(fn) { showLoading(true); setTimeout(() => { try { fn(); } finally { showLoading(false); } }, 30); }
-function selectTrack(i) { if (settings.mode === 'champ') return; settings.track = i; saveSettings(); refreshMenu(); withLoading(() => buildTrack(i)); }
+function selectTrack(i) {
+  if (settings.mode === 'champ') return;
+  if (TRACKS[i].vip && !isVip()) { $('vipMsg').textContent = 'The ' + TRACKS[i].name + ' is VIP only. Enter a VIP code here to unlock it.'; $('vipCode').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('vipCode').focus(); return; }
+  settings.track = i; saveSettings(); refreshMenu(); withLoading(() => buildTrack(i)); }
 function cardStats(i) {
   const d = TRACKS[i], pv = previewPoints(d, 60), rec = parseFloat(store.get('apexgp2-best-' + serKey(d.id)));
-  return '<b>' + (pv.length / 1000).toFixed(2) + ' km</b> · ' + (d.oval ? 'Oval' : d.type === 'street' ? 'Street' : 'Circuit') + (isFinite(rec) ? ' · <b>' + fmt(rec) + '</b>' : '');
+  return '<b>' + (pv.length / 1000).toFixed(2) + ' km</b> · ' + (d.oval ? 'Oval' : d.type === 'street' ? 'Street' : 'Circuit') + (isFinite(rec) ? ' · <b>' + fmt(rec) + '</b>' : '') + (d.vip ? ' · <span class="viptrk">' + (isVip() ? 'VIP' : '🔒 VIP only') + '</span>' : '');
 }
 function initMenu() {
   { const inp = $('lbNameIn'); inp.value = lbName(); inp.addEventListener('change', () => { const v = inp.value.replace(/[^\w .\-]/g, '').trim().slice(0, 16); inp.value = v; store.set('apexgp-name', v); refreshLeaderboard(); }); }
@@ -2201,7 +2204,7 @@ function initMenu() {
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipFw').onclick = () => { settings.vipFw = settings.vipFw === false; saveSettings(); vipUi(); };
   vipUi();
-  $('vipBtn').onclick = async () => { $('vipBtn').disabled = true; $('vipMsg').textContent = 'Checking…'; const r = await redeemVip($('vipCode').value); $('vipBtn').disabled = false; if (r === true) { $('vipCode').value = ''; vipUi(); mpLastInfo = ''; mpShareInfo(); } else $('vipMsg').textContent = r; };
+  $('vipBtn').onclick = async () => { $('vipBtn').disabled = true; $('vipMsg').textContent = 'Checking…'; const r = await redeemVip($('vipCode').value); $('vipBtn').disabled = false; if (r === true) { $('vipCode').value = ''; vipUi(); refreshMenu(); mpLastInfo = ''; mpShareInfo(); } else $('vipMsg').textContent = r; };
   TRACKS.forEach((d, i) => {
     const el = document.createElement('div'); el.className = 'tcard panel';
     const cv = document.createElement('canvas'); cv.width = 160; cv.height = 120;
@@ -2330,7 +2333,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=vip26h');
+await loadCarModel('js/car.bin?v=ring26i');
 initMenu();
 requestAnimationFrame(frame);
 

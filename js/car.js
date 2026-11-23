@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=vip26h';
+import { canvasTex } from './util.js?v=ring26i';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -193,7 +193,7 @@ vec3 livery(vec3 p, vec3 c1) {
 
 export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compound = 'medium', model = 'f1', livery = null }) {
   const M = MODEL || buildModel();
-  if (model === 'gt3' || model === 'hyper') { const car = makeClosedCar(model, { color, accent, helmet, number, compound }); if (livery) applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); addInterior(car.group, model); return fitCockpit(car, model, helmet); }
+  if (model === 'gt3' || model === 'hyper' || model === 'rally') { const car = makeClosedCar(model, { color, accent, helmet, number, compound }); if (livery) applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); addInterior(car.group, model); return fitCockpit(car, model, helmet); }
   const g = new THREE.Group();
   const mats = {
     body: new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.08 }),
@@ -339,6 +339,14 @@ const CLOSED = {
     roof: [[-0.95, 0.6, 0.035, 1.272, 4], [0.1, 0.62, 0.035, 1.284, 4], [0.45, 0.58, 0.03, 1.262, 4]],
     axF: 1.42, axR: -1.38, track: 0.8, helmet: [0.3, 1.0, -0.25], wing: { y: 1.32, z: -2.02, w: 1.86 }, num: [0.995, 0.64, -0.15],
   },
+  // Rally1-style hatchback: short, tall, raised ride height, big roof-level rear wing, roof scoop, mud flaps
+  rally: {
+    body: [[-2.02, 0.86, 0.28, 0.76, 4], [-1.95, 0.92, 0.33, 0.75, 6], [-1.5, 0.93, 0.34, 0.75, 8], [-0.8, 0.92, 0.33, 0.74, 8], [0.0, 0.9, 0.32, 0.73, 8],
+      [0.8, 0.9, 0.3, 0.71, 8], [1.35, 0.9, 0.27, 0.68, 7], [1.8, 0.88, 0.22, 0.63, 6], [2.0, 0.82, 0.16, 0.57, 4], [2.08, 0.72, 0.1, 0.52, 3]],
+    glass: [[-1.78, 0.66, 0.06, 1.1, 3], [-1.66, 0.73, 0.33, 1.1, 3.5], [-0.2, 0.75, 0.36, 1.1, 3.5], [0.45, 0.71, 0.26, 1.06, 3], [0.98, 0.6, 0.05, 1.04, 2.5]],
+    roof: [[-1.64, 0.67, 0.035, 1.44, 4], [-0.25, 0.69, 0.035, 1.455, 4], [0.32, 0.65, 0.03, 1.42, 4]],
+    axF: 1.3, axR: -1.25, track: 0.82, helmet: [0.32, 1.12, -0.35], wing: { y: 1.4, z: -1.92, w: 1.78 }, num: [0.935, 0.78, 0.1], rally: true,
+  },
   hyper: {
     body: [[-2.58, 0.88, 0.15, 0.56, 5], [-2.3, 0.98, 0.21, 0.56, 7], [-1.75, 0.98, 0.23, 0.56, 8], [-1.0, 0.9, 0.2, 0.52, 8], [0, 0.86, 0.19, 0.5, 8],
       [0.9, 0.88, 0.18, 0.49, 8], [1.55, 0.9, 0.17, 0.47, 7], [2.1, 0.86, 0.13, 0.43, 6], [2.45, 0.8, 0.09, 0.38, 4], [2.62, 0.68, 0.05, 0.34, 3]],
@@ -363,9 +371,9 @@ function closedGeo(kind) {
       box(0.04, W.y - 0.82, 0.1, 0.42, (W.y + 0.82) / 2, W.z + 0.08), box(0.04, W.y - 0.82, 0.1, -0.42, (W.y + 0.82) / 2, W.z + 0.08)]),
     splitter: box(1.7, 0.025, 0.2, 0, 0.2, C.body[C.body.length - 1][0] - 0.22),
     sill: mergeGeometries([box(0.05, 0.12, 2.1, 0.975, 0.42, 0.05), box(0.05, 0.12, 2.1, -0.975, 0.42, 0.05)]),
-    heads: kind === 'gt3' ? mergeGeometries([box(0.36, 0.07, 0.06, 0.6, 0.66, 2.2, 0.35), box(0.36, 0.07, 0.06, -0.6, 0.66, 2.2, -0.35)])
+    heads: kind !== 'hyper' ? mergeGeometries([box(0.36, 0.07, 0.06, 0.6, kind === 'rally' ? 0.74 : 0.66, C.body[C.body.length - 1][0] - 0.17, 0.35), box(0.36, 0.07, 0.06, -0.6, kind === 'rally' ? 0.74 : 0.66, C.body[C.body.length - 1][0] - 0.17, -0.35)])
       : mergeGeometries([box(0.05, 0.04, 0.5, 0.74, 0.74, 2.12, 0.55), box(0.05, 0.04, 0.5, -0.74, 0.74, 2.12, -0.55), box(0.05, 0.04, 0.3, 0.6, 0.7, 2.3, 1.1), box(0.05, 0.04, 0.3, -0.6, 0.7, 2.3, -1.1)]),
-    tails: kind === 'gt3' ? mergeGeometries([box(0.5, 0.06, 0.04, 0.55, 0.86, -2.27), box(0.5, 0.06, 0.04, -0.55, 0.86, -2.27)]) : box(1.72, 0.035, 0.03, 0, 0.84, -2.56),
+    tails: kind !== 'hyper' ? mergeGeometries([box(0.5, 0.06, 0.04, 0.55, kind === 'rally' ? 0.95 : 0.86, C.body[0][0] + 0.03), box(0.5, 0.06, 0.04, -0.55, kind === 'rally' ? 0.95 : 0.86, C.body[0][0] + 0.03)]) : box(1.72, 0.035, 0.03, 0, 0.84, -2.56),
     fin: C.fin ? box(0.03, 0.32, 1.55, 0, 0.98, -1.55) : null,
   };
   const f = C.body[C.body.length - 1][0], r = C.body[0][0], cyl = (rt, rb, h, x, y, z) => new THREE.CylinderGeometry(rt, rb, h, 14).rotateX(Math.PI / 2).translate(x, y, z);
@@ -375,18 +383,20 @@ function closedGeo(kind) {
     [0.5, 0.18, 0.17, 0.53, 5, sx * 0.78], [1.15, 0.22, 0.3, 0.58, 5, sx * 0.76], [1.95, 0.21, 0.27, 0.56, 5, sx * 0.75], [2.45, 0.1, 0.1, 0.48, 3, sx * 0.72]], 22);
   gw.flares = mergeGeometries(C.pods ? [pod(1), pod(-1)] : [arch(C.axF, 1), arch(C.axF, -1), arch(C.axR, 1), arch(C.axR, -1)]);
   gw.dark = mergeGeometries([
-    box(kind === 'gt3' ? 1.0 : 0.7, 0.13, 0.06, 0, 0.36, f - 0.02),                                   // front grille / intake
+    box(kind !== 'hyper' ? 1.0 : 0.7, 0.13, 0.06, 0, kind === 'rally' ? 0.46 : 0.36, f - 0.02),                                   // front grille / intake
     box(0.36, 0.09, 0.05, 0.62, 0.34, f - 0.06), box(0.36, 0.09, 0.05, -0.62, 0.34, f - 0.06),        // brake ducts
-    box(0.32, 0.015, 0.36, 0.33, kind === 'gt3' ? 0.86 : 0.67, 1.3, 0, -0.18), box(0.32, 0.015, 0.36, -0.33, kind === 'gt3' ? 0.86 : 0.67, 1.3, 0, -0.18), // bonnet vents
+    box(0.32, 0.015, 0.36, 0.33, kind === 'rally' ? 0.955 : kind === 'gt3' ? 0.86 : 0.67, 1.3, 0, -0.18), box(0.32, 0.015, 0.36, -0.33, kind === 'rally' ? 0.955 : kind === 'gt3' ? 0.86 : 0.67, 1.3, 0, -0.18), // bonnet vents
     box(1.5, 0.12, 0.34, 0, 0.27, r + 0.12),                                                           // diffuser
     ...[-0.5, -0.17, 0.17, 0.5].map(x => box(0.02, 0.16, 0.36, x, 0.3, r + 0.14)),
     box(0.06, 0.2, 0.7, 0.955, 0.6, -0.95), box(0.06, 0.2, 0.7, -0.955, 0.6, -0.95),                  // side intakes
     ...(kind === 'hyper' ? [box(0.22, 0.14, 0.4, 0, 1.18, -0.75)] : []),                               // roof snorkel
+    ...(kind === 'rally' ? [box(0.3, 0.1, 0.4, 0, 1.5, 0.05, 0, 0.08),                                // roof scoop
+      ...[[C.axF, 1], [C.axF, -1], [C.axR, 1], [C.axR, -1]].map(([z, sx]) => box(0.42, 0.34, 0.012, sx * 0.84, 0.24, z - 0.45))] : []), // mud flaps
   ]);
-  const mz = kind === 'gt3' ? 0.72 : 0.95, mx = kind === 'gt3' ? 0.86 : 0.76, my = kind === 'gt3' ? 1.04 : 0.84;
+  const mz = kind === 'rally' ? 0.8 : kind === 'gt3' ? 0.72 : 0.95, mx = kind === 'rally' ? 0.84 : kind === 'gt3' ? 0.86 : 0.76, my = kind === 'rally' ? 1.13 : kind === 'gt3' ? 1.04 : 0.84;
   gw.mirrors = mergeGeometries([box(0.16, 0.09, 0.06, mx + 0.08, my, mz), box(0.16, 0.09, 0.06, -mx - 0.08, my, mz), box(0.12, 0.025, 0.04, mx, my - 0.04, mz + 0.02), box(0.12, 0.025, 0.04, -mx, my - 0.04, mz + 0.02)]);
   gw.mirrorGlass = mergeGeometries([new THREE.PlaneGeometry(0.13, 0.065).rotateY(Math.PI).translate(mx + 0.08, my, mz - 0.032), new THREE.PlaneGeometry(0.13, 0.065).rotateY(Math.PI).translate(-mx - 0.08, my, mz - 0.032)]);
-  gw.exhaust = kind === 'gt3' ? mergeGeometries([cyl(0.045, 0.045, 0.2, 0.42, 0.34, r + 0.04), cyl(0.045, 0.045, 0.2, -0.42, 0.34, r + 0.04)]) : cyl(0.05, 0.05, 0.2, 0, 0.62, r + 0.1);
+  gw.exhaust = kind !== 'hyper' ? mergeGeometries([cyl(0.045, 0.045, 0.2, 0.42, 0.34, r + 0.04), cyl(0.045, 0.045, 0.2, -0.42, 0.34, r + 0.04)]) : cyl(0.05, 0.05, 0.2, 0, 0.62, r + 0.1);
   return (CLOSED_GEO[kind] = gw);
 }
 function makeClosedCar(kind, { color, accent, helmet, number, compound }) {
@@ -402,7 +412,7 @@ function makeClosedCar(kind, { color, accent, helmet, number, compound }) {
     new THREE.Mesh(G.heads, HEAD_MAT), new THREE.Mesh(G.tails, TAIL_MAT));
   if (G.fin) g.add(new THREE.Mesh(G.fin, mats.body));
   g.add(new THREE.Mesh(G.flares, mats.body), new THREE.Mesh(G.dark, DARK), new THREE.Mesh(G.mirrors, mats.body), new THREE.Mesh(G.mirrorGlass, MIRROR_MAT), new THREE.Mesh(G.exhaust, METAL));
-  fwing.add(new THREE.Mesh(G.splitter, CARBON)); rwing.add(new THREE.Mesh(G.wing, kind === 'gt3' ? CARBON : mats.acc));
+  fwing.add(new THREE.Mesh(G.splitter, CARBON)); rwing.add(new THREE.Mesh(G.wing, kind !== 'hyper' ? CARBON : mats.acc));
   // door numbers on white roundels
   const tex = numberTex(number, '#111111', 'rgba(255,255,255,0)');
   const nmat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
@@ -483,19 +493,20 @@ export function updateDash(car, { gear, kmh, rpm, frac, lap, pos, delta }) {
 }
 /* replace a car's simple wheel with the detailed one, placed for its cockpit */
 function fitCockpit(car, kind, glove) {
-  const W = buildWheel(kind === 'gt3' || kind === 'hyper', glove);
-  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.95, 0.24, -0.3], eye: [0.32, 1.07, -0.18], scale: 0.8 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
+  const W = buildWheel(kind === 'gt3' || kind === 'hyper' || kind === 'rally', glove);
+  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.95, 0.24, -0.3], eye: [0.32, 1.07, -0.18], scale: 0.8 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.05, 0.16, -0.3], eye: [0.32, 1.19, -0.3], scale: 0.8 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
   const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); if (P.scale) W.group.scale.setScalar(P.scale); st.visible = false;
   car.dash = W; car.eye = P.eye;
   // T-cam mount: above the airbox on single-seaters; at the front of the roof, over the windscreen, on closed cars
-  car.tcam = { gt3: [0, 1.5, 0.5, 1.05], hyper: [0, 1.32, 0.78, 0.92] }[kind] || [0, 1.36, -0.5, 0.8];
+  car.tcam = { gt3: [0, 1.5, 0.5, 1.05], hyper: [0, 1.32, 0.78, 0.92], rally: [0, 1.64, 0.35, 1.0] }[kind] || [0, 1.36, -0.5, 0.8];
   return car;
 }
 /* closed cars: dashboard, A-pillars, roof header, rear-view mirror, so the cockpit view looks out of a cabin */
 function addInterior(g, kind) {
   const dashM = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.85 }), I = new THREE.Group();
   const pillar = (a, b, r) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, A.distanceTo(B), 8), dashM); m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); I.add(m); };
-  if (kind === 'gt3') {
+  if (kind === 'gt3' || kind === 'rally') {
+    if (kind === 'rally') I.position.set(0, 0.12, -0.08);
     const dash = new THREE.Mesh(new RoundedBoxGeometry(1.32, 0.16, 0.42, 3, 0.04), dashM); dash.position.set(0, 0.92, 0.66); I.add(dash);
     const hood = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.07, 0.2, 2, 0.03), dashM); hood.position.set(0.32, 1.02, 0.5); I.add(hood);
     pillar([0.64, 0.98, 0.93], [0.6, 1.27, 0.44], 0.035); pillar([-0.64, 0.98, 0.93], [-0.6, 1.27, 0.44], 0.035);
@@ -530,9 +541,11 @@ export function addLiveMirrors(car, tex) {
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.18, 8), CARBON); st.position.set(sx * 0.45, 0.83, 0.72); st.rotation.z = sx * 0.3; g.add(st);
       plane(0.25, 0.09, sx > 0 ? 0 : 0.5, sx > 0 ? 0.5 : 1, sx * 0.48, 0.93, 0.692, Math.PI - sx * 0.3);
     }
-  } else if (kind === 'gt3') {
-    plane(0.22, 0.05, 0.2, 0.8, 0, 1.19, 0.387);
-    plane(0.13, 0.065, 0, 0.45, 0.94, 1.04, 0.687, Math.PI - 0.25); plane(0.13, 0.065, 0.55, 1, -0.94, 1.04, 0.687, Math.PI + 0.25);
+  } else if (kind === 'gt3' || kind === 'rally') {
+    const ry = kind === 'rally' ? 0.12 : 0, rz = kind === 'rally' ? -0.08 : 0;
+    plane(0.22, 0.05, 0.2, 0.8, 0, 1.19 + ry, 0.387 + rz);
+    if (kind === 'rally') { plane(0.13, 0.065, 0, 0.45, 0.92, 1.13, 0.767, Math.PI - 0.25); plane(0.13, 0.065, 0.55, 1, -0.92, 1.13, 0.767, Math.PI + 0.25); }
+    else { plane(0.13, 0.065, 0, 0.45, 0.94, 1.04, 0.687, Math.PI - 0.25); plane(0.13, 0.065, 0.55, 1, -0.94, 1.04, 0.687, Math.PI + 0.25); }
   } else {
     const scr = new THREE.Mesh(new RoundedBoxGeometry(0.3, 0.1, 0.03, 2, 0.01), DARK); scr.position.set(0, 0.935, 0.66); scr.rotation.x = -0.25; g.add(scr);
     plane(0.28, 0.085, 0, 1, 0, 0.937, 0.644, Math.PI, 0.25);
