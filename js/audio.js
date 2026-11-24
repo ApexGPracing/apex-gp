@@ -1,7 +1,7 @@
 /* Synthesised sound: a screaming 2011-era V8 (18,000 rpm, exhaust-blown diffuser) for the player's car
    (plus the nearest rival), off-throttle "hot blowing" stutter and crackle, seamless-shift cuts,
    downshift blips, kerb rumble, tyre squeal, wind, rain and impacts. */
-const ENG_F1 = { lo: 7000, hi: 18000, cyl: 8, roar: 1, scream: 1 };
+const ENG_F1 = { lo: 7000, hi: 18000, cyl: 8, roar: 0.8, scream: 0.3, band: 1.0, q: 0.8, rasp: 0.6, bright: 0.62, comb: 1.3, half: 1.2 };
 export class Sound {
   constructor() { this.ctx = null; this.muted = false; this.prevGear = 0; this.popT = 0; this.stutT = 0; this.blowAmt = 0; }
 
@@ -136,14 +136,14 @@ export class Sound {
     cOsc.connect(cDrive); cDrive.connect(cShape); cShape.connect(cHp); cHp.connect(cPk); cPk.connect(cLp); cLp.connect(cG); cG.connect(out); cOsc.start();
     return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cDrive, cG, cPk, combCyl: 0 };
   }
-  combWave(cyl) {
+  combWave(cyl, half = 0.8) {
     const H = 72, real = new Float32Array(H + 1), imag = new Float32Array(H + 1);
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const orders = [1, 0.58, 0.36, 0.22, 0.13, 0.08, 0.05];
     for (let k = 1; k <= H; k++) {
       let a = 0.16 * Math.exp(-k / 70);                                     // the half-order floor
       orders.forEach((A, m) => { const c = cyl * (m + 1), d = k - c; a += A * Math.exp(-d * d / (2 * 1.7 * 1.7)); });
-      for (const [c, A] of [[cyl / 2, 0.8], [cyl * 0.3, 0.4], [cyl * 1.5, 0.45]]) { const d = k - c; a += A * Math.exp(-d * d / (2 * 1.1 * 1.1)); }   // half and 3/2 orders: the deeper V10 bark under the shriek
+      for (const [c, A] of [[cyl / 2, half], [cyl * 0.3, 0.4], [cyl * 1.5, 0.45]]) { const d = k - c; a += A * Math.exp(-d * d / (2 * 1.1 * 1.1)); }   // half and 3/2 orders: the deeper V10 bark under the shriek
       a *= 0.7 + 0.6 * rnd();                                              // uneven cylinders
       const ph = rnd() * Math.PI * 2; real[k] = a * Math.cos(ph); imag[k] = a * Math.sin(ph);
     }
@@ -177,7 +177,7 @@ export class Sound {
     e.rLp.frequency.setTargetAtTime(1400 + thr * 3200 + e.srpm * 0.12, t, 0.05);
     e.roarG.gain.setTargetAtTime((0.25 + 0.4 * thr + 0.3 * blow) * eng.roar, t, 0.04);
     if (eng.comb) {
-      if (e.combCyl !== eng.cyl) { e.combCyl = eng.cyl; e.cOsc.setPeriodicWave(this.combWave(eng.cyl)); }
+      const ck = eng.cyl + ':' + (eng.half || 0.8); if (e.combCyl !== ck) { e.combCyl = ck; e.cOsc.setPeriodicWave(this.combWave(eng.cyl, eng.half || 0.8)); }
       e.cOsc.frequency.setTargetAtTime(e.srpm / 120 * (1 + e.jit), t, 0.012);
       e.cDrive.gain.setTargetAtTime(0.9 + 1.0 * thr, t, 0.04); e.cPk.frequency.setTargetAtTime(e.srpm / 120 * eng.cyl * 0.95, t, 0.05);
       e.cG.gain.setTargetAtTime(eng.comb * (0.3 + 0.7 * Math.max(thr, 0.6 * blow)), t, 0.04);

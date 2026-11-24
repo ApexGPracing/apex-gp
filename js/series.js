@@ -5,7 +5,7 @@
 // physics multiples of the F1 car: aero drag, top speed, engine power, grip, braking; drs = can use DRS
 // eng = engine sound: rev range (lo..hi rpm), cylinders, and how much roar vs scream
 export const CLASSES = {
-  f1: { label: 'F1', model: 'f1', drag: 1, vmax: 1, power: 1, grip: 1, brake: 1, drs: true, eng: { lo: 7000, hi: 18000, cyl: 8, roar: 1, scream: 1 } },
+  f1: { label: 'F1', model: 'f1', drag: 1, vmax: 1, power: 1, grip: 1, brake: 1, drs: true, eng: { lo: 7000, hi: 18000, cyl: 8, roar: 0.8, scream: 0.3, band: 1.0, q: 0.8, rasp: 0.6, bright: 0.62, comb: 1.3, half: 1.2 } },
   f2: { label: 'F2', model: 'f1', drag: 1, vmax: 0.9, power: 0.84, grip: 0.9, brake: 0.92, drs: true, eng: { lo: 5200, hi: 10500, cyl: 6, roar: 1.25, scream: 0.55 } },
   indy: { label: 'INDY', model: 'indy', drag: 0.55, vmax: 1.12, power: 0.95, grip: 0.88, brake: 0.85, drs: false, eng: { lo: 6500, hi: 12000, cyl: 6, roar: 1.1, scream: 0.8 } },
   gt3: { label: 'GT3', model: 'gt3', drag: 0.85, vmax: 0.8, power: 0.6, grip: 0.74, brake: 0.74, drs: false, eng: { lo: 3500, hi: 8800, cyl: 8, roar: 1.6, scream: 0.35 } },
