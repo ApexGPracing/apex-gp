@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=snd27d';
-import { AXLE_F, AXLE_R } from './car.js?v=snd27d';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=snd27d';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=m10fix27e';
+import { AXLE_F, AXLE_R } from './car.js?v=m10fix27e';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=m10fix27e';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -253,6 +253,22 @@ export class World {
     const seg = q === 0 ? 200 : q === 1 ? 280 : 360, tcell = span / seg, reachR = tcell * 1.5, corridor = T.wallOff + reachR;
     const HB = 32, hash = new Map();
     for (let k = 0; k < N; k += 2) { const key = Math.floor(T.px[k] / HB) + ',' + Math.floor(T.pz[k] / HB); let a = hash.get(key); if (!a) hash.set(key, a = []); a.push(k); }
+    // where the lap crosses itself, the ground around the LOWER road is dug out so it does not climb up to the bridge
+    // across the road (an underpass cutting with sloping sides), and the bridge deck spans the cutting
+    const xUp = new Uint8Array(N), xLo = new Map();
+    if (T.elev) for (let i = 0; i < N; i += 2) for (let j = 0; j < N; j += 2) {
+      let di = Math.abs(i - j); di = Math.min(di, N - di); if (di * DS < 150) continue;
+      const dx = T.px[j] - T.px[i], dz = T.pz[j] - T.pz[i];
+      if (dx * dx + dz * dz < (2 * T.wallOff + 8) ** 2 && T.elev[i] - T.elev[j] > 4.5) { xUp[i] = xUp[(i + 1) % N] = 1; xLo.set(i, j); }
+    }
+    const cutS = []; for (const j of new Set(xLo.values())) for (let k = -70; k <= 70; k += 2) cutS.push((j + k + N) % N);
+    const cutR = 90, cutBox = cutS.length ? [Math.min(...cutS.map(k => T.px[k])) - cutR, Math.max(...cutS.map(k => T.px[k])) + cutR, Math.min(...cutS.map(k => T.pz[k])) - cutR, Math.max(...cutS.map(k => T.pz[k])) + cutR] : null;
+    const cutCap = (x, z) => {
+      if (!cutBox || x < cutBox[0] || x > cutBox[1] || z < cutBox[2] || z > cutBox[3]) return Infinity;
+      let cap = Infinity; const flatW = W + KERB + 5;
+      for (const k of cutS) { const dx = x - T.px[k], dz = z - T.pz[k], d2 = dx * dx + dz * dz; if (d2 > cutR * cutR) continue; cap = Math.min(cap, T.elev[k] - 0.6 + Math.max(0, Math.sqrt(d2) - flatW) * 0.45); }
+      return cap;
+    };
     const roadCap = (x, z) => {
       let cap = Infinity; const r2 = (reachR + T.wallOff) ** 2, cx = Math.floor(x / HB), cz = Math.floor(z / HB), nb = Math.ceil((reachR + T.wallOff) / HB);
       for (let gx = cx - nb; gx <= cx + nb; gx++) for (let gz = cz - nb; gz <= cz + nb; gz++) {
@@ -278,6 +294,7 @@ export class World {
       const d = dist(x, z), t = smooth(flat, flat + 600, d);
       let base = T.elev ? elevNear(x, z) - 0.6 * (1 - smooth(T.wallOff, flat, d)) : 0;
       if (T.elev && d < corridor) base = Math.min(base, roadCap(x, z) - 0.6);
+      if (cutBox) { const cc = cutCap(x, z); if (cc < base) return cc; }
       if (t <= 0) return base;
       let h;
       const sx = x / 1000, sz = z / 1000;
@@ -337,7 +354,7 @@ export class World {
         : new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.6, 0.6), vertexColors: true, roughness: 0.86, metalness: 0, color: th.night ? '#c9ccd6' : '#ffffff' }));
     const lineMat = new THREE.MeshStandardMaterial({ color: '#f2f2f2', roughness: 0.6, map: tx.paint });
     // def.concreteBanks: the banked turns are bare concrete slabs from edge to edge, with a sheer concrete outer face (Monza)
-    const bankRanges = T.def.concreteBanks ? rangesOf(T.bank, N, v => Math.abs(v) > 0.03) : [];
+    const bankRanges = T.def.concreteBanks ? rangesOf(T.bank, N, v => Math.abs(v) > 0.004) : [];
     if (bankRanges.length) {
       const slab = new THREE.MeshStandardMaterial({ map: tx.concreteSlab, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.3, 0.3), roughness: 0.92, color: th.night ? '#c9ccd6' : '#ffffff' });
       const face = new THREE.MeshStandardMaterial({ map: tx.concreteSlab, color: '#d2cec6', roughness: 0.95, side: THREE.DoubleSide });
@@ -347,8 +364,20 @@ export class World {
         const cols = [i => [L(i), 0.07, L(i) / 8], i => [Math.min(Wb, L(i)), 0.07, Math.min(Wb, L(i)) / 8], col(0, 0.07, 0), i => [Math.max(-Wb, Rr(i)), 0.07, Math.max(-Wb, Rr(i)) / 8], i => [Rr(i), 0.07, Rr(i) / 8]];
         add(ribbon(T, a, cnt, cols, 8), slab);
         const mid = (a + (cnt >> 1)) % N, so = T.bank[mid] > 0 ? 1 : -1, ol = so > 0 ? L : Rr;   // the raised (outer) side
-        add(ribbon(T, a, cnt, [i => [ol(i) + so * 0.2, 0.07, 0], i => [ol(i) + so * 0.2, -22, 2.5]], 8, { up: false }), face);
+        // the sheer outer face, except where the banking is a bridge over the lap (it would wall off the road underneath)
+        const nearX = k => { const i = (a + k) % N; for (const ui of xLo.keys()) { let di = Math.abs(i - ui); di = Math.min(di, N - di); if (di < 90) return true; } return false; };
+        for (let k = 0; k < cnt;) { while (k < cnt && nearX(k)) k++; const k0 = k; while (k < cnt && !nearX(k)) k++; if (k - k0 > 2) add(ribbon(T, (a + k0) % N, k - k0, [i => [ol(i) + so * 0.2, 0.07, 0], i => [ol(i) + so * 0.2, -22, 2.5]], 8, { up: false }), face); }
       }
+    }
+    if (T.def.concreteBanks) {
+      const twin = new Uint8Array(N);
+      for (let i = 0; i < N; i += 2) for (let j = 0; j < N; j += 2) {
+        let di = Math.abs(i - j); di = Math.min(di, N - di); if (di * DS < 150) continue;
+        const dx = T.px[j] - T.px[i], dz = T.pz[j] - T.pz[i];
+        if (dx * dx + dz * dz < (2 * T.wallOff + 14) ** 2 && Math.abs(T.elev[i] - T.elev[j]) < 3) { for (let k = -6; k <= 7; k++) twin[(i + k + N) % N] = 1; }
+      }
+      const tarmac = new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.88, color: '#d0d2d6' });
+      for (const [a0, a1] of rangesOf(twin, N, v => v)) for (const sd of [1, -1]) add(ribbon(T, a0, a1 - a0, [col(sd * W, 0.015, 0), i => [sd * (sideLim(T, sd)(i) + 0.35), 0.015, 1]], 6), tarmac);
     }
     const onConcreteBank = (s0, e0) => bankRanges.some(([a0, a1]) => { const m = (s0 + ((e0 - s0 + N) % N >> 1)) % N; return m >= a0 && m <= a1; });
     if (T.gripMul === 1 && !T.def.noBarriers) for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);   // no painted lines on loose surfaces
@@ -410,15 +439,14 @@ export class World {
     }
     // overpasses: where the lap crosses itself (Monza 10 km), the upper road gets a concrete deck, parapet faces and piers
     {
-      const up = new Uint8Array(N), lo = new Map();
-      for (let i = 0; i < N; i += 2) for (let j = 0; j < N; j += 2) {
-        let di = Math.abs(i - j); di = Math.min(di, N - di); if (di * DS < 150) continue;
-        const dx = T.px[j] - T.px[i], dz = T.pz[j] - T.pz[i];
-        if (dx * dx + dz * dz < (2 * T.wallOff + 8) ** 2 && T.elev[i] - T.elev[j] > 4.5) { up[i] = up[(i + 1) % N] = 1; lo.set(i, j); }
+      const up = new Uint8Array(N), lo = xLo;
+      for (const [a0, a1] of rangesOf(xUp, N, v => v)) for (let k = -90; k <= a1 - a0 + 90; k++) {
+        const i = (a0 + k + N) % N, gnd = Math.min(height(T.px[i] + T.nx[i] * (T.limL[i] + 1), T.pz[i] + T.nz[i] * (T.limL[i] + 1)), height(T.px[i] - T.nx[i] * (T.limR[i] + 1), T.pz[i] - T.nz[i] * (T.limR[i] + 1)), height(T.px[i], T.pz[i]));
+        if (xUp[i] || gnd < bankH(T, i, 0) - 2.2) up[i] = 1;
       }
       const conc = new THREE.MeshStandardMaterial({ color: '#b9b5ad', roughness: 0.85, side: THREE.DoubleSide });
       for (const [a0, a1] of rangesOf(up, N, v => v)) {
-        const a = (a0 - 8 + N) % N, cnt = a1 - a0 + 17, eL = i => T.limL[i] + 0.8, eR = i => -T.limR[i] - 0.8;
+        const a = (a0 - 3 + N) % N, cnt = a1 - a0 + 7, eL = i => T.limL[i] + 0.8, eR = i => -T.limR[i] - 0.8;
         add(ribbon(T, a, cnt, [i => [eL(i), -1.6, 0], i => [eR(i), -1.6, 1]], 8, { up: false }), conc);        // deck underside
         add(ribbon(T, a, cnt, [i => [eL(i), 1.1, 0], i => [eL(i), -1.6, 1]], 8, { up: false }), conc);         // outer faces
         add(ribbon(T, a, cnt, [i => [eR(i), -1.6, 0], i => [eR(i), 1.1, 1]], 8, { up: false }), conc);
