@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=rally27v';
+import { canvasTex } from './util.js?v=bus27w';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -194,6 +194,7 @@ vec3 livery(vec3 p, vec3 c1) {
 
 export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compound = 'medium', model = 'f1', livery = null }) {
   const M = MODEL || buildModel();
+  if (model === 'miata' || model === 'bus') { const car = makeSpecialCar(model, { color, accent, helmet, number, compound }); if (livery && model === 'miata') applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); return fitCockpit(car, model, helmet); }
   if (model === 'gt3' || model === 'hyper' || model === 'rally') { const car = makeClosedCar(model, { color, accent, helmet, number, compound }); if (livery) applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); addInterior(car.group, model); return fitCockpit(car, model, helmet); }
   const g = new THREE.Group();
   const mats = {
@@ -439,6 +440,70 @@ function makeClosedCar(kind, { color, accent, helmet, number, compound }) {
   return { group: g, wheels, helmet: helmetMesh, steering, cockpitHide: [helmetMesh], mats, numTex: tex, stripes, fwing, rwing, closed: kind };
 }
 
+/* ---- Miata-style roadster (open top, roll hoop, driver's helmet showing) and a London double-decker bus ---- */
+const OPEN_GLASS = new THREE.MeshPhysicalMaterial({ color: 0xa9c4d8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.28, depthWrite: false });
+const SPECIAL = {
+  miata: { axF: 1.2, axR: -1.12, track: 0.72, ws: 0.82, helmet: [0.3, 0.98, -0.42], num: [0.86, 0.58, 0.05] },
+  bus: { axF: 3.15, axR: -2.55, track: 1.02, ws: 1.42, helmet: [-0.72, 2.05, 3.95], num: [1.27, 1.55, 1.2] },
+};
+function makeSpecialCar(kind, { color, accent, helmet, number, compound }) {
+  const C = SPECIAL[kind], M = MODEL, g = new THREE.Group();
+  const mats = { body: new THREE.MeshPhysicalMaterial({ color, roughness: 0.35, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.12 }), acc: new THREE.MeshPhysicalMaterial({ color: accent, roughness: 0.4, clearcoat: 0.8 }), carbon: CARBON, dark: DARK, metal: METAL, light: LIGHT };
+  const box = (w, h, d, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d).rotateX(rx), m); o.position.set(x, y, z); o.castShadow = true; return o; };
+  const shadow = new THREE.Mesh(SHADOW, SHADOW_MAT); shadow.position.y = 0.025; shadow.renderOrder = 1; g.add(shadow);
+  const fwing = new THREE.Group(), rwing = new THREE.Group(); g.add(fwing, rwing);
+  if (kind === 'miata') {
+    shadow.scale.set(0.85, 1, 0.7);
+    g.add(new THREE.Mesh(loft([[-1.96, 0.78, 0.2, 0.52, 4], [-1.86, 0.83, 0.27, 0.54, 6], [-1.2, 0.85, 0.29, 0.54, 8], [-0.5, 0.84, 0.28, 0.54, 8], [0.3, 0.83, 0.26, 0.52, 8], [1.0, 0.82, 0.24, 0.5, 7], [1.6, 0.79, 0.19, 0.47, 6], [1.9, 0.72, 0.13, 0.44, 4], [1.99, 0.6, 0.07, 0.42, 3]], 40), mats.body));
+    g.add(box(1.25, 0.06, 1.15, DARK, 0, 0.83, -0.4));                                     // open cockpit tub
+    for (const sx of [1, -1]) g.add(box(0.48, 0.45, 0.12, DARK, sx * 0.3, 1.0, -0.75, 0.15));   // seat backs
+    g.add(box(1.32, 0.42, 0.03, OPEN_GLASS, 0, 1.0, 0.36, -0.95));                         // low windscreen
+    const hoop = new THREE.MeshStandardMaterial({ color: 0x1b1c20, roughness: 0.4, metalness: 0.6 }), tube = (a, b) => g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(...a), new THREE.Vector3(...b)), 1, 0.035, 6), hoop));
+    tube([0.55, 0.82, -0.85], [0.5, 1.3, -0.88]); tube([-0.55, 0.82, -0.85], [-0.5, 1.3, -0.88]); tube([0.5, 1.3, -0.88], [-0.5, 1.3, -0.88]); tube([0.5, 1.3, -0.88], [0.35, 0.85, -1.4]); tube([-0.5, 1.3, -0.88], [-0.35, 0.85, -1.4]);
+    for (const sx of [1, -1]) { g.add(box(0.32, 0.08, 0.06, HEAD_MAT, sx * 0.55, 0.66, 1.9)); g.add(box(0.28, 0.07, 0.04, TAIL_MAT, sx * 0.6, 0.74, -1.97)); }
+    g.add(box(0.9, 0.12, 0.05, DARK, 0, 0.42, 1.98));                                          // grille
+    rwing.add(box(1.0, 0.03, 0.18, CARBON, 0, 0.9, -1.85));                                     // small duckbill spoiler
+    fwing.add(box(1.5, 0.025, 0.14, CARBON, 0, 0.2, 1.92));
+    g.add(box(0.12, 0.08, 0.05, mats.body, 0.86, 0.92, 0.25), box(0.12, 0.08, 0.05, mats.body, -0.86, 0.92, 0.25));   // door mirrors
+    var shoulders = box(0.36, 0.5, 0.3, new THREE.MeshStandardMaterial({ color: 0x23252b, roughness: 0.8 }), C.helmet[0], 0.85, C.helmet[2]); g.add(shoulders);   // driver's shoulders (hidden in the cockpit view)
+  } else {
+    // London double-decker: two decks, cream band, big windows, destination blind lit up front and back
+    shadow.scale.set(1.25, 1, 1.85);
+    const cream = new THREE.MeshStandardMaterial({ color: 0xf1e7c8, roughness: 0.6 }), win = new THREE.MeshPhysicalMaterial({ color: 0x0b1118, roughness: 0.05, metalness: 0.5, clearcoat: 1 });
+    const lower = new THREE.Mesh(new RoundedBoxGeometry(2.52, 2.05, 10, 3, 0.12), mats.body); lower.position.set(0, 1.4, 0); lower.castShadow = true; g.add(lower);
+    const upper = new THREE.Mesh(new RoundedBoxGeometry(2.52, 1.95, 9.7, 4, 0.35), mats.body); upper.position.set(0, 3.38, -0.12); upper.castShadow = true; g.add(upper);
+    g.add(box(2.55, 0.14, 9.9, cream, 0, 2.42, 0));
+    g.add(box(2.56, 0.85, 7.6, win, 0, 1.9, -0.9), box(2.56, 0.82, 9.0, win, 0, 3.5, -0.12));
+    g.add(box(2.3, 1.1, 0.04, OPEN_GLASS, 0, 1.75, 5.01), box(2.3, 0.85, 0.04, win, 0, 3.55, 4.75));   // see-through windscreen for the driver
+    const dest = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xffa800, emissiveIntensity: 1.4 });
+    g.add(box(1.5, 0.28, 0.04, dest, 0, 2.62, 5.02), box(1.2, 0.26, 0.04, dest, 0, 2.62, -5.02));
+    for (const sx of [1, -1]) { g.add(box(0.3, 0.2, 0.05, HEAD_MAT, sx * 0.95, 0.75, 5.02)); g.add(box(0.22, 0.3, 0.05, TAIL_MAT, sx * 1.1, 0.95, -5.02)); g.add(box(0.06, 0.4, 0.3, DARK, sx * 1.4, 2.0, 4.6)); }
+    g.add(box(2.4, 0.35, 0.1, DARK, 0, 0.45, 5.0), box(2.4, 0.35, 0.1, DARK, 0, 0.45, -5.0));   // bumpers
+    for (const z of [C.axF, C.axR]) for (const sx of [1, -1]) g.add(box(0.05, 0.75, 1.5, DARK, sx * 1.27, 0.55, z));   // wheel arches
+  }
+  // side numbers on white roundels (the bus shows its route number)
+  const tex = numberTex(number, '#111111', 'rgba(255,255,255,0)'), nmat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  for (const sx of [1, -1]) {
+    const pl = new THREE.Mesh(new THREE.CircleGeometry(kind === 'bus' ? 0.32 : 0.19, 24), PLATE_MAT); pl.position.set(sx * C.num[0], C.num[1], C.num[2]); pl.rotation.y = sx * Math.PI / 2; g.add(pl);
+    const n = new THREE.Mesh(NUM_FIN, nmat); n.scale.setScalar(kind === 'bus' ? 1.5 : 0.85); n.position.set(sx * (C.num[0] + 0.004), C.num[1], C.num[2]); n.rotation.y = sx * Math.PI / 2; g.add(n);
+  }
+  const helmetMesh = new THREE.Group(); helmetMesh.position.set(...C.helmet);
+  helmetMesh.add(new THREE.Mesh(HELMET, new THREE.MeshPhysicalMaterial({ color: helmet, roughness: 0.2, metalness: 0.3, clearcoat: 1 })), new THREE.Mesh(VISOR, VISOR_MAT));
+  g.add(helmetMesh);
+  const wheels = [], stripes = [];
+  for (const [front, sx] of [[true, 1], [true, -1], [false, 1], [false, -1]]) {
+    const Wg = front ? M.front : M.rear;
+    const pivot = new THREE.Group(); pivot.position.set(sx * (C.track + 0.04 * C.ws), 0.36 * C.ws, front ? C.axF : C.axR); pivot.scale.setScalar(C.ws); g.add(pivot);
+    const spin = new THREE.Group(); pivot.add(spin);
+    spin.add(new THREE.Mesh(Wg.tyre, M.wheelMats.tyre), new THREE.Mesh(Wg.rim, M.wheelMats.rim));
+    const face = new THREE.Mesh(Wg.face, M.wheelMats.face); face.position.x = sx * (Wg.w / 2 - 0.004); face.rotation.y = sx * Math.PI / 2; spin.add(face);
+    for (const s2 of [1, -1]) { const st = new THREE.Mesh(Wg.stripe, M.wheelMats[compound]); st.position.x = s2 * (Wg.w / 2 + 0.002); spin.add(st); stripes.push(st); }
+    wheels.push({ pivot, spin, front });
+  }
+  const steering = new THREE.Group(); steering.position.set(C.helmet[0], 0.9, C.helmet[2] + 0.4); g.add(steering); steering.add(new THREE.Mesh(SW, DARK)); steering.visible = false;
+  return { group: g, wheels, helmet: helmetMesh, steering, cockpitHide: [helmetMesh].concat(typeof shoulders !== 'undefined' && shoulders ? [shoulders] : []), mats, numTex: tex, stripes, fwing, rwing, closed: kind };
+}
+
 /* ---- cockpit: a detailed steering wheel (formula-style or round), gloves on the grips, a live screen
    showing gear and speed, and a row of shift lights. Only the player's is shown, in the cockpit camera. */
 const RUBBER = new THREE.MeshStandardMaterial({ color: 0x1b1c20, roughness: 0.95 });
@@ -494,12 +559,12 @@ export function updateDash(car, { gear, kmh, rpm, frac, lap, pos, delta }) {
 }
 /* replace a car's simple wheel with the detailed one, placed for its cockpit */
 function fitCockpit(car, kind, glove) {
-  const W = buildWheel(kind === 'gt3' || kind === 'hyper' || kind === 'rally', glove);
-  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.99, 0.3, -0.32], eye: [0.32, 1.14, -0.1], scale: 0.72 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.11, 0.22, -0.32], eye: [0.32, 1.28, -0.2], scale: 0.72 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
+  const W = buildWheel(kind === 'gt3' || kind === 'hyper' || kind === 'rally' || kind === 'miata' || kind === 'bus', glove);
+  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.99, 0.3, -0.32], eye: [0.32, 1.14, -0.1], scale: 0.72 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.11, 0.22, -0.32], eye: [0.32, 1.28, -0.2], scale: 0.72 }, miata: { wheel: [0.3, 0.92, -0.05, -0.35], eye: [0.3, 1.08, -0.42], scale: 0.62 }, bus: { wheel: [-0.72, 1.55, 4.55, -1.0], eye: [-0.72, 2.05, 4.1], scale: 1.25 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
   const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); if (P.scale) W.group.scale.setScalar(P.scale); st.visible = false;
   car.dash = W; car.eye = P.eye;
   // T-cam mount: above the airbox on single-seaters; at the front of the roof, over the windscreen, on closed cars
-  car.tcam = { gt3: [0, 1.5, 0.5, 1.05], hyper: [0, 1.32, 0.78, 0.92], rally: [0, 1.64, 0.35, 1.0] }[kind] || [0, 1.36, -0.5, 0.8];
+  car.tcam = { gt3: [0, 1.5, 0.5, 1.05], hyper: [0, 1.32, 0.78, 0.92], rally: [0, 1.64, 0.35, 1.0], miata: [0, 1.38, -0.95, 1.0], bus: [0, 4.6, 3.6, 1.0] }[kind] || [0, 1.36, -0.5, 0.8];
   return car;
 }
 /* closed cars: dashboard, A-pillars, roof header, rear-view mirror, so the cockpit view looks out of a cabin */
@@ -529,6 +594,7 @@ function addInterior(g, kind) {
    second. Single-seaters: two side mirrors; GT3: rear-view mirror plus door mirrors; Hypercar: a rear-camera
    screen on the dash, as the real cars have. uv halves: the left mirror shows the left side and so on. */
 export function addLiveMirrors(car, tex) {
+  if (car.closed === 'miata' || car.closed === 'bus') return;
   const g = car.group, kind = car.closed || 'open', mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide });
   const plane = (w, h, u0, u1, x, y, z, ry = Math.PI, rx = 0) => {
     const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv;

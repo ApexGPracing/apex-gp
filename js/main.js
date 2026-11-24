@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=rally27v';
-import { World } from './world.js?v=rally27v';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=rally27v';
-import { Sound } from './audio.js?v=rally27v';
-import { Particles, Skids, Fireworks } from './fx.js?v=rally27v';
-import { Weather } from './weather.js?v=rally27v';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=rally27v';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=rally27v';
-import { Net, newCode, loadTurn } from './net.js?v=rally27v';
-import { VIP_CODES } from './codes.js?v=rally27v';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rally27v';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=rally27v';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=bus27w';
+import { World } from './world.js?v=bus27w';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=bus27w';
+import { Sound } from './audio.js?v=bus27w';
+import { Particles, Skids, Fireworks } from './fx.js?v=bus27w';
+import { Weather } from './weather.js?v=bus27w';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=bus27w';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=bus27w';
+import { Net, newCode, loadTurn } from './net.js?v=bus27w';
+import { VIP_CODES } from './codes.js?v=bus27w';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=bus27w';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=bus27w';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -229,6 +229,7 @@ const fireworks = new Fireworks(scene);
 const skids = new Skids(scene);
 
 const settings = Object.assign({ steer: 'normal', series: 'f1', lmClass: 'hyper', track: 0, mode: 'race', laps: 5, opp: 9, ai: 50, line: 'off', livery: 0, quali: 'on', weather: 'random', damage: 'sim', champType: 'real' }, store.json('apexgp2-settings', {}));
+if (SERIES[settings.series] && SERIES[settings.series].vip && store.get('apexgp-vip') !== '1') settings.series = 'f1';   // VIP-only series need a code
 if (settings.track >= TRACKS.length) settings.track = 0;
 if (typeof settings.diff === 'string') { settings.ai = { easy: 25, medium: 50, hard: 72 }[settings.diff] ?? 50; delete settings.diff; }
 delete settings.gfx;
@@ -2256,7 +2257,8 @@ function updateCamera(dt, time) {
   } else {
     // chase cam follows the direction of travel so slides are visible
     const slipLook = clamp(c.slip, -0.6, 0.6);
-    g.localToWorld(tmpV.set(Math.sin(slipLook) * 9.8, 2.9, -9.8 * Math.cos(slipLook))); g.localToWorld(tmpL.set(-c.steer * 1.2, 1.0, 5));
+    const big = c.closed === 'bus' ? 1.9 : 1;   // a double-decker needs the camera further back and higher
+    g.localToWorld(tmpV.set(Math.sin(slipLook) * 9.8 * big, 2.9 * big * (big > 1 ? 1.3 : 1), -9.8 * big * Math.cos(slipLook))); g.localToWorld(tmpL.set(-c.steer * 1.2, 1.0 * big, 5));
     if (camPos.lengthSq() === 0) { camPos.copy(tmpV); camLook.copy(tmpL); }
     camPos.lerp(tmpV, 1 - Math.exp(-dt * 7)); camLook.lerp(tmpL, 1 - Math.exp(-dt * 12));
     camPos.y = Math.max(camPos.y, bankH(game.T, c.idx, c.lat) + 1.0);
@@ -2703,6 +2705,7 @@ function initMenu() {
   document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const k = seg.dataset.opt, v = b.dataset.v;
+    if (k === 'series' && SERIES[v] && SERIES[v].vip && !isVip()) { $('vipMsg').textContent = SERIES[v].name + ' is VIP only. Enter a VIP code here to unlock it.'; $('vipCode').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('vipCode').focus(); return; }
     settings[k] = (k === 'laps' || k === 'opp') ? parseInt(v, 10) : v; saveSettings();
     if (k === 'line') world.setRaceLine(v === 'on');
     const prev = settings.track; refreshMenu();
@@ -2880,7 +2883,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=rally27v');
+await loadCarModel('js/car.bin?v=bus27w');
 initMenu();
 requestAnimationFrame(frame);
 

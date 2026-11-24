@@ -11,6 +11,9 @@ export const CLASSES = {
   gt3: { label: 'GT3', model: 'gt3', drag: 0.85, vmax: 0.8, power: 0.6, grip: 0.74, brake: 0.74, drs: false, eng: { lo: 3500, hi: 8800, cyl: 8, roar: 1.6, scream: 0.35 } },
   // VIP V10 monster: an early-2000s V10 F1 car, ~900 hp at 19,000+ rpm, a sharp piercing shriek with less bark
   v10: { label: 'V10', model: 'f1', drag: 0.95, vmax: 1.06, power: 1.25, grip: 1.0, brake: 1.05, drs: false, eng: { lo: 9000, hi: 19800, cyl: 10, roar: 0.35, scream: 2.4, sc2: 2.0, band: 2.6, q: 3.0, rasp: 0.45, blow: 0.2, bright: 1.5 } },
+  // MX-5 Cup: ~180 hp spec roadster, light and grippy, ~200 km/h; London double-decker bus: heavy, slow, wallowy
+  miata: { label: 'MX-5', model: 'miata', drag: 0.9, vmax: 0.62, power: 0.44, grip: 0.84, brake: 0.72, drs: false, eng: { lo: 2400, hi: 7500, cyl: 4, roar: 1.3, scream: 0.3 } },
+  bus: { label: 'BUS', model: 'bus', drag: 2.2, vmax: 0.34, power: 0.15, grip: 0.42, brake: 0.45, drs: false, eng: { lo: 500, hi: 2300, cyl: 6, roar: 2.4, scream: 0.02, rasp: 1.6, blow: 0 } },
   // Rally1: ~380 hp turbo four, light and short, big mechanical grip from 4WD but little downforce
   rally: { label: 'RALLY1', model: 'rally', drag: 0.95, vmax: 0.62, power: 0.5, grip: 0.68, brake: 0.7, drs: false, slide: { B: 8.5, C: 1.28, rearGrip: 0.92, yawDamp: 0.32, awd: true, lock: 0.55 }, eng: { lo: 3200, hi: 8500, cyl: 4, roar: 1.7, scream: 0.3 } },
   hyper: { label: 'HYPERCAR', model: 'hyper', drag: 0.72, vmax: 0.95, power: 0.8, grip: 0.86, brake: 0.86, drs: false, eng: { lo: 4800, hi: 10000, cyl: 6, roar: 1.3, scream: 0.6 } },
@@ -110,5 +113,19 @@ export const SERIES = {
       D('Esapekka Lappi', 'LAP', [0.89, 0.75, 0.8, 0.88, 1], 4, 1), D('Dani Sordo', 'SOR', [0.88, 0.7, 0.85, 0.9, 0.95], 6, 1),
       D('Josh McErlean', 'MCE', [0.86, 0.8, 0.7, 0.83, 1], 55, 2), D('Jon Armstrong', 'ARM', [0.85, 0.8, 0.7, 0.82, 1], 22, 2), D('Grégoire Munster', 'MUN', [0.85, 0.75, 0.7, 0.83, 1], 13, 2)],
   },
+  miata: {
+    id: 'miata', name: 'MX-5 Cup', short: 'MX5', cls: 'miata', laps: 5,
+    // Mazda MX-5 Cup-style spec roadster series on its US venues (driver names are made up)
+    calendar: ['daytona', 'stpete', 'sebring', 'laguna', 'midohio', 'roadamerica', 'vir', 'watkinsglen', 'indyroad', 'roadatlanta'],
+    teams: [T('McCumbee McAleer Racing', '#0b2a66', '#f2c200'), T('Hixon Motor Sports', '#f2f2f2', '#d40000'), T('JTR Motorsports Engineering', '#111111', '#39ff14'), T('Spark Performance', '#ff6a00', '#111111'), T('Copeland Motorsports', '#1e5fd0', '#f2f2f2'), T('BSI Racing', '#c0c4ca', '#7a1fa2')],
+    drivers: [D('Jake Morrow', 'MOR', [0.84, 0.8, 0.7, 0.84, 1], 2, 0), D('Tyler Benning', 'BEN', [0.86, 0.8, 0.7, 0.84, 1], 3, 0), D('Cole Hastings', 'HAS', [0.88, 0.8, 0.7, 0.84, 1], 4, 0), D('Ryan Delgado', 'DEL', [0.90, 0.8, 0.7, 0.84, 1], 5, 1), D('Maddie Kerr', 'KER', [0.92, 0.8, 0.7, 0.84, 1], 6, 1), D('Evan Pruitt', 'PRU', [0.84, 0.8, 0.7, 0.84, 1], 7, 1), D('Sam Okafor', 'OKA', [0.86, 0.8, 0.7, 0.84, 1], 8, 2), D('Luis Navarro', 'NAV', [0.88, 0.8, 0.7, 0.84, 1], 9, 2), D('Grant Whitfield', 'WHI', [0.90, 0.8, 0.7, 0.84, 1], 10, 2), D('Kaylee Brooks', 'BRO', [0.92, 0.8, 0.7, 0.84, 1], 11, 3), D('Owen Tatum', 'TAT', [0.84, 0.8, 0.7, 0.84, 1], 12, 3), D('Drew Calloway', 'CAL', [0.86, 0.8, 0.7, 0.84, 1], 13, 3), D('Marcus Fenn', 'FEN', [0.88, 0.8, 0.7, 0.84, 1], 14, 4), D('Riley Shaw', 'SHA', [0.90, 0.8, 0.7, 0.84, 1], 15, 4), D('Noah Lindqvist', 'LIN', [0.92, 0.8, 0.7, 0.84, 1], 16, 4), D('Ava Sinclair', 'SIN', [0.84, 0.8, 0.7, 0.84, 1], 17, 5), D('Ben Ortega', 'ORT', [0.86, 0.8, 0.7, 0.84, 1], 18, 5), D('Chase Dalton', 'DAL', [0.88, 0.8, 0.7, 0.84, 1], 19, 5)],
+  },
+  bus: {
+    id: 'bus', name: 'London Bus Racing', short: 'BUS', cls: 'bus', laps: 3, vip: true,
+    // VIP only: double-deckers flat out round London and a few famous circuits (route teams, made-up drivers)
+    calendar: ['london', 'silverstone', 'montecarlo', 'monza', 'lasvegas'],
+    teams: [T('Route 9', '#c8102e', '#f1e7c8'), T('Route 11', '#b50e27', '#111111'), T('Route 15', '#d4142f', '#d4af37'), T('Route 24', '#a50d22', '#f2f2f2'), T('Route 73', '#c8102e', '#1e5fd0'), T('Route 390', '#b50e27', '#39ff14')],
+    drivers: [D('Alfie Barker', 'BAR', [0.82, 0.9, 0.55, 0.8, 1], 9, 0), D('Darren Pike', 'PIK', [0.85, 0.9, 0.55, 0.8, 1], 9, 0), D('Shaz Okonjo', 'OKO', [0.88, 0.9, 0.55, 0.8, 1], 11, 1), D('Terry Mulligan', 'MUL', [0.91, 0.9, 0.55, 0.8, 1], 11, 1), D('Priya Kaur', 'KAU', [0.82, 0.9, 0.55, 0.8, 1], 15, 2), D('Gavin Hollis', 'HOL', [0.85, 0.9, 0.55, 0.8, 1], 15, 2), D('Beryl Nash', 'NAS', [0.88, 0.9, 0.55, 0.8, 1], 24, 3), D('Kofi Mensah', 'MEN', [0.91, 0.9, 0.55, 0.8, 1], 24, 3), D('Dot Hennessey', 'HEN', [0.82, 0.9, 0.55, 0.8, 1], 73, 4), D('Lenny Croft', 'CRO', [0.85, 0.9, 0.55, 0.8, 1], 73, 4), D('Tash Byrne', 'BYR', [0.88, 0.9, 0.55, 0.8, 1], 390, 5), D('Wilf Ashdown', 'ASH', [0.91, 0.9, 0.55, 0.8, 1], 390, 5)],
+  },
 };
-export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans', 'rally'];
+export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans', 'rally', 'miata', 'bus'];

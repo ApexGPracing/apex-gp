@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=rally27v';
-import { AXLE_F, AXLE_R } from './car.js?v=rally27v';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=rally27v';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=bus27w';
+import { AXLE_F, AXLE_R } from './car.js?v=bus27w';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=bus27w';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -404,6 +404,12 @@ export class World {
         skyline: (n = 30, R = 450) => { const g = new THREE.Group(); for (let k = 0; k < n; k++) { const a = r() * 6.28, d = r() * R, h = 60 + r() * r() * 260; g.add(tower(25 + r() * 25, h, 25 + r() * 25).translateX(Math.cos(a) * d).translateZ(Math.sin(a) * d)); } return g; },
         banking: () => { const g = new THREE.Group(), pts = []; for (let k = 0; k <= 40; k++) { const a = Math.PI * k / 40; pts.push([Math.cos(a) * 160, Math.sin(a) * 160]); } for (let k = 0; k < 40; k++) { const [x0, z0] = pts[k], [x1, z1] = pts[k + 1], L = Math.hypot(x1 - x0, z1 - z0), m2 = new THREE.Mesh(new THREE.BoxGeometry(L + 0.5, 0.6, 14), stone('#b9b4aa')); m2.position.set((x0 + x1) / 2, 4, (z0 + z1) / 2); m2.rotation.set(0, -Math.atan2(z1 - z0, x1 - x0), 0); m2.rotateX(0.75); g.add(m2); } return g; },
         castle: () => { const g = new THREE.Group(), c = stone('#9b8f7c'); g.add(B(60, 14, 40, c)); g.add(B(14, 34, 14, c, 0, 0, 0)); for (const [x, z] of [[-30, -20], [30, -20], [-30, 20], [30, 20]]) g.add(B(6, 18, 6, c, x, 0, z)); return g; },
+        // London
+        bigben: () => { const g = new THREE.Group(), c = stone('#c9b27e'), clockM = th.night ? glow('#fff2c0') : stone('#f4efe2'); g.add(B(13, 62, 13, c)); g.add(B(14, 14, 14, c, 0, 62)); for (const [x, z, ry] of [[0, 7.05, 0], [0, -7.05, Math.PI], [7.05, 0, Math.PI / 2], [-7.05, 0, -Math.PI / 2]]) { const f = new THREE.Mesh(new THREE.CircleGeometry(4.6, 32), clockM); f.position.set(x, 69, z); f.rotation.y = ry; g.add(f); } g.add(B(11, 8, 11, c, 0, 76)); const sp = new THREE.Mesh(new THREE.ConeGeometry(7, 14, 4), stone('#3c4a44')); sp.position.y = 91; sp.rotation.y = Math.PI / 4; g.add(sp); g.add(B(60, 26, 22, c, -34, 0, 0)); return g; },
+        londoneye: () => { const o = wheel(60, 68); return o; },
+        nelson: () => { const g = new THREE.Group(), c = stone('#d8d2c2'); g.add(B(10, 6, 10, c)); const col = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.0, 40, 16), c); col.position.y = 26; g.add(col); g.add(B(4, 4, 4, c, 0, 46)); const st = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 5, 8), stone('#4a4f55')); st.position.y = 52.5; g.add(st); for (const [x, z] of [[7, 7], [-7, 7], [7, -7], [-7, -7]]) g.add(B(3, 2.2, 6, stone('#2b2f34'), x, 0, z)); return g; },
+        buckingham: () => { const g = new THREE.Group(), c = stone('#e3dccb'); g.add(B(108, 24, 40, c)); g.add(B(40, 30, 6, c, 0, 0, 22)); for (let k = 0; k < 6; k++) g.add(B(2, 20, 2, stone('#f2ede2'), -12.5 + k * 5, 3, 25.5)); g.add(B(110, 2, 42, stone('#bcb3a0'), 0, 24)); return g; },
+        abbey: () => { const g = new THREE.Group(), c = stone('#cdbf9f'); g.add(B(30, 32, 120, c)); for (const x of [-11, 11]) { g.add(B(10, 68, 10, c, x, 0, 58)); const p2 = new THREE.Mesh(new THREE.ConeGeometry(3, 8, 4), c); p2.position.set(x, 72, 58); g.add(p2); } const roof = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 118, 3, 1), stone('#5d6a66')); roof.rotation.x = Math.PI / 2; roof.rotation.z = Math.PI / 2; roof.position.y = 36; roof.scale.set(1, 1, 0.5); g.add(roof); return g; },
         dunlop: () => { const g = new THREE.Group(), tyre = new THREE.Mesh(new THREE.TorusGeometry(15, 4, 12, 40, Math.PI), new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.9 })); g.add(tyre); const band = new THREE.Mesh(new THREE.BoxGeometry(24, 3, 1), new THREE.MeshStandardMaterial({ color: '#f5c400' })); band.position.set(0, 17, 4.2); g.add(band); return g; },
       };
       for (const L of T.def.landmarks || []) {
@@ -492,6 +498,14 @@ export class World {
         i += Math.round((nearHot ? 9 + rr() * 16 : 45 + rr() * 80) / DS);
       }
       geos.forEach((list, k) => { if (list.length) { const m2 = add(mergeGeometries(list), gMat[k]); m2.renderOrder = 2; m2.receiveShadow = true; } });
+    }
+    // def.phoneboxes: red telephone boxes along the pavement (London)
+    if (T.def.phoneboxes) {
+      const red = new THREE.MeshStandardMaterial({ color: '#c8102e', roughness: 0.45 }), glassP = new THREE.MeshStandardMaterial({ color: th.night ? '#ffe9b0' : '#9fb4c2', emissive: th.night ? '#ffd480' : '#000000', emissiveIntensity: 0.8 }), rr = rng(41);
+      for (let i = 60; i < N - 30; i += Math.round((110 + rr() * 120) / DS)) {
+        const sd = rr() < 0.5 ? 1 : -1, l = sd * (sideLim(T, sd)(i) + 1.6), fr = frameAt2(i, l);
+        fr.add(B0(1.0, 2.5, 1.0, red)); fr.add(B0(1.04, 1.4, 0.9, glassP, 0, 0.7)); fr.add(B0(1.1, 0.25, 1.1, red, 0, 2.5)); G.add(fr);
+      }
     }
     // def.wings: metres where a grandstand-to-pits bridge with a big curved "wing" roof crosses the main straight (Shanghai)
     for (const m of T.def.wings || []) {
