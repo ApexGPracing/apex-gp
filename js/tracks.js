@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp, smooth } from './util.js?v=derby27y';
+import { clamp, smooth } from './util.js?v=boat27a';
 
 export const W = 7;        // road half-width (m)
 export const KERB = 1.4;   // kerb width (m)
@@ -304,6 +304,11 @@ TRACKS.push({ id: 'haarhoff', vip: true, surface: 'dirt', oval: true, name: 'Luk
 /* Demolition derby arena (VIP): a wide dirt bowl ringed by concrete walls */
 TRACKS.push({ id: 'derbyarena', vip: true, arena: true, surface: 'dirt', oval: true, name: 'Derby Arena', loc: 'London Bus Demolition Derby', blurb: 'Last bus running wins.', theme: 'plains', type: S, runoff: 24, pit: 'L', drs: [], kerb: ['#e8e8e8', '#e8e8e8'],
   elev: [[0, 0], [200, 0]], scale: 1, pts: ovalPts(80, 0, 40) });
+
+/* Monza Oval (VIP): the 1955 'anello di alta velocita' - two long straights and two steep concrete bankings of 320 m radius,
+   about 4.25 km, run clockwise like the road course (the oval helper builds anticlockwise, so it is mirrored) */
+TRACKS.push({ id: 'monzaoval', vip: true, oval: true, name: 'Monza Oval', loc: 'Italy · Monza high-speed ring', blurb: 'The old banked ring: 4.25 km, two steep concrete bankings, flat out all the way.', theme: 'park', runoff: 2.5, pit: 'R', drs: [], kerb: ['#e8e8e8', '#e8e8e8'],
+  banks: ovalBanks(1110, 0, 320, 34), scale: 1, pts: ovalPts(1110, 0, 320).map(([x, z]) => [-x, z]) });
 
 /* Lightweight centreline for menu previews */
 export function previewPoints(def, n = 240) {

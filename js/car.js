@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=derby27y';
+import { canvasTex } from './util.js?v=boat27a';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -190,6 +190,55 @@ vec3 livery(vec3 p, vec3 c1) {
   return c;
 }`).replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = livery(vLivPos, diffuseColor.rgb);');
   };
+}
+
+/* Far-away cars are drawn as ONE merged, vertex-coloured mesh instead of ~60 separate parts: a full grid
+   costs a handful of draw calls instead of over a thousand. Built once per car; main.js swaps by distance. */
+const LOD_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 });
+export function addLodProxy(car) {
+  const g = car.group, parts = [], inv = new THREE.Matrix4(), m = new THREE.Matrix4(), col = new THREE.Color();
+  g.updateMatrixWorld(true); inv.copy(g.matrixWorld).invert();
+  g.traverse(o => {
+    if (!o.isMesh || !o.geometry || !o.material || Array.isArray(o.material)) return;
+    let vis = true; for (let p = o; p && p !== g; p = p.parent) if (!p.visible) vis = false;
+    if (!vis || o.material.transparent || o.material.isMeshBasicMaterial) return;
+    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+    m.multiplyMatrices(inv, o.matrixWorld); geo.applyMatrix4(m);
+    col.copy(o.material.color || col.set('#888888')); if (o.material.emissive && o.material.emissiveIntensity > 1) col.copy(o.material.emissive);
+    const n = geo.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(c, 3)); parts.push(geo);
+  });
+  if (!parts.length) return;
+  const proxy = new THREE.Mesh(mergeGeometries(parts), LOD_MAT); proxy.castShadow = true; proxy.visible = false; proxy.userData.lod = true;
+  car.lodKids = g.children.slice(); g.add(proxy); car.lodProxy = proxy; car.lodFar = false;
+}
+/* merge a car's fixed body parts that share a material into one mesh each (wheels, wings, helmet, steering and
+   anything see-through stay separate): roughly halves the draw calls of a nearby car */
+export function mergeCarStatic(car) {
+  const g = car.group, groups = new Map(), keep = new Set(car.cockpitHide || []);
+  for (const o of g.children) {
+    if (!o.isMesh || keep.has(o) || o.userData.lod || !o.visible || !o.material || Array.isArray(o.material) || o.material.transparent || o.material.isMeshBasicMaterial) continue;
+    const key = o.material.uuid + '|' + Object.keys(o.geometry.attributes).sort().join(',') + '|' + (o.geometry.index ? 'i' : 'n');
+    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(o);
+  }
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const geos = list.map(o => { o.updateMatrix(); const gg = o.geometry.clone(); gg.applyMatrix4(o.matrix); return gg; });
+    let merged = null; try { merged = mergeGeometries(geos); } catch (e) { merged = null; }
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, list[0].material); m.castShadow = list.some(o => o.castShadow); m.receiveShadow = true;
+    for (const o of list) g.remove(o);
+    g.add(m);
+  }
+}
+
+export function setCarLod(car, far) {
+  if (!car.lodProxy || car.lodFar === far) return;
+  car.lodFar = far;
+  for (const k of car.lodKids) { if (far) { k.userData.lodPrev = k.visible; k.visible = false; } else k.visible = k.userData.lodPrev ?? true; }
+  car.lodProxy.visible = far;
 }
 
 export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compound = 'medium', model = 'f1', livery = null }) {

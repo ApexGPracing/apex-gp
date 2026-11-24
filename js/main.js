@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=derby27y';
-import { World } from './world.js?v=derby27y';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=derby27y';
-import { Sound } from './audio.js?v=derby27y';
-import { Particles, Skids, Fireworks } from './fx.js?v=derby27y';
-import { Weather } from './weather.js?v=derby27y';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=derby27y';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=derby27y';
-import { Net, newCode, loadTurn } from './net.js?v=derby27y';
-import { VIP_CODES } from './codes.js?v=derby27y';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=derby27y';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=derby27y';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=boat27a';
+import { World } from './world.js?v=boat27a';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=boat27a';
+import { Sound } from './audio.js?v=boat27a';
+import { Particles, Skids, Fireworks } from './fx.js?v=boat27a';
+import { Weather } from './weather.js?v=boat27a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=boat27a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=boat27a';
+import { Net, newCode, loadTurn } from './net.js?v=boat27a';
+import { VIP_CODES } from './codes.js?v=boat27a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=boat27a';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=boat27a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -300,14 +300,14 @@ function makeField(lineup, skill) {
   const basePcls = classFor(TEAMS.length, true), pcls = v10On() ? 'v10' : basePcls;
   const myLiv = { p: PATS[(lv * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
   const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: myNum(), compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
-  vipFinish(p, lv); vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
+  vipFinish(p, lv); vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); mergeCarStatic(p); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
     const tm = TEAMS[teamIdxOf(di)], cls = mate ? basePcls : classFor(teamIdxOf(di), false);
     const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium', model: CLASSES[cls].model, livery: mate ? myLiv : liveryFor(teamIdxOf(di)) }), { cls, spec: CLASSES[cls] },
       { name: DRIVERS[di][0], code: DRIVERS[di][1], team: mate ? 'Your Team' : tm.name, color: mate ? colr : tm.color, isPlayer: false, mate, teamIdx: mate ? TEAMS.length : teamIdxOf(di),
         per: personaOf(DRIVERS[di][1]), pace: Math.min(1.035, aiPace(skill) * L.rating * (1 + (personaOf(DRIVERS[di][1]).skill - 0.86) * 0.03)), lateBrake: skill >= 70, rating: L.rating, boost: aiBoost(skill) });
-    game.cars.push(c); if (mate) game.mate = c;
+    mergeCarStatic(c); addLodProxy(c); game.cars.push(c); if (mate) game.mate = c;
   });
   for (const c of game.cars) { resetState(c); c.stints = []; scene.add(c.group); }
   p.steering.visible = true;
@@ -910,8 +910,8 @@ function damage(c, impact, where, scale = 1) {
   else if (where === 'rear') d.rw = Math.min(1, d.rw + impact * k / 28);
   else { d.susp = Math.min(1, d.susp + Math.max(0, impact - 9) * k / 40); d.pull = clamp(d.pull + (Math.random() < 0.5 ? -1 : 1) * Math.max(0, impact - 7) * k / 300, -0.14, 0.14); }
   if (impact > 15 && Math.random() < 0.3 * k) d.punct = true;
-  if (d.fw >= 0.85 && c.fwing.visible) { c.fwing.visible = false; debris(c, 1.9); if (racing() && !game.flag && Math.random() < 0.35) deployFlag('vsc', 'debris on track'); }
-  if (d.rw >= 0.9 && c.rwing.visible) { c.rwing.visible = false; debris(c, -2.3); }
+  if (d.fw >= 0.85 && c.fwing.visible) { c.fwing.visible = false; c.fwing.userData.lodPrev = false; debris(c, 1.9); if (racing() && !game.flag && Math.random() < 0.35) deployFlag('vsc', 'debris on track'); }
+  if (d.rw >= 0.9 && c.rwing.visible) { c.rwing.visible = false; c.rwing.userData.lodPrev = false; debris(c, -2.3); }
   if (impact > 30 / Math.max(k, 0.3) || d.susp >= 1) { retire(c, 'accident'); return; }
   if (c.isPlayer && isRace()) {
     if (d.fw - before.fw > 0.15) radio(d.fw > 0.6 ? 'Front wing is badly damaged. Box this lap.' : 'We have some front wing damage. Car will understeer.', d.fw > 0.6 ? 'bad' : 'warn');
@@ -1928,7 +1928,7 @@ function startMp(cfg) {
           teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined, ocPid: pl.ocPid || null });
       vipFinish(c, lv); vipExtras(c, mine ? myExtras() : pl.vx); helmetDesign(c, mine ? myHelmet() : (pl.hel ?? -1)); c.vip = mine ? isVip() : !!pl.vip;
       if (c.vip && !mine) c.group.add(makeCrown());   // VIP crown over other VIP players' cars
-      game.cars.push(c); if (mine) { game.player = c; addLiveMirrors(c, mirrorRT.texture); c.hasMirrors = true; }
+      mergeCarStatic(c); if (!mine) addLodProxy(c); game.cars.push(c); if (mine) { game.player = c; addLiveMirrors(c, mirrorRT.texture); c.hasMirrors = true; }
     });
     game.mate = null;
     for (const c of game.cars) { resetState(c); c.stints = []; scene.add(c.group); }
@@ -2221,6 +2221,7 @@ function updateCarVisuals(dt) {
   for (const c of game.cars) {
     if (!c.group.visible) continue;
     c.group.position.set(c.x, 0, c.z); c.group.rotation.order = 'YXZ'; c.group.rotation.y = c.h;
+    if (c.lodProxy) { const dC = Math.hypot(c.x - camera.position.x, c.z - camera.position.z); setCarLod(c, c.lodFar ? dC > 34 : dC > 42); }   // far cars: one merged mesh
     if (c.spec && c.spec.slide && !c.isPlayer && !c.dnf) {
       // AI rally cars slide too: the nose points into the corner, more the faster and tighter it is
       const Tr2 = game.T, j = (c.idx + 6) % Tr2.N, turn = angDiff(Math.atan2(Tr2.tx[j], Tr2.tz[j]), Math.atan2(Tr2.tx[c.idx], Tr2.tz[c.idx]));
@@ -2954,7 +2955,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=derby27y');
+await loadCarModel('js/car.bin?v=boat27a');
 initMenu();
 requestAnimationFrame(frame);
 
