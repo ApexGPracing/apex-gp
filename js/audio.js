@@ -112,8 +112,8 @@ export class Sound {
     e.jit = (e.jit || 0) * 0.85 + (Math.random() - 0.5) * 0.0035 * lumpy;
     const fire = e.srpm / 60 * eng.cyl / 2 * (1 + e.jit), base = fire / 2;
     e.o1.frequency.setTargetAtTime(base, t, 0.015); e.o2.frequency.setTargetAtTime(base * 1.0035, t, 0.015);
-    e.f1.frequency.setTargetAtTime(1600 + e.srpm * 0.08, t, 0.05);
-    e.f2.frequency.setTargetAtTime(2500 + thr * 4500 + e.srpm * 0.15, t, 0.05);
+    e.f1.frequency.setTargetAtTime((1600 + e.srpm * 0.08) * (eng.bright || 1), t, 0.05);
+    e.f2.frequency.setTargetAtTime((2500 + thr * 4500 + e.srpm * 0.15) * (eng.bright || 1), t, 0.05);   // V10: opens the top end up
     // scream gets stronger with revs and throttle; rasp is strongest on throttle
     const hi = Math.min(1, Math.max(0, (e.srpm - (eng.lo + 0.18 * span)) / (0.82 * span))) * eng.scream;
     e.sc.frequency.setTargetAtTime(fire, t, 0.015); e.sc2.frequency.setTargetAtTime(fire * (eng.sc2 || 1.5), t, 0.015);

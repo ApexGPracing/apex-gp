@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=v10x27t';
-import { World } from './world.js?v=v10x27t';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=v10x27t';
-import { Sound } from './audio.js?v=v10x27t';
-import { Particles, Skids, Fireworks } from './fx.js?v=v10x27t';
-import { Weather } from './weather.js?v=v10x27t';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=v10x27t';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=v10x27t';
-import { Net, newCode, loadTurn } from './net.js?v=v10x27t';
-import { VIP_CODES } from './codes.js?v=v10x27t';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=v10x27t';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=v10x27t';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=v10s27u';
+import { World } from './world.js?v=v10s27u';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=v10s27u';
+import { Sound } from './audio.js?v=v10s27u';
+import { Particles, Skids, Fireworks } from './fx.js?v=v10s27u';
+import { Weather } from './weather.js?v=v10s27u';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=v10s27u';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=v10s27u';
+import { Net, newCode, loadTurn } from './net.js?v=v10s27u';
+import { VIP_CODES } from './codes.js?v=v10s27u';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=v10s27u';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=v10s27u';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -2878,7 +2878,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=v10x27t');
+await loadCarModel('js/car.bin?v=v10s27u');
 initMenu();
 requestAnimationFrame(frame);
 
