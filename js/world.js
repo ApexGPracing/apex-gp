@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=melco27n';
-import { AXLE_F, AXLE_R } from './car.js?v=melco27n';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=melco27n';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=graf27o';
+import { AXLE_F, AXLE_R } from './car.js?v=graf27o';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=graf27o';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -466,6 +466,32 @@ export class World {
       for (const k of [0, cnt]) { const i = (a + k) % N; for (let d = 9; d <= 25; d += 4) { const o = B0(1, 0.8, 1, deck, 0, 0, 0); o.position.set(T.px[i] + T.nx[i] * lat(i, d), elevAt(T, i), T.pz[i] + T.nz[i] * lat(i, d)); G.add(o); } }
       const mid = (a + Math.round(cnt * 0.5)) % N, dt2 = new THREE.Group(); dt2.add(B0(4, 10, 4, deck)); dt2.add(B0(6, 0.4, 2, deck, 0, 10, 2)); dt2.position.set(T.px[mid] + T.nx[mid] * lat(mid, 31), elevAt(T, mid), T.pz[mid] + T.nz[mid] * lat(mid, 31)); dt2.rotation.y = Math.atan2(T.tx[mid], T.tz[mid]); G.add(dt2);
       for (let k = 0; k <= cnt; k += 6) { const i = (a + k) % N; keepOut.push([T.px[i] + T.nx[i] * lat(i, 17), T.pz[i] + T.nz[i] * lat(i, 17), 20]); }
+    }
+    // def.graffiti (Nordschleife): fan graffiti painted on the road: messages, flags, hearts and smileys,
+    // readable by the driver coming towards them, denser at the famous spectator spots
+    if (T.def.graffiti) {
+      const MSG = ['GRÜNE HÖLLE', 'VOLLGAS!', 'NO LIFT', 'GO GO GO', 'RING ♥', 'EIFEL', 'FULL SEND', 'ALLEZ!', 'LATE BRAKE', 'HI MUM', 'BRÜNNCHEN', 'SEND IT', 'FLAT OUT', 'TOUCH WOOD', '24H', 'KEEP LEFT', 'RINGTOOL', 'YOU GOT THIS', 'VMAX', 'HELLO WORLD'];
+      const PAINT = ['#f4f4f2', '#f4f4f2', '#f4f4f2', '#ffd23a', '#ff4a3a', '#36b6ff'];
+      const rr = rng(77), kinds = [];
+      const tag = (draw) => { const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256; const g = cv.getContext('2d'); draw(g); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+      const spray = (g, col, fn) => { g.globalAlpha = 0.9; g.strokeStyle = col; g.fillStyle = col; g.lineCap = 'round'; g.lineJoin = 'round'; fn(); g.globalAlpha = 1; for (let k = 0; k < 90; k++) { g.fillStyle = col; g.globalAlpha = 0.35 * rr(); g.fillRect(rr() * 512, rr() * 256, 2, 2); } g.globalAlpha = 1; };
+      for (let k = 0; k < 14; k++) {
+        const col = PAINT[k % PAINT.length], m = MSG[k];
+        kinds.push(tag(g => spray(g, col, () => { g.save(); g.translate(256, 128); g.rotate((rr() - 0.5) * 0.12); g.font = 'italic 900 ' + (m.length > 9 ? 74 : 104) + 'px "Barlow Condensed", Impact, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 6; g.strokeText(m, 0, 0); g.fillText(m, 0, 0); g.restore(); })));
+      }
+      kinds.push(tag(g => spray(g, '#ff4a3a', () => { g.beginPath(); g.moveTo(256, 220); g.bezierCurveTo(60, 110, 150, 10, 256, 80); g.bezierCurveTo(362, 10, 452, 110, 256, 220); g.fill(); })));                              // heart
+      kinds.push(tag(g => spray(g, '#ffd23a', () => { g.lineWidth = 14; g.beginPath(); g.arc(256, 128, 100, 0, 7); g.stroke(); g.beginPath(); g.arc(256, 140, 55, 0.2, Math.PI - 0.2); g.stroke(); g.fillRect(215, 85, 18, 28); g.fillRect(280, 85, 18, 28); })));   // smiley
+      kinds.push(tag(g => spray(g, '#f4f4f2', () => { for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) if ((x + y) % 2 === 0) g.fillRect(96 + x * 40, 48 + y * 40, 40, 40); g.lineWidth = 4; g.strokeRect(96, 48, 320, 160); })));   // chequered flag
+      kinds.push(tag(g => spray(g, '#f4f4f2', () => { g.lineWidth = 22; g.beginPath(); g.moveTo(256, 230); g.lineTo(256, 50); g.stroke(); g.beginPath(); g.moveTo(180, 120); g.lineTo(256, 40); g.lineTo(332, 120); g.stroke(); })));   // arrow
+      const gMat = kinds.map(t => new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.75, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+      const geos = kinds.map(() => []), hot = (T.def.graffiti.hot || []).map(m => Math.round(m / DS));
+      let i = 40;
+      while (i < N - 40) {
+        const nearHot = hot.some(h => Math.abs(h - i) < 300), k = Math.floor(rr() * kinds.length), len = Math.round((k < 14 ? 11 + rr() * 7 : 6 + rr() * 3) / DS), half = k < 14 ? 4.2 + rr() * 1.6 : 3.2, lat = (rr() * 2 - 1) * (W - half - 0.5);
+        if (Math.abs(T.curv[i]) < 1 / 25) geos[k].push(ribbon(T, i, len, [() => [lat + half, 0.035, 0], () => [lat - half, 0.035, 1]], len * DS));
+        i += Math.round((nearHot ? 9 + rr() * 16 : 45 + rr() * 80) / DS);
+      }
+      geos.forEach((list, k) => { if (list.length) { const m2 = add(mergeGeometries(list), gMat[k]); m2.renderOrder = 2; m2.receiveShadow = true; } });
     }
     // def.wings: metres where a grandstand-to-pits bridge with a big curved "wing" roof crosses the main straight (Shanghai)
     for (const m of T.def.wings || []) {
