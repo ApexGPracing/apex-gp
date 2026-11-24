@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=line27l';
-import { AXLE_F, AXLE_R } from './car.js?v=line27l';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=line27l';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=port27m';
+import { AXLE_F, AXLE_R } from './car.js?v=port27m';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=port27m';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -183,7 +183,20 @@ export class World {
       }
       return cap;
     };
-    const height = (x, z) => {
+    // def.harbour (Monaco's Port Hercule): a basin dug out of the ground beside the track, bounded by the quay
+    // along the given stretch of track and by the outer points in def.harbour.far
+    let harbourPoly = null, hb = null;
+    const inPoly = (x, z, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const xi = P[i][0], zi = P[i][1], xj = P[j][0], zj = P[j][1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
+    if (T.def.harbour) {
+      const H = T.def.harbour; harbourPoly = [];
+      for (let m = H.from; m <= H.to; m += 6) { const i = Math.round(m / DS) % N, off = (H.side > 0 ? T.limL[i] : T.limR[i]) + (H.quay || 9); harbourPoly.push([T.px[i] + T.nx[i] * H.side * off, T.pz[i] + T.nz[i] * H.side * off]); }
+      harbourPoly.push(...H.far);
+      hb = [Math.min(...harbourPoly.map(p => p[0])), Math.max(...harbourPoly.map(p => p[0])), Math.min(...harbourPoly.map(p => p[1])), Math.max(...harbourPoly.map(p => p[1]))];
+    }
+    const inHarbour = (x, z) => !!harbourPoly && x > hb[0] && x < hb[1] && z > hb[2] && z < hb[3] && inPoly(x, z, harbourPoly);
+    const harbourFloor = (th.water ? th.water.level : 0) - 6;
+    const height = (x, z) => { const h = heightRaw(x, z); return inHarbour(x, z) ? Math.min(h, harbourFloor) : h; };
+    const heightRaw = (x, z) => {
       const d = dist(x, z), t = smooth(flat, flat + 600, d);
       let base = T.elev ? elevNear(x, z) - 0.6 * (1 - smooth(T.wallOff, flat, d)) : 0;
       if (T.elev && d < corridor) base = Math.min(base, roadCap(x, z) - 0.6);
@@ -415,6 +428,32 @@ export class World {
       add(ribbon(T, a, cnt, [i => [sd * (lim(i) + 2 + D), 0, 0], i => [sd * (lim(i) + 2 + D), Hs, 1]], 6, { up: false }), new THREE.MeshStandardMaterial({ color: '#8d939c', roughness: 0.9, side: THREE.DoubleSide }));
       for (let k = 0; k <= cnt; k += 60) { const i = (a + k) % N, l = sd * (lim(i) + 4 + D), lt = new THREE.Group(); lt.add(B0(1.2, Hs + 26, 1.2, stl)); lt.add(B0(8, 3, 1, new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff4dc').multiplyScalar(th.night ? 4 : 1.2), toneMapped: false }), 0, Hs + 26)); lt.position.set(T.px[i] + T.nx[i] * l, elevAt(T, i), T.pz[i] + T.nz[i] * l); lt.rotation.y = Math.atan2(T.tx[i], T.tz[i]); G.add(lt); }
       for (let k = 0; k <= cnt; k += 8) { const i = (a + k) % N, l = sd * (lim(i) + 2 + D / 2); keepOut.push([T.px[i] + T.nx[i] * l, T.pz[i] + T.nz[i] * l, D / 2 + 4]); }
+    }
+    if (harbourPoly) {
+      const H = T.def.harbour, a = Math.round(H.from / DS) % N, cnt = Math.round((H.to - H.from) / DS), sd = H.side, lim = sideLim(T, sd), qy = H.quay || 9, wl = th.water ? th.water.level : 0;
+      const quayM = new THREE.MeshStandardMaterial({ color: '#cfc6b4', roughness: 0.85, side: THREE.DoubleSide }), paveM = new THREE.MeshStandardMaterial({ color: '#b9b2a6', roughness: 0.9 });
+      add(ribbon(T, a, cnt, [i => [sd * (lim(i) + 0.4), 0.04, 0], i => [sd * (lim(i) + qy + 0.3), 0.04, 1]], 6), paveM);
+      add(ribbon(T, a, cnt, [i => [sd * (lim(i) + qy), wl - 3 - elevAt(T, i), 0], i => [sd * (lim(i) + qy), 0.05, 1]], 6, { up: false }), quayM);
+      // yachts: rows of pontoons with boats moored stern-to on both sides, superyachts along the quays
+      const yachts = [], piers = [], Y = (x, z, h, sc, kind) => { if (inHarbour(x, z) && inHarbour(x + Math.sin(h) * 10 * sc, z + Math.cos(h) * 10 * sc) && inHarbour(x - Math.sin(h) * 10 * sc, z - Math.cos(h) * 10 * sc)) yachts.push([x, z, h, sc, kind]); };
+      for (let z = hb[2] + 40; z < hb[3] - 30; z += 56) {
+        let x0 = null; for (let x = hb[0] + 10; x < hb[1] - 60; x += 4) { const ok = inHarbour(x, z) && inHarbour(x, z - 18) && inHarbour(x, z + 18); if (ok && x0 === null) x0 = x; if ((!ok || x >= hb[1] - 64) && x0 !== null) { if (x - x0 > 30) { const w = x - x0; piers.push([x0, x0 + w * 0.42, z]); if (w > 160) piers.push([x - w * 0.2, x, z]); } x0 = null; } }   // open water down the middle
+      }
+      for (const [x0, x1, z] of piers) for (const s2 of [-1, 1]) for (let x = x0 + 6; x < x1 - 4;) { const sc = 0.65 + r() * r() * 0.75; if (r() < 0.88) Y(x, z + s2 * (2.5 + 10.5 * sc), s2 > 0 ? 0 : Math.PI, sc, r() < 0.15 ? 1 : 0); x += 5.6 * sc + 1.6; }
+      for (let k = 0; k <= cnt; k += 22) { const i = (a + k) % N, l = sd * (lim(i) + qy + 9), h0 = Math.atan2(T.tx[i], T.tz[i]); Y(T.px[i] + T.nx[i] * l, T.pz[i] + T.nz[i] * l, h0, 2.2 + r() * 1.2, r() < 0.3 ? 1 : 0); }
+      const pier = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.5, 4), new THREE.MeshStandardMaterial({ color: '#6b6258', roughness: 0.9 }), piers.length), dd = new THREE.Object3D();
+      piers.forEach(([x0, x1, z], k) => { dd.position.set((x0 + x1) / 2, wl + 0.35, z); dd.rotation.set(0, 0, 0); dd.scale.set(x1 - x0, 1, 1); dd.updateMatrix(); pier.setMatrixAt(k, dd.matrix); }); G.add(pier);
+      const hull = mergeGeometries([new THREE.BoxGeometry(4.6, 2.2, 20).translate(0, 1.1, 0), new THREE.ConeGeometry(2.3, 6, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.6, 1).translate(0, 1.2, 13), new THREE.BoxGeometry(4.2, 0.25, 26).translate(0, 2.3, 1)]);
+      const decks = mergeGeometries([new THREE.BoxGeometry(3.8, 2, 12).translate(0, 3.3, -1), new THREE.BoxGeometry(3.2, 1.8, 7).translate(0, 5.2, -0.5), new THREE.BoxGeometry(2.2, 1.2, 3).translate(0, 6.7, 0)]);
+      const glassB = new THREE.BoxGeometry(3.85, 0.7, 11).translate(0, 3.6, -1);
+      const hullM = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3, metalness: 0.1 }), deckM = new THREE.MeshStandardMaterial({ color: '#f4f5f6', roughness: 0.4 });
+      const winM = th.night ? new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd9a0').multiplyScalar(1.6), toneMapped: false }) : new THREE.MeshStandardMaterial({ color: '#10161f', roughness: 0.05, metalness: 0.8 });
+      const imH = new THREE.InstancedMesh(hull, hullM, yachts.length), imD = new THREE.InstancedMesh(decks, deckM, yachts.length), imW = new THREE.InstancedMesh(glassB, winM, yachts.length), hc = new THREE.Color();
+      yachts.forEach(([x, z, h, sc, kind], k) => { dd.position.set(x, wl - 0.6, z); dd.rotation.set(0, h, 0); dd.scale.setScalar(sc); dd.updateMatrix(); imH.setMatrixAt(k, dd.matrix); imD.setMatrixAt(k, dd.matrix); imW.setMatrixAt(k, dd.matrix); hc.set(kind ? ['#14233d', '#2b2f36', '#7b8794'][k % 3] : '#ffffff'); imH.setColorAt(k, hc); });
+      this.yachtCount = yachts.length;
+      for (const im of [imH, imD, imW]) { im.castShadow = q > 0; im.receiveShadow = true; G.add(im); }
+      // the blue floating platform with a white canopy (hospitality / grandstand barge)
+      if (H.barge !== undefined) { const i = Math.round(H.barge / DS) % N, l = sd * (lim(i) + qy + 26), fr = frameAt2(i, l); fr.position.y = wl; fr.add(B0(50, 3, 18, new THREE.MeshStandardMaterial({ color: '#1f3fa8', roughness: 0.5 }), 0, -1)); fr.add(B0(46, 0.6, 16, new THREE.MeshStandardMaterial({ map: tx.crowd, roughness: 0.9 }), 0, 2)); const roof = new THREE.Mesh(new THREE.ConeGeometry(30, 6, 4, 1).rotateY(Math.PI / 4).scale(1, 1, 0.42), new THREE.MeshStandardMaterial({ color: '#f7f7f7', roughness: 0.5, side: THREE.DoubleSide })); roof.position.y = 10; fr.add(roof); for (const x of [-20, 20]) for (const z of [-6, 6]) fr.add(B0(0.4, 8, 0.4, stl, x, 2, z)); G.add(fr); }
     }
     // def.pool: [from, to, side] Monaco's Rainier III swimming pool on the harbour front, which the Piscine chicanes swing round
     if (T.def.pool) {
