@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=rims27p';
-import { World } from './world.js?v=rims27p';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=rims27p';
-import { Sound } from './audio.js?v=rims27p';
-import { Particles, Skids, Fireworks } from './fx.js?v=rims27p';
-import { Weather } from './weather.js?v=rims27p';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=rims27p';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=rims27p';
-import { Net, newCode, loadTurn } from './net.js?v=rims27p';
-import { VIP_CODES } from './codes.js?v=rims27p';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rims27p';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=rims27p';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=ring27q';
+import { World } from './world.js?v=ring27q';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=ring27q';
+import { Sound } from './audio.js?v=ring27q';
+import { Particles, Skids, Fireworks } from './fx.js?v=ring27q';
+import { Weather } from './weather.js?v=ring27q';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=ring27q';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=ring27q';
+import { Net, newCode, loadTurn } from './net.js?v=ring27q';
+import { VIP_CODES } from './codes.js?v=ring27q';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=ring27q';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=ring27q';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -727,7 +727,7 @@ function wallHit(c, Tr, ni, d, L) {
 }
 
 /* VIP Time Trial ghost: your best lap is recorded and replayed as a see-through car to race against */
-const ghostKey = () => 'apexgp-ghost-' + serKey(game.T.def.id);
+const ghostKey = () => 'apexgp-ghost2-' + serKey(game.T.def.id);   // v2: old Nordschleife ghosts were recorded the wrong way round
 function ghostLap(lt, valid) {
   const G = game.ghost || (game.ghost = { rec: [], start: null });
   if (valid && G.rec.length > 20 && G.start !== null) {
@@ -2824,7 +2824,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=rims27p');
+await loadCarModel('js/car.bin?v=ring27q');
 initMenu();
 requestAnimationFrame(frame);
 
