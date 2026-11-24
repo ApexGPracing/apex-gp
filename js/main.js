@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=smoke27s';
-import { World } from './world.js?v=smoke27s';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=smoke27s';
-import { Sound } from './audio.js?v=smoke27s';
-import { Particles, Skids, Fireworks } from './fx.js?v=smoke27s';
-import { Weather } from './weather.js?v=smoke27s';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=smoke27s';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=smoke27s';
-import { Net, newCode, loadTurn } from './net.js?v=smoke27s';
-import { VIP_CODES } from './codes.js?v=smoke27s';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=smoke27s';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=smoke27s';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=v10x27t';
+import { World } from './world.js?v=v10x27t';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=v10x27t';
+import { Sound } from './audio.js?v=v10x27t';
+import { Particles, Skids, Fireworks } from './fx.js?v=v10x27t';
+import { Weather } from './weather.js?v=v10x27t';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=v10x27t';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=v10x27t';
+import { Net, newCode, loadTurn } from './net.js?v=v10x27t';
+import { VIP_CODES } from './codes.js?v=v10x27t';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=v10x27t';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=v10x27t';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -269,7 +269,8 @@ function newSeason() {
 const game = { state: 'menu', T: null, cars: [], player: null, mate: null, session: null, phase: 'idle', lightsT: 0, goAt: 0, raceTime: 0, camMode: 2, paused: false, finishCount: 0, orbit: 0, resultsAt: 0, season: null, laps: 5, skill: 50, q: null, grid: null, wx: {}, to: null, fastest: Infinity };
 const cm = parseInt(store.get('apexgp-cam'), 10); if (cm >= 0 && cm < 3) game.camMode = cm;
 const keys = {};
-const serKey = id => (SER.id === 'f1' ? '' : SER.id + '-') + id;
+const v10On = () => isVip() && !!settings.vipV10 && settings.mode !== 'mp';   // VIP V10 monster (not online)
+const serKey = id => (v10On() ? 'v10-' : SER.id === 'f1' ? '' : SER.id + '-') + id;   // V10 times kept separate
 const bestKey = T => 'apexgp2-best-' + serKey(T.def.id);
 const recordFor = T => { const v = parseFloat(store.get(bestKey(T))); return isFinite(v) ? v : 0; };
 const T = () => game.T;
@@ -295,13 +296,13 @@ function setTyres(c, comp) { c.tyre = { comp, wear: 0 }; c.tyreLap = Math.max(1,
 function makeField(lineup, skill) {
   clearCars();
   const lv = myLivery(), colr = LIVERIES[lv], acc = accentFor(lv);
-  const pcls = classFor(TEAMS.length, true);
+  const basePcls = classFor(TEAMS.length, true), pcls = v10On() ? 'v10' : basePcls;
   const myLiv = { p: PATS[(lv * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
   const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: myNum(), compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
   vipFinish(p, lv); vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
-    const tm = TEAMS[teamIdxOf(di)], cls = mate ? pcls : classFor(teamIdxOf(di), false);
+    const tm = TEAMS[teamIdxOf(di)], cls = mate ? basePcls : classFor(teamIdxOf(di), false);
     const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium', model: CLASSES[cls].model, livery: mate ? myLiv : liveryFor(teamIdxOf(di)) }), { cls, spec: CLASSES[cls] },
       { name: DRIVERS[di][0], code: DRIVERS[di][1], team: mate ? 'Your Team' : tm.name, color: mate ? colr : tm.color, isPlayer: false, mate, teamIdx: mate ? TEAMS.length : teamIdxOf(di),
         per: personaOf(DRIVERS[di][1]), pace: Math.min(1.035, aiPace(skill) * L.rating * (1 + (personaOf(DRIVERS[di][1]).skill - 0.86) * 0.03)), lateBrake: skill >= 70, rating: L.rating, boost: aiBoost(skill) });
@@ -2727,6 +2728,7 @@ function initMenu() {
     $('vipGhost').textContent = 'Time Trial ghost: ' + (settings.vipGhost === false ? 'Off' : 'On');
     $('vipSmoke').textContent = 'Tyre smoke: ' + SMOKE_NAMES[settings.vipSmoke || 0];
     $('vipFlames').textContent = 'Exhaust flames: ' + (settings.vipFlames === false ? 'Off' : 'On');
+    $('vipV10').textContent = 'V10 monster car: ' + (settings.vipV10 ? 'On' : 'Off');
     if (document.activeElement !== $('vipNum')) $('vipNum').value = settings.vipNum || '';
     if (document.activeElement !== $('vipMsgIn')) $('vipMsgIn').value = settings.vipMsg || '';
   };
@@ -2736,6 +2738,7 @@ function initMenu() {
   $('vipGhost').onclick = () => { settings.vipGhost = settings.vipGhost === false; saveSettings(); vipUi(); };
   $('vipSmoke').onclick = () => { settings.vipSmoke = ((settings.vipSmoke || 0) + 1) % SMOKES.length; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipFlames').onclick = () => { settings.vipFlames = settings.vipFlames === false; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipV10').onclick = () => { settings.vipV10 = !settings.vipV10; saveSettings(); vipUi(); refreshMenu(); if (settings.vipV10) $('vipMsg').textContent = 'V10 monster on: ~900 hp, 19,000 rpm V10 scream. Quick Race, Time Trial and Championship (not online).'; };
   document.querySelectorAll('#qchat button').forEach(b => b.onclick = () => quickChat(+b.dataset.k));
   $('vipNum').onchange = () => { const v = Math.round(+$('vipNum').value); settings.vipNum = v >= 1 && v <= 99 ? v : null; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
@@ -2875,7 +2878,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=smoke27s');
+await loadCarModel('js/car.bin?v=v10x27t');
 initMenu();
 requestAnimationFrame(frame);
 

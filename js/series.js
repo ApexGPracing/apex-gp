@@ -9,6 +9,8 @@ export const CLASSES = {
   f2: { label: 'F2', model: 'f1', drag: 1, vmax: 0.9, power: 0.84, grip: 0.9, brake: 0.92, drs: true, eng: { lo: 5200, hi: 10500, cyl: 6, roar: 1.25, scream: 0.55 } },
   indy: { label: 'INDY', model: 'indy', drag: 0.55, vmax: 1.12, power: 0.95, grip: 0.88, brake: 0.85, drs: false, eng: { lo: 6500, hi: 12000, cyl: 6, roar: 1.1, scream: 0.8 } },
   gt3: { label: 'GT3', model: 'gt3', drag: 0.85, vmax: 0.8, power: 0.6, grip: 0.74, brake: 0.74, drs: false, eng: { lo: 3500, hi: 8800, cyl: 8, roar: 1.6, scream: 0.35 } },
+  // VIP V10 monster: an early-2000s V10 F1 car, ~900 hp at 19,000+ rpm, a sharp piercing shriek with less bark
+  v10: { label: 'V10', model: 'f1', drag: 0.95, vmax: 1.06, power: 1.25, grip: 1.0, brake: 1.05, drs: false, eng: { lo: 8500, hi: 19200, cyl: 10, roar: 0.55, scream: 1.6, sc2: 2.0, band: 2.1, q: 2.2, rasp: 0.6, blow: 0.25 } },
   // Rally1: ~380 hp turbo four, light and short, big mechanical grip from 4WD but little downforce
   rally: { label: 'RALLY1', model: 'rally', drag: 0.95, vmax: 0.62, power: 0.5, grip: 0.68, brake: 0.7, drs: false, slide: { B: 7.5, C: 1.25, rearGrip: 0.87, yawDamp: 0.18, awd: true, lock: 0.55 }, eng: { lo: 3200, hi: 8500, cyl: 4, roar: 1.7, scream: 0.3 } },
   hyper: { label: 'HYPERCAR', model: 'hyper', drag: 0.72, vmax: 0.95, power: 0.8, grip: 0.86, brake: 0.86, drs: false, eng: { lo: 4800, hi: 10000, cyl: 6, roar: 1.3, scream: 0.6 } },

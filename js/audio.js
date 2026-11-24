@@ -116,13 +116,14 @@ export class Sound {
     e.f2.frequency.setTargetAtTime(2500 + thr * 4500 + e.srpm * 0.15, t, 0.05);
     // scream gets stronger with revs and throttle; rasp is strongest on throttle
     const hi = Math.min(1, Math.max(0, (e.srpm - (eng.lo + 0.18 * span)) / (0.82 * span))) * eng.scream;
-    e.sc.frequency.setTargetAtTime(fire, t, 0.015); e.sc2.frequency.setTargetAtTime(fire * 1.5, t, 0.015);
-    e.scBand.frequency.setTargetAtTime(1600 + fire * 3.3, t, 0.05);
+    e.sc.frequency.setTargetAtTime(fire, t, 0.015); e.sc2.frequency.setTargetAtTime(fire * (eng.sc2 || 1.5), t, 0.015);
+    e.scBand.frequency.setTargetAtTime(1600 + fire * (eng.band || 3.3), t, 0.05); e.scBand.Q.setTargetAtTime(eng.q || 1.1, t, 0.1);   // V10: a narrower, more piercing scream band
     e.scG.gain.setTargetAtTime(0.3 + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);
     e.pulse.frequency.setTargetAtTime(fire, t, 0.015);
     e.nzBand.frequency.setTargetAtTime(1200 + e.srpm * 0.08, t, 0.05);
-    // off-throttle hot blowing keeps the exhaust loud and raspy instead of letting the engine fall quiet
-    e.rasp.gain.setTargetAtTime(0.15 + 0.45 * thr + 0.6 * blow, t, 0.04);
+    // off-throttle hot blowing keeps the exhaust loud and raspy instead of letting the engine fall quiet (2011 V8; a V10 has little)
+    blow *= eng.blow ?? 1;
+    e.rasp.gain.setTargetAtTime((0.15 + 0.45 * thr + 0.6 * blow) * (eng.rasp ?? 1), t, 0.04);
     // roar: drive and brightness open up with throttle; stays meaty on hot-blown overrun
     e.r1.frequency.setTargetAtTime(fire, t, 0.015); e.r2.frequency.setTargetAtTime(base * 1.004, t, 0.015); e.r3.frequency.setTargetAtTime(fire * 2, t, 0.015);
     e.rDrive.gain.setTargetAtTime((1 + 2.8 * thr + 2 * blow) * eng.roar, t, 0.04);
