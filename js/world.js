@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=pool27k';
-import { AXLE_F, AXLE_R } from './car.js?v=pool27k';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=pool27k';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=line27l';
+import { AXLE_F, AXLE_R } from './car.js?v=line27l';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=line27l';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -953,15 +953,23 @@ export class World {
   resetCrews() { if (!this.crew) return; for (let t = 0; t < this.crewInfo.teams; t++) this.crewPose(t, null); }
 
   /* racing line colours from a speed plan: red = braking, yellow = through the corner, green = full throttle */
-  colorRaceLine(prof) {
+  /* racing line colours from the speed you can actually reach: the corner/braking limit (prof) combined with how
+     hard the car can accelerate (spec power, drag, top speed). Red = brake (a real slowdown is coming), yellow =
+     hold speed through the corner, green = on the throttle. */
+  colorRaceLine(prof, spec) {
     const g = this.raceGeo, T = this.raceT; if (!g || !prof) return;
-    const N = T.N, cols = g.attributes.color.array, c = new THREE.Color();
-    let top = 0; for (let i = 0; i < N; i++) top = Math.max(top, prof[i]);
+    const N = T.N, cols = g.attributes.color.array, c = new THREE.Color(), sp = spec || { power: 1, drag: 1, vmax: 1 };
+    const vm = 95 * (sp.vmax || 1), acc = v => Math.max(0.4, 11.5 * (sp.power || 1) * Math.max(0, 1 - (v / vm) ** 2) - 0.00028 * (sp.drag || 1) * v * v - 0.3);
+    let i0 = 0; for (let i = 1; i < N; i++) if (prof[i] < prof[i0]) i0 = i;
+    const va = new Float32Array(N); va[i0] = prof[i0];
+    for (let k = 1; k <= 2 * N; k++) { const i = (i0 + k) % N, p = (i - 1 + N) % N; va[i] = Math.min(prof[i], Math.sqrt(va[p] * va[p] + 2 * acc(va[p]) * DS)); }
+    this.lineSpeed = va;
     for (let k = 0; k <= N; k++) {
-      const i = k % N, here = prof[i], next = prof[(i + 3) % N], min = Math.min(prof[(i + 8) % N], prof[(i + 16) % N]);
-      if (next < here - 0.15 && min < here - 1) c.set('#ff2a2a');            // slowing for the corner ahead
-      else if (here < top - 4 && next < here + 0.6) c.set('#ffd21a');         // in the corner: coast / maintain
-      else c.set('#2bff6a');                                                   // accelerating or flat out
+      const i = k % N, here = va[i], ahead = va[(i + 2) % N];
+      let minAhead = here; for (let j = 1; j <= 30; j++) minAhead = Math.min(minAhead, va[(i + j) % N]);
+      if (ahead < here - 0.05 && here - minAhead > 2.5) c.set('#ff2a2a');          // brake: a real slowdown for the corner ahead
+      else if (ahead <= here + 0.03 && here >= prof[i] - 0.5 && prof[i] < vm * 0.97) c.set('#ffd21a');   // at the corner's limit: hold the speed
+      else c.set('#2bff6a');                                                        // on the throttle
       for (let col2 = 0; col2 < 2; col2++) cols.set([c.r, c.g, c.b], (k * 2 + col2) * 3);
     }
     g.attributes.color.needsUpdate = true;
