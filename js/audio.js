@@ -121,7 +121,33 @@ export class Sound {
     // a little noise in the roar too: combustion is never a clean tone
     const rNz = ctx.createGain(); rNz.gain.value = 0.35; nzBand.connect(rNz); rNz.connect(rDrive);
     r1.start(); r2.start(); r3.start();
-    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG };
+    // COMB layer (eng.comb, the V10): one oscillator at the engine-CYCLE frequency (rpm/120) carrying a dense set of
+    // harmonics - a cluster around every firing order plus the in-between half-orders from cylinder-to-cylinder
+    // differences - driven into soft clipping. That packed comb, ~150 Hz apart at 18,000 rpm, is the raw shriek of an
+    // F1 V10; a few pure tones through a filter sound like an electric whine instead.
+    const cOsc = ctx.createOscillator(), cDrive = ctx.createGain(); cDrive.gain.value = 1.5;
+    const cShape = ctx.createWaveShaper(), cc = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; cc[i] = Math.tanh(x * 2.2) / Math.tanh(2.2); }
+    cShape.curve = cc; cShape.oversample = '2x';
+    const cHp = ctx.createBiquadFilter(); cHp.type = 'highpass'; cHp.frequency.value = 380; cHp.Q.value = 0.6;
+    const cG = ctx.createGain(); cG.gain.value = 0;
+    const cPk = ctx.createBiquadFilter(); cPk.type = 'peaking'; cPk.frequency.value = 1400; cPk.Q.value = 0.9; cPk.gain.value = 7;   // body around the firing note
+    const cLp = ctx.createBiquadFilter(); cLp.type = 'lowpass'; cLp.frequency.value = 5200; cLp.Q.value = 0.5;
+    cOsc.connect(cDrive); cDrive.connect(cShape); cShape.connect(cHp); cHp.connect(cPk); cPk.connect(cLp); cLp.connect(cG); cG.connect(out); cOsc.start();
+    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cDrive, cG, cPk, combCyl: 0 };
+  }
+  combWave(cyl) {
+    const H = 72, real = new Float32Array(H + 1), imag = new Float32Array(H + 1);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const orders = [1, 0.58, 0.36, 0.22, 0.13, 0.08, 0.05];
+    for (let k = 1; k <= H; k++) {
+      let a = 0.16 * Math.exp(-k / 70);                                     // the half-order floor
+      orders.forEach((A, m) => { const c = cyl * (m + 1), d = k - c; a += A * Math.exp(-d * d / (2 * 1.7 * 1.7)); });
+      for (const [c, A] of [[cyl / 2, 0.8], [cyl * 0.3, 0.4], [cyl * 1.5, 0.45]]) { const d = k - c; a += A * Math.exp(-d * d / (2 * 1.1 * 1.1)); }   // half and 3/2 orders: the deeper V10 bark under the shriek
+      a *= 0.7 + 0.6 * rnd();                                              // uneven cylinders
+      const ph = rnd() * Math.PI * 2; real[k] = a * Math.cos(ph); imag[k] = a * Math.sin(ph);
+    }
+    return this.ctx.createPeriodicWave(real, imag);
   }
   setEngine(e, rpm, thr, gain, blow = 0, eng = ENG_F1) {
     // the game's rev range (4k-12.5k) is mapped onto the real engine's range (F1 V8: 7k-18k, GT3 V8: 3.5k-8.8k...)
@@ -150,6 +176,12 @@ export class Sound {
     e.rDrive.gain.setTargetAtTime((1 + 2.8 * thr + 2 * blow) * eng.roar, t, 0.04);
     e.rLp.frequency.setTargetAtTime(1400 + thr * 3200 + e.srpm * 0.12, t, 0.05);
     e.roarG.gain.setTargetAtTime((0.25 + 0.4 * thr + 0.3 * blow) * eng.roar, t, 0.04);
+    if (eng.comb) {
+      if (e.combCyl !== eng.cyl) { e.combCyl = eng.cyl; e.cOsc.setPeriodicWave(this.combWave(eng.cyl)); }
+      e.cOsc.frequency.setTargetAtTime(e.srpm / 120 * (1 + e.jit), t, 0.012);
+      e.cDrive.gain.setTargetAtTime(0.9 + 1.0 * thr, t, 0.04); e.cPk.frequency.setTargetAtTime(e.srpm / 120 * eng.cyl * 0.95, t, 0.05);
+      e.cG.gain.setTargetAtTime(eng.comb * (0.3 + 0.7 * Math.max(thr, 0.6 * blow)), t, 0.04);
+    } else e.cG.gain.setTargetAtTime(0, t, 0.05);
     e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.09 + 0.17 * Math.max(thr, 0.75 * blow)), t, 0.04);
   }
   burst(gain, dur, freq = 1500, q = 1) {
