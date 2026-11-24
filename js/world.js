@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=land27j';
-import { AXLE_F, AXLE_R } from './car.js?v=land27j';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=land27j';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=pool27k';
+import { AXLE_F, AXLE_R } from './car.js?v=pool27k';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=pool27k';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -415,6 +415,18 @@ export class World {
       add(ribbon(T, a, cnt, [i => [sd * (lim(i) + 2 + D), 0, 0], i => [sd * (lim(i) + 2 + D), Hs, 1]], 6, { up: false }), new THREE.MeshStandardMaterial({ color: '#8d939c', roughness: 0.9, side: THREE.DoubleSide }));
       for (let k = 0; k <= cnt; k += 60) { const i = (a + k) % N, l = sd * (lim(i) + 4 + D), lt = new THREE.Group(); lt.add(B0(1.2, Hs + 26, 1.2, stl)); lt.add(B0(8, 3, 1, new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff4dc').multiplyScalar(th.night ? 4 : 1.2), toneMapped: false }), 0, Hs + 26)); lt.position.set(T.px[i] + T.nx[i] * l, elevAt(T, i), T.pz[i] + T.nz[i] * l); lt.rotation.y = Math.atan2(T.tx[i], T.tz[i]); G.add(lt); }
       for (let k = 0; k <= cnt; k += 8) { const i = (a + k) % N, l = sd * (lim(i) + 2 + D / 2); keepOut.push([T.px[i] + T.nx[i] * l, T.pz[i] + T.nz[i] * l, D / 2 + 4]); }
+    }
+    // def.pool: [from, to, side] Monaco's Rainier III swimming pool on the harbour front, which the Piscine chicanes swing round
+    if (T.def.pool) {
+      const [m0, m1, sd] = T.def.pool, a = Math.round(m0 / DS) % N, cnt = Math.round((m1 - m0) / DS), lim = sideLim(T, sd), lat = (i, d) => sd * (lim(i) + d);
+      const deck = new THREE.MeshStandardMaterial({ color: '#e9e2d4', roughness: 0.8 });
+      const water = new THREE.MeshStandardMaterial({ color: '#2fb4e0', roughness: 0.05, metalness: 0.2, emissive: th.night ? '#1a8fd0' : '#000000', emissiveIntensity: 0.6 });
+      add(ribbon(T, (a - 4 + N) % N, cnt + 8, [i => [lat(i, 0.6), 0.05, 0], i => [lat(i, 34), 0.05, 1]], 8), deck);
+      add(ribbon(T, a, cnt, [i => [lat(i, 7), 0.12, 0], i => [lat(i, 27), 0.12, 1]], 8), water);
+      for (const d of [11, 15, 19, 23]) add(ribbon(T, a, cnt, [i => [lat(i, d - 0.12), 0.14, 0], i => [lat(i, d + 0.12), 0.14, 1]], 2), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+      for (const k of [0, cnt]) { const i = (a + k) % N; for (let d = 9; d <= 25; d += 4) { const o = B0(1, 0.8, 1, deck, 0, 0, 0); o.position.set(T.px[i] + T.nx[i] * lat(i, d), elevAt(T, i), T.pz[i] + T.nz[i] * lat(i, d)); G.add(o); } }
+      const mid = (a + Math.round(cnt * 0.5)) % N, dt2 = new THREE.Group(); dt2.add(B0(4, 10, 4, deck)); dt2.add(B0(6, 0.4, 2, deck, 0, 10, 2)); dt2.position.set(T.px[mid] + T.nx[mid] * lat(mid, 31), elevAt(T, mid), T.pz[mid] + T.nz[mid] * lat(mid, 31)); dt2.rotation.y = Math.atan2(T.tx[mid], T.tz[mid]); G.add(dt2);
+      for (let k = 0; k <= cnt; k += 6) { const i = (a + k) % N; keepOut.push([T.px[i] + T.nx[i] * lat(i, 17), T.pz[i] + T.nz[i] * lat(i, 17), 20]); }
     }
     // def.wings: metres where a grandstand-to-pits bridge with a big curved "wing" roof crosses the main straight (Shanghai)
     for (const m of T.def.wings || []) {
