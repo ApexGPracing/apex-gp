@@ -51,7 +51,6 @@ export const SERIES = {
     id: 'indy', name: 'IndyCar', short: 'INDY', cls: 'indy', laps: 8,
     // 2026 calendar (Milwaukee's double-header is one round here; Toronto stands in for the new Markham street race)
     calendar: ['stpete', 'phoenix', 'arlington', 'barber', 'longbeach', 'indyroad', 'indianapolis', 'detroit', 'gateway', 'roadamerica', 'midohio', 'nashville', 'milwaukee', 'toronto', 'portland', 'laguna'],
-    missing: ['Markham (Toronto stands in)', 'Washington D.C.'],
     teams: [T('Team Penske', '#f2f2f2', '#ffd400'), T('Chip Ganassi Racing', '#d40000', '#ffffff'), T('Arrow McLaren', '#ff8000', '#0a2b5c'), T('Andretti Global', '#0b1f4d', '#ff6a13'),
       T('A.J. Foyt Racing', '#c8102e', '#f2f2f2'), T('Ed Carpenter Racing', '#1a1a1a', '#00c2ff'), T('Dale Coyne Racing', '#00a3e0', '#111111'), T('Rahal Letterman Lanigan', '#f5f5f5', '#00843d')],
     drivers: [D('Josef Newgarden', 'NEW', [0.93, 0.85, 0.85, 0.88, 1], 2, 0), D('Scott McLaughlin', 'MCL', [0.93, 0.8, 0.85, 0.9, 0.95], 3, 0), D('David Malukas', 'MLK', [0.9, 0.8, 0.75, 0.85, 1], 12, 0),
@@ -113,7 +112,17 @@ export const SERIES = {
       D('Esapekka Lappi', 'LAP', [0.89, 0.75, 0.8, 0.88, 1], 4, 1), D('Dani Sordo', 'SOR', [0.88, 0.7, 0.85, 0.9, 0.95], 6, 1),
       D('Josh McErlean', 'MCE', [0.86, 0.8, 0.7, 0.83, 1], 55, 2), D('Jon Armstrong', 'ARM', [0.85, 0.8, 0.7, 0.82, 1], 22, 2), D('Grégoire Munster', 'MUN', [0.85, 0.75, 0.7, 0.83, 1], 13, 2)],
   },
-  miata: {
+  wrc: {
+    id: 'wrc', name: 'WRC Stages', short: 'WRC', vip: true, cls: 'rally', laps: 4,
+    // VIP only: Rally1 cars on a closed stage for every 2026 WRC round, each on that rally's surface
+    calendar: ['rmontecarlo', 'rsweden', 'rkenya', 'rcroatia', 'rcanarias', 'rportugal', 'rjapan', 'racropolis', 'restonia', 'rfinland', 'rparaguay', 'rchile', 'rsardinia', 'rsaudi'],
+    teams: [T('Toyota Gazoo Racing WRT', '#f2f2f2', '#e60012'), T('Hyundai Shell Mobis WRT', '#0b1a3a', '#00a3e0'), T('M-Sport Ford WRT', '#ffffff', '#1f4fd1')],
+    drivers: [D('Elfyn Evans', 'EVA', [0.93, 0.75, 0.85, 0.92, 0.95], 33, 0), D('Sébastien Ogier', 'OGI', [0.96, 0.8, 0.85, 0.93, 0.9], 17, 0),
+      D('Oliver Solberg', 'SOL', [0.91, 0.85, 0.75, 0.86, 1], 99, 0), D('Takamoto Katsuta', 'KAT', [0.89, 0.8, 0.7, 0.85, 1], 18, 0), D('Sami Pajari', 'PAJ', [0.87, 0.75, 0.75, 0.85, 1], 5, 0),
+      D('Thierry Neuville', 'NEU', [0.94, 0.85, 0.75, 0.9, 0.95], 11, 1), D('Adrien Fourmaux', 'FOU', [0.9, 0.8, 0.75, 0.87, 1], 16, 1),
+      D('Esapekka Lappi', 'LAP', [0.89, 0.75, 0.8, 0.88, 1], 4, 1), D('Dani Sordo', 'SOR', [0.88, 0.7, 0.85, 0.9, 0.95], 6, 1),
+      D('Josh McErlean', 'MCE', [0.86, 0.8, 0.7, 0.83, 1], 55, 2), D('Jon Armstrong', 'ARM', [0.85, 0.8, 0.7, 0.82, 1], 22, 2), D('Grégoire Munster', 'MUN', [0.85, 0.75, 0.7, 0.83, 1], 13, 2)],
+  },  miata: {
     id: 'miata', name: 'MX-5 Cup', short: 'MX5', cls: 'miata', laps: 5,
     // Mazda MX-5 Cup-style spec roadster series on its US venues (driver names are made up)
     calendar: ['daytona', 'stpete', 'sebring', 'laguna', 'midohio', 'roadamerica', 'vir', 'watkinsglen', 'indyroad', 'roadatlanta'],
@@ -128,4 +137,4 @@ export const SERIES = {
     drivers: [D('Alfie Barker', 'BAR', [0.82, 0.9, 0.55, 0.8, 1], 9, 0), D('Darren Pike', 'PIK', [0.85, 0.9, 0.55, 0.8, 1], 9, 0), D('Shaz Okonjo', 'OKO', [0.88, 0.9, 0.55, 0.8, 1], 11, 1), D('Terry Mulligan', 'MUL', [0.91, 0.9, 0.55, 0.8, 1], 11, 1), D('Priya Kaur', 'KAU', [0.82, 0.9, 0.55, 0.8, 1], 15, 2), D('Gavin Hollis', 'HOL', [0.85, 0.9, 0.55, 0.8, 1], 15, 2), D('Beryl Nash', 'NAS', [0.88, 0.9, 0.55, 0.8, 1], 24, 3), D('Kofi Mensah', 'MEN', [0.91, 0.9, 0.55, 0.8, 1], 24, 3), D('Dot Hennessey', 'HEN', [0.82, 0.9, 0.55, 0.8, 1], 73, 4), D('Lenny Croft', 'CRO', [0.85, 0.9, 0.55, 0.8, 1], 73, 4), D('Tash Byrne', 'BYR', [0.88, 0.9, 0.55, 0.8, 1], 390, 5), D('Wilf Ashdown', 'ASH', [0.91, 0.9, 0.55, 0.8, 1], 390, 5)],
   },
 };
-export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans', 'rally', 'miata', 'bus'];
+export const SERIES_ORDER = ['f1', 'f2', 'indy', 'gt3', 'lemans', 'rally', 'wrc', 'miata', 'bus'];

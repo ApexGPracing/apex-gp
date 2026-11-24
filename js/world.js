@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=bus27w';
-import { AXLE_F, AXLE_R } from './car.js?v=bus27w';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=bus27w';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=wrc27x';
+import { AXLE_F, AXLE_R } from './car.js?v=wrc27x';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=wrc27x';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -19,6 +19,10 @@ function textures() {
   TX.kerbFor = (...cs) => TX['kerb' + cs.join()] || (TX['kerb' + cs.join()] = canvasTex(64, 64 * cs.length, (g, w, h) => { cs.forEach((c, k) => { g.fillStyle = c; g.fillRect(0, k * h / cs.length, w, h / cs.length); }); const id = g.getImageData(0, 0, w, h); for (let i = 0; i < id.data.length; i += 4) { const n = (r() - 0.5) * 18; id.data[i] += n; id.data[i + 1] += n; id.data[i + 2] += n; } g.putImageData(id, 0, 0); }));
   TX.paint = canvasTex(128, 128, (g, w, h) => noiseFill(g, w, h, '#e8e8e8', 22, 8));
   TX.gravel = canvasTex(256, 256, (g, w, h) => noiseFill(g, w, h, '#c9b48a', 60, 9, 0.25));
+  // loose road surfaces: red-brown dirt, beige gravel, packed snow with darker ruts
+  TX.dirtRoad = canvasTex(256, 256, (g, w, h) => noiseFill(g, w, h, '#8a5634', 34, 6, 0.18));
+  TX.gravelRoad = canvasTex(256, 256, (g, w, h) => noiseFill(g, w, h, '#b8a78a', 42, 8, 0.22));
+  TX.snowRoad = canvasTex(256, 256, (g, w, h) => { noiseFill(g, w, h, '#eef3f7', 14, 5, 0.1); g.fillStyle = 'rgba(150,160,175,0.35)'; for (const x of [70, 90, 166, 186]) g.fillRect(x, 0, 10, h); });
   TX.gravelN = normalTex(256, 256, (g, w, h) => noiseFill(g, w, h, '#808080', 140, 10, 0.3), 3);
   TX.verge = canvasTex(64, 256, (g, w, h) => { g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, w, h / 2); g.fillStyle = '#d6d6d6'; g.fillRect(0, h / 2, w, h / 2); const id = g.getImageData(0, 0, w, h); for (let i = 0; i < id.data.length; i += 4) { const n = (r() - 0.5) * 30; id.data[i] += n; id.data[i + 1] += n; id.data[i + 2] += n; } g.putImageData(id, 0, 0); });
   TX.fence = canvasTex(128, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(180,186,194,1)'; g.lineWidth = 3; for (let k = -w; k < w * 2; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h, h); g.stroke(); g.beginPath(); g.moveTo(k + h, 0); g.lineTo(k, h); g.stroke(); } g.fillStyle = 'rgba(160,166,174,1)'; g.fillRect(0, 0, w, 4); }, { srgb: true });
@@ -255,9 +259,10 @@ export class World {
     /* ----- track surface ----- */
     const roadCols = []; for (let c = 0; c <= 14; c++) { const o = W - c * (2 * W / 14); roadCols.push(col(o, 0.02, o / 6)); }
     this.roadMesh = add(ribbon(T, 0, N, roadCols, 6, { colorFn: (i, o) => { const d = (o - T.race[i]) / 1.5; return 0.92 * (1 - 0.26 * Math.exp(-d * d)) * (Math.abs(o) > W - 0.9 ? 1.08 : 1); } }),
-      new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.6, 0.6), vertexColors: true, roughness: 0.86, metalness: 0, color: th.night ? '#c9ccd6' : '#ffffff' }));
+      T.gripMul < 1 ? new THREE.MeshStandardMaterial({ map: { gravel: tx.gravelRoad, dirt: tx.dirtRoad, snow: tx.snowRoad }[T.surface], normalMap: tx.gravelN, normalScale: new THREE.Vector2(0.5, 0.5), vertexColors: true, roughness: 1, color: '#ffffff' })   // gravel, dirt or snow road
+        : new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.6, 0.6), vertexColors: true, roughness: 0.86, metalness: 0, color: th.night ? '#c9ccd6' : '#ffffff' }));
     const lineMat = new THREE.MeshStandardMaterial({ color: '#f2f2f2', roughness: 0.6, map: tx.paint });
-    for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);
+    if (T.gripMul === 1 && !T.def.noBarriers) for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);   // no painted lines on loose surfaces
     // verges / run-off
     const rs = T.def.runoffStyle;
     const ricardT = canvasTex(128, 16, (g2, w, h) => { for (let k = 0; k < 8; k++) { g2.fillStyle = k < 2 ? '#d42027' : k % 2 ? '#1d4ed8' : '#e8ecf2'; g2.fillRect(k * 16, 0, 16, h); } });
@@ -270,7 +275,7 @@ export class World {
     const kerbMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...(T.def.kerb || ['#c8202a', '#f1f1f1'])), roughness: 0.55 });
     const kc = T.def.kerb || ['#c8202a', '#f1f1f1'];
     const apronMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...kc), color: '#d9d9d9', roughness: 0.8 });
-    for (const [s0, e0] of T.kerbs) {
+    for (const [s0, e0] of T.gripMul < 1 || T.def.noBarriers ? [] : T.kerbs) {   // no kerbs on loose surfaces or rally stages   // no kerbs on loose surfaces
       const cnt = e0 - s0;
       for (const s of [1, -1]) {
         add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 2.4), kerbMat);
@@ -555,7 +560,7 @@ export class World {
       const rail = new THREE.MeshStandardMaterial({ color: '#c3c8cf', roughness: 0.3, metalness: 0.85, side: THREE.DoubleSide });
       const wallBand = new THREE.MeshStandardMaterial({ color: th.wallB, roughness: 0.6, side: THREE.DoubleSide });
       const capMat = new THREE.MeshStandardMaterial({ color: '#b8bcc4', roughness: 0.8 });
-      for (const [i0, cnt] of segsFor(s)) {
+      for (const [i0, cnt] of T.def.noBarriers ? [] : segsFor(s)) {   // rally stages: no barriers drawn, just the roadside
         if (cnt < 2) continue;
         if (T.street) {
           add(ribbon(T, i0, cnt, [i => [s * lim(i), 0, 0], i => [s * lim(i), 1.15, 1]], 30, { up: false }), adMat, { cast: q > 0 });
@@ -831,7 +836,7 @@ export class World {
       const d = new THREE.Object3D();
       const placeAt = (im, k, i, lat, yOff = 0, ry = 0) => { d.position.set(T.px[i] + T.nx[i] * lat, bankH(T, i, lat) + yOff, T.pz[i] + T.nz[i] * lat); d.rotation.set(0, Math.atan2(T.tx[i], T.tz[i]) + ry, 0); d.scale.set(1, 1, 1); d.updateMatrix(); im.setMatrixAt(k, d.matrix); };
       // advertising hoardings behind the barrier on the outside of corners (circuits; streets already have ad walls)
-      if (!T.street) {
+      if (!T.street && !T.def.noBarriers) {   // no advertising hoardings along rally stages
         const spots = [];
         // each board is 17 m long and runs ALONG the barrier. Skip any spot where either end or the middle would
         // come close to another part of the track (hairpins, chicanes, parallel straights like Montreal's)

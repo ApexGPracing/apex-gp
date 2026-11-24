@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=bus27w';
-import { World } from './world.js?v=bus27w';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=bus27w';
-import { Sound } from './audio.js?v=bus27w';
-import { Particles, Skids, Fireworks } from './fx.js?v=bus27w';
-import { Weather } from './weather.js?v=bus27w';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=bus27w';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=bus27w';
-import { Net, newCode, loadTurn } from './net.js?v=bus27w';
-import { VIP_CODES } from './codes.js?v=bus27w';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=bus27w';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=bus27w';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=wrc27x';
+import { World } from './world.js?v=wrc27x';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=wrc27x';
+import { Sound } from './audio.js?v=wrc27x';
+import { Particles, Skids, Fireworks } from './fx.js?v=wrc27x';
+import { Weather } from './weather.js?v=wrc27x';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=wrc27x';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=wrc27x';
+import { Net, newCode, loadTurn } from './net.js?v=wrc27x';
+import { VIP_CODES } from './codes.js?v=wrc27x';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=wrc27x';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=wrc27x';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -579,7 +579,7 @@ function stepCar(c, inp, dt, Tr) {
     }
   }
   if (c.sausT > 0) { c.sausT -= dt; c.lift = Math.max(0, (c.lift || 0) - dt * 0.5); }
-  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * spec.grip * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : AI_GRIP);
+  const grip = c.gripNow = GRIP[surf] * tg * dmgF * (surf >= 3 ? 1 - 0.3 * wet : 1) * boost * spec.grip * (Tr.gripMul || 1) * (c.isPlayer ? PLAYER_GRIP * MODES[game.mode ?? 1].grip : AI_GRIP);
   c.gripTD = tg * dmgF;
   let v = c.v;
   const vm = VMAX * spec.vmax * (c.drsOpen ? 1.08 : 1) * (1 + 0.04 * (c.tow || 0)) * (1 - 0.05 * d.rw) * (d.punct ? 0.35 : 1) * Math.sqrt(boost);
@@ -2018,6 +2018,7 @@ function engMate() {
 
 /* ---------------- Effects ---------------- */
 const tmpC = new THREE.Color();
+const SNOWC = new THREE.Color('#f4f8fb');
 const FLAME = new THREE.Color(3, 1.3, 0.35), FLAME2 = new THREE.Color(0.7, 1.1, 3);
 const SMOKE = new THREE.Color('#e9e9ea'), DUST = new THREE.Color('#c9b48a'), GRASS = new THREE.Color('#6b7a3a'), SPARK = new THREE.Color(3, 1.6, 0.5), SPRAY = new THREE.Color('#c5ccd4');
 function carEffects(c, dt) {
@@ -2048,6 +2049,11 @@ function carEffects(c, dt) {
       const [x, wz] = wheel(s2, brake && !burn ? AXLE_F : AXLE_R);
       if (Math.random() < dt * rate) smoke.spawn(x, ey + 0.35, wz, -fx * sp * 0.12 + (Math.random() - 0.5) * 1.5, 0.8 + Math.random() * 1.2, -fz * sp * 0.12 + (Math.random() - 0.5) * 1.5, 1.1 + Math.random() * 0.6, 0.7, 3.2, 0.3, c.smokeCol, 1.4);
     }
+  }
+  // loose surfaces: a dust (or snow) trail kicked up behind every car
+  if (T().gripMul < 1 && sp > 8 && c.surf <= 2) {
+    const snow = T().surface === 'snow';
+    for (const s2 of [1, -1]) if (Math.random() < dt * (6 + sp * 0.5)) { const [x, wz] = wheel(s2, AXLE_R - 0.3); smoke.spawn(x, ey + 0.3, wz, -fx * sp * 0.25 + (Math.random() - 0.5) * 2, 0.6 + Math.random() * 1.4, -fz * sp * 0.25 + (Math.random() - 0.5) * 2, 1.6 + Math.random() * 1.4, 1.0, 6, snow ? 0.5 : 0.36, snow ? SNOWC : DUST, 1.1); }
   }
   // VIP exhaust flames: a burst of flame when lifting off at speed, and pops while coasting at high revs
   if (c.flames && c.inp) {
@@ -2883,7 +2889,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=bus27w');
+await loadCarModel('js/car.bin?v=wrc27x');
 initMenu();
 requestAnimationFrame(frame);
 
