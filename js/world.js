@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=m10k27b';
-import { AXLE_F, AXLE_R } from './car.js?v=m10k27b';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=m10k27b';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=conc27c';
+import { AXLE_F, AXLE_R } from './car.js?v=conc27c';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=conc27c';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -17,6 +17,8 @@ function textures() {
   TX.asphalt = canvasTex(512, 512, (g, w, h) => noiseFill(g, w, h, '#4a4c51', 30, 3, 0.05));
   TX.asphaltN = normalTex(512, 512, (g, w, h) => noiseFill(g, w, h, '#808080', 90, 4, 0.08), 2.2);
   TX.kerbFor = (...cs) => TX['kerb' + cs.join()] || (TX['kerb' + cs.join()] = canvasTex(64, 64 * cs.length, (g, w, h) => { cs.forEach((c, k) => { g.fillStyle = c; g.fillRect(0, k * h / cs.length, w, h / cs.length); }); const id = g.getImageData(0, 0, w, h); for (let i = 0; i < id.data.length; i += 4) { const n = (r() - 0.5) * 18; id.data[i] += n; id.data[i + 1] += n; id.data[i + 2] += n; } g.putImageData(id, 0, 0); }));
+  // concrete banking slabs (Monza's sopraelevata): pale grey, weathered, with tar-filled joints
+  TX.concreteSlab = canvasTex(256, 256, (g, w, h) => { noiseFill(g, w, h, '#a9a69f', 34, 5, 0.12); g.fillStyle = 'rgba(40,40,42,0.55)'; for (let x = 0; x < w; x += 128) g.fillRect(x, 0, 3, h); for (let y = 0; y < h; y += 64) g.fillRect(0, y, w, 3); g.fillStyle = 'rgba(60,55,50,0.12)'; for (let k = 0; k < 14; k++) { g.beginPath(); g.ellipse((k * 73) % w, (k * 131) % h, 18 + k % 4 * 9, 8 + k % 3 * 6, k, 0, 7); g.fill(); } });
   TX.paint = canvasTex(128, 128, (g, w, h) => noiseFill(g, w, h, '#e8e8e8', 22, 8));
   TX.gravel = canvasTex(256, 256, (g, w, h) => noiseFill(g, w, h, '#c9b48a', 60, 9, 0.25));
   // loose road surfaces: red-brown dirt, beige gravel, packed snow with darker ruts
@@ -334,6 +336,21 @@ export class World {
       T.gripMul < 1 ? new THREE.MeshStandardMaterial({ map: { gravel: tx.gravelRoad, dirt: tx.dirtRoad, snow: tx.snowRoad }[T.surface], normalMap: tx.gravelN, normalScale: new THREE.Vector2(0.5, 0.5), vertexColors: true, roughness: 1, color: '#ffffff' })   // gravel, dirt or snow road
         : new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.6, 0.6), vertexColors: true, roughness: 0.86, metalness: 0, color: th.night ? '#c9ccd6' : '#ffffff' }));
     const lineMat = new THREE.MeshStandardMaterial({ color: '#f2f2f2', roughness: 0.6, map: tx.paint });
+    // def.concreteBanks: the banked turns are bare concrete slabs from edge to edge, with a sheer concrete outer face (Monza)
+    const bankRanges = T.def.concreteBanks ? rangesOf(T.bank, N, v => Math.abs(v) > 0.03) : [];
+    if (bankRanges.length) {
+      const slab = new THREE.MeshStandardMaterial({ map: tx.concreteSlab, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.3, 0.3), roughness: 0.92, color: th.night ? '#c9ccd6' : '#ffffff' });
+      const face = new THREE.MeshStandardMaterial({ map: tx.concreteSlab, color: '#d2cec6', roughness: 0.95, side: THREE.DoubleSide });
+      const Wb = W + KERB + 2;
+      for (const [a0, a1] of bankRanges) {
+        const a = a0, cnt = a1 - a0, L = i => T.limL[i] + 0.3, Rr = i => -(T.limR[i] + 0.3);
+        const cols = [i => [L(i), 0.07, L(i) / 8], i => [Math.min(Wb, L(i)), 0.07, Math.min(Wb, L(i)) / 8], col(0, 0.07, 0), i => [Math.max(-Wb, Rr(i)), 0.07, Math.max(-Wb, Rr(i)) / 8], i => [Rr(i), 0.07, Rr(i) / 8]];
+        add(ribbon(T, a, cnt, cols, 8), slab);
+        const mid = (a + (cnt >> 1)) % N, so = T.bank[mid] > 0 ? 1 : -1, ol = so > 0 ? L : Rr;   // the raised (outer) side
+        add(ribbon(T, a, cnt, [i => [ol(i) + so * 0.2, 0.07, 0], i => [ol(i) + so * 0.2, -22, 2.5]], 8, { up: false }), face);
+      }
+    }
+    const onConcreteBank = (s0, e0) => bankRanges.some(([a0, a1]) => { const m = (s0 + ((e0 - s0 + N) % N >> 1)) % N; return m >= a0 && m <= a1; });
     if (T.gripMul === 1 && !T.def.noBarriers) for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);   // no painted lines on loose surfaces
     // verges / run-off
     const rs = T.def.runoffStyle;
@@ -347,7 +364,7 @@ export class World {
     const kerbMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...(T.def.kerb || ['#c8202a', '#f1f1f1'])), roughness: 0.55 });
     const kc = T.def.kerb || ['#c8202a', '#f1f1f1'];
     const apronMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...kc), color: '#d9d9d9', roughness: 0.8 });
-    for (const [s0, e0] of T.gripMul < 1 || T.def.noBarriers ? [] : T.kerbs) {   // no kerbs on loose surfaces or rally stages   // no kerbs on loose surfaces
+    for (const [s0, e0] of T.gripMul < 1 || T.def.noBarriers ? [] : T.kerbs.filter(([s0, e0]) => !onConcreteBank(s0, e0))) {   // no kerbs on loose surfaces or rally stages   // no kerbs on loose surfaces
       const cnt = e0 - s0;
       for (const s of [1, -1]) {
         add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 2.4), kerbMat);
