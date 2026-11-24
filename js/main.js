@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=graf27o';
-import { World } from './world.js?v=graf27o';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=graf27o';
-import { Sound } from './audio.js?v=graf27o';
-import { Particles, Skids, Fireworks } from './fx.js?v=graf27o';
-import { Weather } from './weather.js?v=graf27o';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=graf27o';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=graf27o';
-import { Net, newCode, loadTurn } from './net.js?v=graf27o';
-import { VIP_CODES } from './codes.js?v=graf27o';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=graf27o';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=graf27o';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=rims27p';
+import { World } from './world.js?v=rims27p';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=rims27p';
+import { Sound } from './audio.js?v=rims27p';
+import { Particles, Skids, Fireworks } from './fx.js?v=rims27p';
+import { Weather } from './weather.js?v=rims27p';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=rims27p';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=rims27p';
+import { Net, newCode, loadTurn } from './net.js?v=rims27p';
+import { VIP_CODES } from './codes.js?v=rims27p';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rims27p';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=rims27p';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -102,13 +102,23 @@ const VIP_FROM = 7, VIP_LIV = { 7: { name: 'Gold', metal: 0.95, rough: 0.18 }, 8
   11: { name: 'Rose Gold', metal: 0.95, rough: 0.15 }, 12: { name: 'Red Chrome', metal: 1, rough: 0.07 }, 13: { name: 'Ice Chrome', metal: 1, rough: 0.06 }, 14: { name: 'Matte Black', metal: 0.1, rough: 0.85, c2: '#ff2d2d' } };
 /* VIP extras: gold rims, coloured underglow (both seen by other players online) and podium fireworks */
 const GLOWS = [null, '#22d3ee', '#ff2bd6', '#39ff14', '#ffcc00', '#ff3b30'], GLOW_NAMES = ['Off', 'Blue', 'Pink', 'Green', 'Gold', 'Red'];
-const myExtras = () => isVip() ? { rims: settings.vipRims ? 1 : 0, glow: settings.vipGlow || 0 } : { rims: 0, glow: 0 };
-let goldRim = null, glowTex = null;
+const myExtras = () => isVip() ? { rims: settings.vipRims !== false ? 1 : 0, glow: settings.vipGlow || 0 } : { rims: 0, glow: 0 };   // gold rims on unless switched off
+let goldRim = null, goldFace = null, glowTex = null;
 function vipExtras(car, x) {
   if (!car || !x) return;
   if (x.rims) {
-    goldRim = goldRim || new THREE.MeshStandardMaterial({ color: '#d4af37', roughness: 0.2, metalness: 1 });
-    car.group.traverse(o => { if (o.isMesh && o.material && o.material.color && o.material.color.getHex() === 0x24262a && o.material.metalness === 0.8) o.material = goldRim; });
+    goldRim = goldRim || new THREE.MeshStandardMaterial({ color: '#d4af37', roughness: 0.18, metalness: 1 });
+    if (!goldFace) {
+      // the wheel face you actually see: polished gold with five spokes and a bright centre nut
+      const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+      g.fillStyle = '#8a6a12'; g.fillRect(0, 0, 128, 128); g.translate(64, 64);
+      g.strokeStyle = '#f2d27a'; g.lineWidth = 8; g.beginPath(); g.arc(0, 0, 57, 0, Math.PI * 2); g.stroke();
+      for (let k = 0; k < 5; k++) { g.rotate(Math.PI * 2 / 5); g.fillStyle = '#e8c45a'; g.beginPath(); g.moveTo(-7, 14); g.lineTo(7, 14); g.lineTo(4, 54); g.lineTo(-4, 54); g.fill(); }
+      g.fillStyle = '#fff1b8'; g.beginPath(); g.arc(0, 0, 13, 0, Math.PI * 2); g.fill();
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+      goldFace = new THREE.MeshStandardMaterial({ map: t, roughness: 0.22, metalness: 0.9 });
+    }
+    car.group.traverse(o => { if (!o.isMesh || !o.material || !o.material.userData) return; if (o.material.userData.part === 'rim') o.material = goldRim; else if (o.material.userData.part === 'face') o.material = goldFace; });
   }
   const g = GLOWS[x.glow | 0];
   if (g) {
@@ -2664,7 +2674,7 @@ function initMenu() {
   const vipUi = () => {
     document.body.classList.toggle('isvip', isVip());
     if (isVip()) $('vipMsg').textContent = 'VIP unlocked: 8 special liveries, gold rims, underglow, fireworks for every podium and a VIP tag online.';
-    $('vipRims').textContent = 'Gold rims: ' + (settings.vipRims ? 'On' : 'Off');
+    $('vipRims').textContent = 'Gold rims: ' + (settings.vipRims !== false ? 'On' : 'Off');
     $('vipGlow').textContent = 'Underglow: ' + GLOW_NAMES[settings.vipGlow || 0];
     $('vipFw').textContent = 'Fireworks: ' + (settings.vipFw === false ? 'Off' : 'On');
     $('vipHelmet').textContent = 'Helmet: ' + HELMETS[settings.vipHelmet || 0][0];
@@ -2680,7 +2690,7 @@ function initMenu() {
   $('vipGhost').onclick = () => { settings.vipGhost = settings.vipGhost === false; saveSettings(); vipUi(); };
   $('vipNum').onchange = () => { const v = Math.round(+$('vipNum').value); settings.vipNum = v >= 1 && v <= 99 ? v : null; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
-  $('vipRims').onclick = () => { settings.vipRims = !settings.vipRims; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipRims').onclick = () => { settings.vipRims = settings.vipRims === false; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipFw').onclick = () => { settings.vipFw = settings.vipFw === false; saveSettings(); vipUi(); };
   vipUi();
@@ -2814,7 +2824,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=graf27o');
+await loadCarModel('js/car.bin?v=rims27p');
 initMenu();
 requestAnimationFrame(frame);
 

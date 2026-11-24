@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=graf27o';
+import { canvasTex } from './util.js?v=rims27p';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -143,6 +143,7 @@ function buildModel() {
     soft: new THREE.MeshStandardMaterial({ color: 0xe2231a, roughness: 0.6 }), medium: new THREE.MeshStandardMaterial({ color: 0xf5c400, roughness: 0.6 }), hard: new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.6 }),
     inter: new THREE.MeshStandardMaterial({ color: 0x2bb54a, roughness: 0.6 }), wet: new THREE.MeshStandardMaterial({ color: 0x1e6fe0, roughness: 0.6 }),
   };
+  MODEL.wheelMats.rim.userData.part = 'rim'; MODEL.wheelMats.face.userData.part = 'face';
   return MODEL;
 }
 
