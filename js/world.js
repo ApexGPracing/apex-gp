@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=boat27a';
-import { AXLE_F, AXLE_R } from './car.js?v=boat27a';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=boat27a';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=m10k27b';
+import { AXLE_F, AXLE_R } from './car.js?v=m10k27b';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=m10k27b';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -390,6 +390,33 @@ export class World {
     for (const z of T.runZones || []) {
       const lim = sideLim(T, z.side), m = z.kind === 'gravel' ? new THREE.MeshStandardMaterial({ map: tx.gravel, normalMap: tx.gravelN, roughness: 1 }) : new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#a3a6ad', roughness: 0.9 });
       add(ribbon(T, z.a, z.len, [col(z.side * (W + KERB + 2.4), z.kind === 'gravel' ? 0.03 : 0.025, 0), i => [z.side * Math.max(W + KERB + 2.6, lim(i) - 0.6), z.kind === 'gravel' ? 0.03 : 0.025, 3]], 8), m);
+    }
+    // overpasses: where the lap crosses itself (Monza 10 km), the upper road gets a concrete deck, parapet faces and piers
+    {
+      const up = new Uint8Array(N), lo = new Map();
+      for (let i = 0; i < N; i += 2) for (let j = 0; j < N; j += 2) {
+        let di = Math.abs(i - j); di = Math.min(di, N - di); if (di * DS < 150) continue;
+        const dx = T.px[j] - T.px[i], dz = T.pz[j] - T.pz[i];
+        if (dx * dx + dz * dz < (2 * T.wallOff + 8) ** 2 && T.elev[i] - T.elev[j] > 4.5) { up[i] = up[(i + 1) % N] = 1; lo.set(i, j); }
+      }
+      const conc = new THREE.MeshStandardMaterial({ color: '#b9b5ad', roughness: 0.85, side: THREE.DoubleSide });
+      for (const [a0, a1] of rangesOf(up, N, v => v)) {
+        const a = (a0 - 8 + N) % N, cnt = a1 - a0 + 17, eL = i => T.limL[i] + 0.8, eR = i => -T.limR[i] - 0.8;
+        add(ribbon(T, a, cnt, [i => [eL(i), -1.6, 0], i => [eR(i), -1.6, 1]], 8, { up: false }), conc);        // deck underside
+        add(ribbon(T, a, cnt, [i => [eL(i), 1.1, 0], i => [eL(i), -1.6, 1]], 8, { up: false }), conc);         // outer faces
+        add(ribbon(T, a, cnt, [i => [eR(i), -1.6, 0], i => [eR(i), 1.1, 1]], 8, { up: false }), conc);
+        // piers either side of the road underneath, and solid abutments at both ends
+        for (let k = 0; k <= cnt; k += 6) {
+          const i = (a + k) % N; let near = false;
+          for (const [ui, lj] of lo) { const dx = T.px[i] - T.px[lj], dz = T.pz[i] - T.pz[lj]; if (dx * dx + dz * dz < (T.wallOff + 3) ** 2) { near = true; break; } }
+          if (near) continue;
+          for (const l of [eL(i) - 1.5, eR(i) + 1.5]) {
+            const x = T.px[i] + T.nx[i] * l, z = T.pz[i] + T.nz[i] * l, top = bankH(T, i, l) - 1.6, bot = height(x, z) - 1, h = top - bot;
+            if (h < 0.5) continue;
+            const pm = new THREE.Mesh(new THREE.BoxGeometry(1.4, h, 1.4), conc); pm.position.set(x, bot + h / 2, z); pm.castShadow = q > 0; pm.receiveShadow = true; G.add(pm);
+          }
+        }
+      }
     }
     // bridges (Singapore's Anderson Bridge): white steel arches over both sides of the road
     for (const [m0, m1] of T.def.bridges || []) {
