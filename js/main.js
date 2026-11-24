@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=wrc27x';
-import { World } from './world.js?v=wrc27x';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=wrc27x';
-import { Sound } from './audio.js?v=wrc27x';
-import { Particles, Skids, Fireworks } from './fx.js?v=wrc27x';
-import { Weather } from './weather.js?v=wrc27x';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=wrc27x';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=wrc27x';
-import { Net, newCode, loadTurn } from './net.js?v=wrc27x';
-import { VIP_CODES } from './codes.js?v=wrc27x';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=wrc27x';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=wrc27x';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=derby27y';
+import { World } from './world.js?v=derby27y';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=derby27y';
+import { Sound } from './audio.js?v=derby27y';
+import { Particles, Skids, Fireworks } from './fx.js?v=derby27y';
+import { Weather } from './weather.js?v=derby27y';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=derby27y';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=derby27y';
+import { Net, newCode, loadTurn } from './net.js?v=derby27y';
+import { VIP_CODES } from './codes.js?v=derby27y';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=derby27y';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=derby27y';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -343,16 +343,17 @@ function estimateLap(Tr, pace, prof, boost = 1, spec = CLASSES.f1) {
 }
 
 function startWeekend() {
-  const champ = settings.mode === 'champ', tt = settings.mode === 'tt';
+  const champ = settings.mode === 'champ', tt = settings.mode === 'tt', derby = settings.mode === 'derby' && isVip();
+  if (derby) { if (SER.id !== 'bus') applySeries('bus'); settings.track = TRACKS.findIndex(t => t.id === 'derbyarena'); }   // bus demolition derby in the arena
   if (champ) { const old = loadSeason(); game.season = old && !old.finished ? old : newSeason(); settings.track = calIdx()[game.season.round] ?? calIdx()[0]; }
   const Tr = game.T = buildTrack(settings.track);
-  game.laps = tt ? Infinity : (champ ? game.season.laps : settings.laps);
+  game.laps = tt ? Infinity : derby ? 999 : (champ ? game.season.laps : settings.laps);
   game.skill = champ ? (game.season.ai ?? 50) : settings.ai;
   const r = rng((Date.now() & 0xffff) + 1);
   let lineup = [];
   if (champ) TEAM_MAP = shuffleTeams();
   if (champ) lineup = game.season.lineup.slice();
-  else if (!tt) lineup = DRIVERS.map((d, i) => i).sort(() => r() - 0.5).slice(0, settings.opp).map(di => ({ di, rating: 0.99 + r() * 0.02 }));
+  else if (!tt) lineup = DRIVERS.map((d, i) => i).sort(() => r() - 0.5).slice(0, derby ? clamp(settings.opp, 7, 11) : settings.opp).map(di => ({ di, rating: 0.99 + r() * 0.02 }));
   if (!champ && !tt) TEAM_MAP = shuffleTeams(r, lineup.slice(1).map(l => l.di));
   makeField(lineup, game.skill);
   game.seed = (Date.now() & 0xfffff) + 3;
@@ -363,7 +364,7 @@ function startWeekend() {
   buildMinimap(Tr);
   audio.init();
   if (tt) return startSession('tt');
-  if (rule('quali') === 'on') {
+  if (rule('quali') === 'on' && !derby) {
     const n = game.cars.length;
     game.q = { stages: n >= 12 ? ['Q1', 'Q2', 'Q3'] : ['Q'], idx: 0, entrants: game.cars.slice(), out: [], results: {} };
     if (n >= 12) { const rest = n - 10; game.q.elim = { Q1: Math.ceil(rest / 2), Q2: rest - Math.ceil(rest / 2), Q3: 0 }; } else game.q.elim = { Q: 0 };
@@ -511,7 +512,7 @@ function aiPlan(c, L) {
 function startRace() {
   const Tr = game.T;
   hideAllOverlays(); $('hud').classList.remove('hidden');
-  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.fwDone = false; fireworks.stop(); game.fwCar = null; game.champ = null;
+  game.session = 'race'; game.raceTime = 0; game.finishCount = 0; game.paused = false; game.resultsAt = 0; game.state = 'race'; game.fastest = Infinity; game.mode = 1; engMenu(false); if (game.player) game.player.tyreChoice = null; game.derby = settings.mode === 'derby' && isVip() ? { t: 0, limit: 180, out: 0 } : null; for (const c of game.cars) c.hp = 100; $('derbyHud').classList.toggle('hidden', !game.derby); if (game.derby) radio('DEMOLITION DERBY! Ram the other buses. Last bus running wins (3 minutes).', 'info', 6); game.fwDone = false; fireworks.stop(); game.fwCar = null; game.champ = null;
   clearSC(); game.flag = null; game.dnfTimes = []; game.redWx = false; game.drsHoldLap = 0; $('flag').className = 'hidden';
   game.drsCross = Tr.drs.map(() => ({})); game.to = { issued: null }; game.wx = { announced: 0, level: 0, raining: false, forecastSaid: false };
   for (const c of game.cars) { resetState(c); c.stints = []; c.active = true; c.group.visible = true; }
@@ -532,6 +533,7 @@ function startRace() {
 
 /* ---------------- Physics ---------------- */
 function surfaceOf(c, Tr) {
+  if (Tr.def.arena) return 0;   // derby arena: the whole floor is driveable
   const a = Math.abs(c.lat);
   if (a <= W + 0.3) return 0;
   if (a <= W + KERB) return 1;
@@ -781,6 +783,7 @@ function ghostTick(dt) {
 }
 /* driving the wrong way round the track: warnings, then disqualified after 15 seconds of it */
 function wrongWay(c, dt, Tr) {
+  if (game.derby) return;
   if (!isRace() || !racing() || c.dnf || c.finished || c.pit) { c.wrongT = 0; return; }
   const along = c.v * (Math.sin(c.vh) * Tr.tx[c.idx] + Math.cos(c.vh) * Tr.tz[c.idx]);
   if (along < -2) c.wrongT = (c.wrongT || 0) + dt; else if (along > 3) c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 3);
@@ -799,7 +802,7 @@ function disqualify(c, why) {
 function retire(c, why) {
   if (c.dnf) return;
   c.dnf = true; c.drsOpen = false; c.retire = { why, side: c.lat >= 0 ? 1 : -1, dmg: { ...c.dmg } };
-  if (c.isPlayer) { if (why !== 'dsq') radio(why === 'accident' ? 'Car is too badly damaged. We have to retire it. Sorry.' : 'We have to retire the car.', 'bad', 8); game.resultsAt = game.raceTime + 3; }
+  if (c.isPlayer) { if (why !== 'dsq' && why !== 'wrecked') radio(why === 'accident' ? 'Car is too badly damaged. We have to retire it. Sorry.' : 'We have to retire the car.', 'bad', 8); game.resultsAt = game.raceTime + 3; }
   else if (isRace() && why !== 'dsq') radio('Yellow flag: ' + c.code + ' is out of the race.', 'warn', 4);
   if (why === 'accident') incident(c.code + ' has crashed');
 }
@@ -899,6 +902,7 @@ function serviceCar(c) {
 
 /* ---------------- Damage ---------------- */
 function damage(c, impact, where, scale = 1) {
+  if (game.derby) return;   // the derby uses its own bus health
   if (rule('damage') === 'off' || settings.mode === 'tt' || game.mp) return; // time trial: never any damage
   const k = (rule('damage') === 'reduced' ? 0.5 : 1) * scale, d = c.dmg, before = { ...d };
   if (impact < 5 || k <= 0) return;
@@ -958,6 +962,7 @@ function playerInput(c, dt) {
 }
 
 function aiInput(c, dt, Tr) {
+  if (game.derby) return derbyAI(c, dt);
   const N = Tr.N;
   c.blockT -= dt; c.yieldT -= dt; c.attackT = (c.attackT || 0) - dt; c.defT = (c.defT || 0) - dt; c.mistT = (c.mistT || 0) - dt;
   // ovals: cars hold their lane (packs run two and three wide); road courses: drift back to the racing line
@@ -1104,15 +1109,17 @@ function collide() {
   const cars = game.cars.filter(c => c.active && !c.pit && !c.celebrate && !(c.dnf && Math.abs(c.v) < 1));
   for (let a = 0; a < cars.length; a++) for (let b = a + 1; b < cars.length; b++) {
     const A = cars[a], B = cars[b], dx0 = B.x - A.x, dz0 = B.z - A.z;
-    if (dx0 * dx0 + dz0 * dz0 > 64) continue;
-    const fa = [Math.sin(A.h), Math.cos(A.h)], fb = [Math.sin(B.h), Math.cos(B.h)];
+    // a car is two overlapping circles along its length; a double-decker is four bigger ones
+    const HA = A.closed === 'bus' ? BUS_HIT : CAR_HIT, HB = B.closed === 'bus' ? BUS_HIT : CAR_HIT, reach = HA.reach + HB.reach;
+    if (dx0 * dx0 + dz0 * dz0 > reach * reach) continue;
+    const fa = [Math.sin(A.h), Math.cos(A.h)], fb = [Math.sin(B.h), Math.cos(B.h)], rr = HA.r + HB.r;
     let best = null;
-    for (const oa of [1.35, -1.35]) for (const ob of [1.35, -1.35]) {
+    for (const oa of HA.offs) for (const ob of HB.offs) {
       const ax = A.x + fa[0] * oa, az = A.z + fa[1] * oa, bx = B.x + fb[0] * ob, bz = B.z + fb[1] * ob, d = Math.hypot(bx - ax, bz - az);
-      if (d < 2.15 && d > 1e-4 && (!best || d < best.d)) best = { d, dx: (bx - ax) / d, dz: (bz - az) / d, oa, ob };
+      if (d < rr && d > 1e-4 && (!best || d < best.d)) best = { d, dx: (bx - ax) / d, dz: (bz - az) / d, oa, ob };
     }
     if (!best) continue;
-    const { d, dx, dz, oa, ob } = best, push = (2.15 - d) / 2;
+    const { d, dx, dz, oa, ob } = best, push = (rr - d) / 2;
     if (A.remote || B.remote) {
       // online: each player owns their own car, so only the local car is pushed, and gently (lag-friendly)
       if ((A.remote && B.remote) || A.netPit || B.netPit || !A.group.visible || !B.group.visible) continue;
@@ -1131,6 +1138,7 @@ function collide() {
     // off-centre hits make cars rotate
     const la = Math.cos(A.h) * dx - Math.sin(A.h) * dz, lb = Math.cos(B.h) * dx - Math.sin(B.h) * dz;
     if (cs > 3) { A.spin += clamp(-oa * j * la * 0.09, -2.5, 2.5); B.spin += clamp(ob * j * lb * 0.09, -2.5, 2.5); }
+    if (game.derby && cs > 1.5 && racing()) derbyHit(A, B, cs, fa[0] * dx + fa[1] * dz, -(fb[0] * dx + fb[1] * dz));
     if (cs > 5) {
       const aF = fa[0] * dx + fa[1] * dz, bF = -(fb[0] * dx + fb[1] * dz);
       if (A.isPlayer || B.isPlayer) game.player.impact = Math.min(1, cs / 18);
@@ -1141,6 +1149,58 @@ function collide() {
       damage(B, cs * 0.85, bF > 0.55 ? 'front' : bF < -0.55 ? 'rear' : 'side', sc);
       if (aF > bF) contactFault(A, B, cs); else contactFault(B, A, cs);
     }
+  }
+}
+
+const CAR_HIT = { offs: [1.35, -1.35], r: 1.075, reach: 2.6 }, BUS_HIT = { offs: [3.6, 1.2, -1.2, -3.6], r: 1.3, reach: 5.2 };
+
+/* ---------------- London bus demolition derby (VIP): buses ram each other, last one running wins ---------------- */
+function derbyHit(A, B, cs, aF, bF) {
+  // the bus that is hit side-on or from behind takes more damage than the one doing the ramming
+  for (const [c, f] of [[A, aF], [B, bF]]) {
+    if (c.dnf) continue;
+    c.hp = Math.max(0, (c.hp ?? 100) - cs * 1.4 * (f > 0.55 ? 0.9 : f < -0.55 ? 1.6 : 2.2));
+    c.hitT = Math.min(1, cs / 14);
+    if (c.hp <= 0) derbyWreck(c);
+  }
+  if ((A.isPlayer || B.isPlayer) && cs > 4) { game.player.impact = Math.min(1, cs / 14); try { sound.boom(Math.min(0.5, cs / 30)); } catch (e) { /* no sound */ } }
+}
+function derbyWreck(c) {
+  if (c.dnf) return;
+  c.wrecked = true; c.derbyOut = ++game.derby.out; retire(c, 'wrecked');
+  for (let k = 0; k < 40; k++) smoke.spawn(c.x, c.group.position.y + 2 + Math.random() * 2, c.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, 3 + Math.random() * 2, 2, 9, 0.6, DERBY_SMOKE, 0.6);
+  radio(c.isPlayer ? 'Your bus is wrecked! You are out of the derby.' : c.name + ' is wrecked! ' + derbyAlive().length + ' buses left.', c.isPlayer ? 'bad' : 'warn', 4);
+}
+const derbyAlive = () => game.cars.filter(c => c.active && !c.dnf);
+function derbyAI(c, dt) {
+  // hunt the nearest bus (often the player) and ram it; back out when stuck against a wall
+  if (c.dnf) return { throttle: 0, brake: 1, steer: 0 };
+  c.huntT = (c.huntT || 0) - dt;
+  if (!c.prey || c.prey.dnf || c.huntT <= 0) {
+    let best = null, bd = 1e9; for (const o of derbyAlive()) { if (o === c) continue; const d = Math.hypot(o.x - c.x, o.z - c.z) * (o.isPlayer ? 0.7 : 1) * (0.8 + Math.random() * 0.4); if (d < bd) { bd = d; best = o; } }
+    c.prey = best; c.huntT = 3 + Math.random() * 3;
+  }
+  if (Math.abs(c.v) < 1.2 && game.raceTime > 3) c.stuckT = (c.stuckT || 0) + dt; else c.stuckT = Math.max(0, (c.stuckT || 0) - dt);
+  if (c.reverseT > 0 || c.stuckT > 1.3) { if (!(c.reverseT > 0)) { c.reverseT = 1.4; c.stuckT = 0; c.revSteer = Math.random() < 0.5 ? 1 : -1; } c.reverseT -= dt; c.steer = c.revSteer; return { throttle: 0, brake: 1, steer: c.steer }; }
+  const p = c.prey; if (!p) return { throttle: 0.4, brake: 0, steer: 0 };
+  const lead = Math.min(1.2, Math.hypot(p.x - c.x, p.z - c.z) / 25), tx = p.x + Math.sin(p.vh) * p.v * lead, tz = p.z + Math.cos(p.vh) * p.v * lead;
+  const err = angDiff(Math.atan2(tx - c.x, tz - c.z), c.h);
+  c.steer += clamp(clamp(err * 2.2, -1, 1) - c.steer, -6 * dt, 6 * dt);
+  return { throttle: Math.abs(err) > 1.6 ? 0.5 : 1, brake: 0, steer: c.steer };
+}
+function derbyTick(dt) {
+  const D = game.derby; if (!D || !racing() || D.over) return;
+  D.t += dt;
+  const alive = derbyAlive(), p = game.player;
+  $('derbyHp').style.width = Math.max(0, p.hp ?? 100) + '%';
+  $('derbyLeft').textContent = alive.length + ' buses left · ' + Math.max(0, Math.ceil(D.limit - D.t)) + ' s';
+  if (alive.length <= 1 || D.t >= D.limit) {
+    D.over = true;
+    const order = alive.slice().sort((a, b) => (b.hp ?? 100) - (a.hp ?? 100));
+    order.forEach((c, k) => { c.finished = true; c.finishTime = game.raceTime; c.finishOrder = ++game.finishCount; });
+    const w = order[0];
+    radio(w ? (w.isPlayer ? 'YOU WIN THE DEMOLITION DERBY! Last bus standing!' : w.name + ' wins the demolition derby!') : 'Everyone is wrecked!', w && w.isPlayer ? 'good' : 'info', 6);
+    game.phase = 'finished'; game.resultsAt = game.raceTime + 4;
   }
 }
 
@@ -1167,6 +1227,7 @@ function onPitRoad(c, Tr) {
   const dt0 = game.raceTime - (c.pitExitT ?? -99); return dt0 >= 0 && dt0 < 5;                               // rejoining after the pit exit
 }
 function trackLimits(c) {
+  if (game.derby) return;
   const out = Math.abs(c.lat) > W + KERB + 0.9 && !c.dnf && !onPitRoad(c, game.T);
   if (out && !c.offLimits && Math.abs(c.v) > 12) {
     if (c.isPlayer && !c.lapInvalid && !isRace() && game.session !== 'tt' && c.maxDone >= 0) radio('Lap deleted for track limits.', 'bad', 3);
@@ -1209,6 +1270,7 @@ function drsLogic(c, prevIdx, Tr) {
 
 /* Pit decisions: evaluated ~300 m before pit entry each lap */
 function pitDecision(c, prevIdx, Tr) {
+  if (game.derby) return;
   if (game.phase === 'run' && c.isPlayer) return qualiPitDecision(c, prevIdx, Tr);
   if (!racing() || c.pit || c.dnf || c.finished) return;
   const evalAt = (Tr.pit.entry - 150 + Tr.N) % Tr.N;
@@ -1252,6 +1314,7 @@ function flagSpeed(c, Tr, target) {
   return target;
 }
 function deployFlag(type, why) {
+  if (game.derby) return;
   if (!racing() || game.flag || game.phase !== 'race') return;
   if (type === 'red') return redFlag(why);
   const p = game.player;
@@ -1351,7 +1414,7 @@ function restartFromRed() {
   radio('Standing restart. ' + (game.laps - L) + ' laps to go. Fresh tyres fitted.', 'info', 6);
 }
 function incident(why) {
-  if (!racing() || game.mp) return;
+  if (!racing() || game.mp || game.derby) return;
   game.dnfTimes = (game.dnfTimes || []).filter(t => game.raceTime - t < 15); game.dnfTimes.push(game.raceTime);
   if (game.dnfTimes.length >= 3) return deployFlag('red', 'multiple cars crashed');
   if (game.flag) return;
@@ -2018,7 +2081,7 @@ function engMate() {
 
 /* ---------------- Effects ---------------- */
 const tmpC = new THREE.Color();
-const SNOWC = new THREE.Color('#f4f8fb');
+const SNOWC = new THREE.Color('#f4f8fb'), DERBY_SMOKE = new THREE.Color('#3a3a3a');
 const FLAME = new THREE.Color(3, 1.3, 0.35), FLAME2 = new THREE.Color(0.7, 1.1, 3);
 const SMOKE = new THREE.Color('#e9e9ea'), DUST = new THREE.Color('#c9b48a'), GRASS = new THREE.Color('#6b7a3a'), SPARK = new THREE.Color(3, 1.6, 0.5), SPRAY = new THREE.Color('#c5ccd4');
 function carEffects(c, dt) {
@@ -2134,7 +2197,7 @@ function update(dt) {
       pitDecision(c, prev, Tr);
       wrongWay(c, h, Tr);
     }
-    collide();
+    collide(); derbyTick(h);
     for (const c of game.cars) if (c.active && !c.celebrate) checkLaps(c, Tr);
   }
   // quali: reveal rival lap times as the session goes on
@@ -2475,7 +2538,7 @@ function showResults() {
   $('resSub').textContent = (champ ? 'Round ' + (calIdx().indexOf(settings.track) + 1) + ' of ' + calIdx().length + ' · ' : '') + Tr.def.name + ' · ' + game.laps + ' laps';
   let html = '<tr><th>Pos</th><th>Driver</th><th>Team</th><th>Time</th><th>Best lap</th><th>Tyres</th>' + (champ ? '<th>Pts</th>' : '') + '</tr>';
   rows.forEach((r, k) => {
-    const time = r.c.dsq ? 'DSQ' : r.c.dnf ? 'DNF' : k === 0 ? fmt(r.t) : '+' + (r.t - rows[0].t).toFixed(3) + (r.est ? '*' : '');
+    const time = r.c.dsq ? 'DSQ' : r.c.wrecked ? 'WRECKED' : r.c.dnf ? 'DNF' : game.derby ? (k === 0 ? 'WINNER' : Math.round(r.c.hp ?? 100) + '% left') : k === 0 ? fmt(r.t) : '+' + (r.t - rows[0].t).toFixed(3) + (r.est ? '*' : '');
     const pts = !r.c.dnf && POINTS[k] ? POINTS[k] : 0;
     html += '<tr class="' + (r.c.isPlayer ? 'me' : '') + '"><td>' + (r.c.dnf ? '-' : k + 1) + '</td><td><span class="sw" style="background:' + r.c.color + '"></span>' + r.c.name + '</td><td>' + r.c.team + '</td><td>' + time + (r.c.penalty ? ' <span class="pen">(+' + r.c.penalty + 's)</span>' : '') + '</td><td class="' + (r.c.bestLap === fl ? 'fl' : '') + '">' + fmt(r.c.bestLap) + '</td><td>' + (r.c.stints || []).map(s => '<i class="tb sm" style="--tc:' + COMP[s].color + '">' + COMP[s].s + '</i>').join('') + '</td>' + (champ ? '<td><b>' + (pts ? '+' + pts : '') + '</b></td>' : '') + '</tr>';
     r.pts = pts;
@@ -2711,6 +2774,7 @@ function initMenu() {
   document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const k = seg.dataset.opt, v = b.dataset.v;
+    if (k === 'mode' && v === 'derby' && !isVip()) { $('vipMsg').textContent = 'The London Bus Demolition Derby is VIP only. Enter a VIP code here to unlock it.'; $('vipCode').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('vipCode').focus(); return; }
     if (k === 'series' && SERIES[v] && SERIES[v].vip && !isVip()) { $('vipMsg').textContent = SERIES[v].name + ' is VIP only. Enter a VIP code here to unlock it.'; $('vipCode').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('vipCode').focus(); return; }
     settings[k] = (k === 'laps' || k === 'opp') ? parseInt(v, 10) : v; saveSettings();
     if (k === 'line') world.setRaceLine(v === 'on');
@@ -2793,6 +2857,7 @@ function initMenu() {
   withLoading(() => buildTrack(settings.track));
 }
 function toMenu() {
+  game.derby = null; $('derbyHud').classList.add('hidden');
   $('qchat').classList.add('hidden');
   engMenu(false);
   clearSC(); game.flag = null; $('flag').className = 'hidden';
@@ -2889,7 +2954,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=wrc27x');
+await loadCarModel('js/car.bin?v=derby27y');
 initMenu();
 requestAnimationFrame(frame);
 

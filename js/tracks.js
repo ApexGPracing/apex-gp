@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp, smooth } from './util.js?v=wrc27x';
+import { clamp, smooth } from './util.js?v=derby27y';
 
 export const W = 7;        // road half-width (m)
 export const KERB = 1.4;   // kerb width (m)
@@ -300,6 +300,10 @@ TRACKS.push({ id: 'rsaudi', vip: true, surface: 'gravel', noBarriers: true, elev
 /* Luke Haarhoff Raceway (VIP): a half-mile-style dirt oval with banked turns */
 TRACKS.push({ id: 'haarhoff', vip: true, surface: 'dirt', oval: true, name: 'Luke Haarhoff Raceway', loc: 'Dirt oval', blurb: 'A short, banked dirt oval: throw it sideways into the turns.', theme: 'plains', runoff: 3, pit: 'L', drs: [], kerb: ['#e8e8e8', '#e8e8e8'],
   elev: [[0, 0], [400, 0]], banks: ovalBanks(170, 0, 62, 12), scale: 1, pts: ovalPts(170, 0, 62) });
+
+/* Demolition derby arena (VIP): a wide dirt bowl ringed by concrete walls */
+TRACKS.push({ id: 'derbyarena', vip: true, arena: true, surface: 'dirt', oval: true, name: 'Derby Arena', loc: 'London Bus Demolition Derby', blurb: 'Last bus running wins.', theme: 'plains', type: S, runoff: 24, pit: 'L', drs: [], kerb: ['#e8e8e8', '#e8e8e8'],
+  elev: [[0, 0], [200, 0]], scale: 1, pts: ovalPts(80, 0, 40) });
 
 /* Lightweight centreline for menu previews */
 export function previewPoints(def, n = 240) {

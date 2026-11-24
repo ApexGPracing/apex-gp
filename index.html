@@ -216,6 +216,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 .viptrk{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300;font-weight:800;padding:0 5px;border-radius:4px;font-size:11px}
 .vipin{flex:1 1 30%;display:flex;align-items:center;gap:6px;font-size:12px;color:#f5d36b}.vipin.wide{flex-basis:100%}.vipin input{flex:1;min-width:0;padding:5px 6px;background:rgba(255,255,255,.08);border:1px solid #d4af37;border-radius:6px;color:#fff;font:inherit;font-weight:700}
 .vipn{color:#f5d36b!important;text-shadow:0 0 6px rgba(212,175,55,.6)}
+#derbyHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:20;background:rgba(10,12,18,.75);border:1px solid #d4af37;border-radius:8px;padding:6px 12px;color:#fff;font-size:12px;text-align:center;min-width:220px}#derbyHud .bar{height:10px;background:#333;border-radius:5px;margin:4px 0;overflow:hidden}#derbyHud i{display:block;height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e);width:100%}
 #qchat{position:fixed;left:12px;top:42%;display:flex;flex-direction:column;gap:4px;z-index:20;font-size:12px}#qchat b{color:#f5d36b;letter-spacing:.1em;font-size:11px}#qchat button{background:rgba(10,12,18,.75);color:#fff;border:1px solid #d4af37;border-radius:6px;padding:4px 8px;font:inherit;font-weight:700;text-align:left;cursor:pointer}#qchat small{color:#9aa3ad;font-size:10px}
 .vipser{border-color:#d4af37!important;color:#f5d36b}
 #vipMsg{font-size:13px;color:var(--muted);margin-top:6px;min-height:1em}.mpp .tag.vip{background:linear-gradient(90deg,#d4af37,#f7e7a1);color:#1a1300}
@@ -308,7 +309,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
     <div><div class="logo">APEX<span>GP</span></div><div class="tag" id="menuSub">Formula 1 · 24-round championship</div><div id="onlineNow" class="hidden"><i></i><b>0</b> online now</div></div>
     <div class="opt panel"><h4>Series</h4><div class="seg" data-opt="series"><button data-v="f1">F1</button><button data-v="f2">F2</button><button data-v="indy">IndyCar</button><button data-v="gt3">GT3</button><button data-v="lemans">Le Mans</button><button data-v="rally">Rally</button><button data-v="wrc" class="vipser">WRC Stages ★</button><button data-v="miata">MX-5 Cup</button><button data-v="bus" class="vipser">London Bus ★</button></div></div>
     <div class="opt panel hidden" id="optLmClass"><h4>Your Le Mans car</h4><div class="seg" data-opt="lmClass"><button data-v="hyper">Hypercar</button><button data-v="gt3">GT3</button></div></div>
-    <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button><button data-v="mp">Online</button></div></div>
+    <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button><button data-v="mp">Online</button><button data-v="derby" class="vipser">Bus Derby ★</button></div></div>
     <div class="opt panel hidden" id="mpBox"><h4>Online race</h4>
       <div class="lbname">Your driver name <input id="mpName" maxlength="16" placeholder="e.g. FastGuy44"></div>
       <div id="mpOut"><div class="mprow"><button class="btn primary" id="mpCreate">Create room</button></div><div class="mprow"><button class="btn" id="mpRandom">Join random lobby (1v1)</button></div><div class="mprow"><button class="btn" id="ocOpen">🏆 Online championships</button></div><div class="mprow"><input id="mpCode" maxlength="4" placeholder="CODE"><button class="btn" id="mpJoin">Join room</button></div></div>
@@ -350,6 +351,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 
 <div id="strategy" class="overlay hidden"><div class="card panel" style="min-width:640px"><h2>Race Strategy</h2><div id="stratSub" style="color:var(--muted);font-size:20px;margin:-6px 0 6px"></div><div id="stratWx" class="wxline"></div><div id="stratCards"></div><div class="keys" style="margin-top:10px">The engineer will call you in on the planned lap. Press <kbd>P</kbd> during the race to box or stay out.</div><div class="btns"><button class="btn primary" id="stratGo">Go to the grid</button></div></div></div>
 
+<div id="derbyHud" class="hidden"><b>BUS HEALTH</b><div class="bar"><i id="derbyHp"></i></div><span id="derbyLeft"></span></div>
 <div id="qchat" class="hidden"><b>★ QUICK CHAT</b><button data-k="0">GG!</button><button data-k="1">Nice move!</button><button data-k="2">Sorry!</button><button data-k="3">Thanks!</button><button data-k="4">Good race!</button><button data-k="5">See ya!</button><small>Shift + 1-6</small></div>
 <div id="garageBar" class="hidden"><div class="gt">IN THE GARAGE</div><button class="btn primary" id="leaveGarage">Leave garage (W)</button></div>
 
@@ -368,6 +370,6 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=wrc27x"></script>
+<script type="module" src="js/main.js?v=derby27y"></script>
 </body>
 </html>

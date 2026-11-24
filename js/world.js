@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=wrc27x';
-import { AXLE_F, AXLE_R } from './car.js?v=wrc27x';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=wrc27x';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=derby27y';
+import { AXLE_F, AXLE_R } from './car.js?v=derby27y';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=derby27y';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -266,7 +266,7 @@ export class World {
     // verges / run-off
     const rs = T.def.runoffStyle;
     const ricardT = canvasTex(128, 16, (g2, w, h) => { for (let k = 0; k < 8; k++) { g2.fillStyle = k < 2 ? '#d42027' : k % 2 ? '#1d4ed8' : '#e8ecf2'; g2.fillRect(k * 16, 0, 16, h); } });
-    const vergeMat = rs === 'tarmac' ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#9ea1a8', roughness: 0.9 })
+    const vergeMat = T.def.arena ? new THREE.MeshStandardMaterial({ map: tx.dirtRoad, normalMap: tx.gravelN, roughness: 1 }) : rs === 'tarmac' ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: '#9ea1a8', roughness: 0.9 })
       : rs === 'ricard' ? new THREE.MeshStandardMaterial({ map: ricardT, roughness: 0.75 })
       : T.street ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: T.def.pave || '#7d7f86', roughness: 0.9 })
       : new THREE.MeshStandardMaterial({ map: tx.verge, color: th.grass, roughness: 1 });
