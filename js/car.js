@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=v10s27u';
+import { canvasTex } from './util.js?v=rally27v';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -495,7 +495,7 @@ export function updateDash(car, { gear, kmh, rpm, frac, lap, pos, delta }) {
 /* replace a car's simple wheel with the detailed one, placed for its cockpit */
 function fitCockpit(car, kind, glove) {
   const W = buildWheel(kind === 'gt3' || kind === 'hyper' || kind === 'rally', glove);
-  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.95, 0.24, -0.3], eye: [0.32, 1.07, -0.18], scale: 0.8 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.05, 0.16, -0.3], eye: [0.32, 1.19, -0.3], scale: 0.8 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
+  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.99, 0.3, -0.32], eye: [0.32, 1.14, -0.1], scale: 0.72 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.11, 0.22, -0.32], eye: [0.32, 1.28, -0.2], scale: 0.72 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
   const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); if (P.scale) W.group.scale.setScalar(P.scale); st.visible = false;
   car.dash = W; car.eye = P.eye;
   // T-cam mount: above the airbox on single-seaters; at the front of the roof, over the windscreen, on closed cars
@@ -548,8 +548,8 @@ export function addLiveMirrors(car, tex) {
     if (kind === 'rally') { plane(0.13, 0.065, 0, 0.45, 0.92, 1.13, 0.767, Math.PI - 0.25); plane(0.13, 0.065, 0.55, 1, -0.92, 1.13, 0.767, Math.PI + 0.25); }
     else { plane(0.13, 0.065, 0, 0.45, 0.94, 1.04, 0.687, Math.PI - 0.25); plane(0.13, 0.065, 0.55, 1, -0.94, 1.04, 0.687, Math.PI + 0.25); }
   } else {
-    const scr = new THREE.Mesh(new RoundedBoxGeometry(0.3, 0.1, 0.03, 2, 0.01), DARK); scr.position.set(0, 0.935, 0.66); scr.rotation.x = -0.25; g.add(scr);
-    plane(0.28, 0.085, 0, 1, 0, 0.937, 0.644, Math.PI, 0.25);
+    // hypercar: small door mirrors instead of a big rear-view screen in the middle of the windscreen
+    plane(0.12, 0.05, 0, 0.45, 0.8, 0.86, 0.9, Math.PI - 0.25); plane(0.12, 0.05, 0.55, 1, -0.8, 0.86, 0.9, Math.PI + 0.25);
   }
 }
 

@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=v10s27u';
-import { World } from './world.js?v=v10s27u';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=v10s27u';
-import { Sound } from './audio.js?v=v10s27u';
-import { Particles, Skids, Fireworks } from './fx.js?v=v10s27u';
-import { Weather } from './weather.js?v=v10s27u';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=v10s27u';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=v10s27u';
-import { Net, newCode, loadTurn } from './net.js?v=v10s27u';
-import { VIP_CODES } from './codes.js?v=v10s27u';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=v10s27u';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=v10s27u';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=rally27v';
+import { World } from './world.js?v=rally27v';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=rally27v';
+import { Sound } from './audio.js?v=rally27v';
+import { Particles, Skids, Fireworks } from './fx.js?v=rally27v';
+import { Weather } from './weather.js?v=rally27v';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=rally27v';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=rally27v';
+import { Net, newCode, loadTurn } from './net.js?v=rally27v';
+import { VIP_CODES } from './codes.js?v=rally27v';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rally27v';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=rally27v';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -678,9 +678,9 @@ function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
     const n = Math.min(10, Math.max(1, Math.ceil(dt / (0.7 * u / Cfast))));
     const h = dt / n;
     for (let k = 0; k < n; k++) {
-      const drive = inp.throttle > 0 ? 11.5 * (c.boost || 1) * (c.spec ? c.spec.power : 1) * inp.throttle * Math.max(0, 1 - (u / vm) ** 2) * (surf >= 3 ? 0.55 : 1) : 0;
+      const drive = SL && inp.hb ? 0 : inp.throttle > 0 ? 11.5 * (c.boost || 1) * (c.spec ? c.spec.power : 1) * inp.throttle * Math.max(0, 1 - (u / vm) ** 2) * (surf >= 3 ? 0.55 : 1) : 0;
       // braking is the original strong, consistent braking (no lock-ups)
-      const brake = inp.brake > 0 ? 36 * grip * (c.spec ? c.spec.brake : 1) * inp.brake : 0;
+      const brake = (inp.brake > 0 ? 36 * grip * (c.spec ? c.spec.brake : 1) * inp.brake : 0) + (SL && inp.hb ? 7 : 0);
       const drag = 0.3 + dragK(c) * u * u + (inp.throttle === 0 ? 1.2 : 0) + DRAG[surf] * u + (d.punct ? 0.05 * u : 0);
       // longitudinal weight transfer: braking loads the front, acceleration loads the rear
       const dN = clamp((drive - drag) * P.h / P.L, -4, 4);
@@ -688,7 +688,7 @@ function dynStep(c, inp, dt, grip, vm, bankA, st, surf, d) {
       // speed-sensitive steering: plenty of lock in slow corners, much less at high speed
       // (peak front grip arrives a little before full lock, so there is steering in reserve)
       const delta = st * clamp(0.05 + 1.2 * P.L * mu * Ntot / (u * u), 0.05, SL ? SL.lock : 0.4);
-      const muR = mu * (SL ? SL.rearGrip : P.rearGrip), xF = P.muX * mu * Nf, xR = P.muX * muR * Nr;
+      const hb = SL && inp.hb, muR = mu * (SL ? SL.rearGrip : P.rearGrip) * (hb ? 0.32 : 1), xF = P.muX * mu * Nf, xR = P.muX * muR * Nr;
       // braking/driving use up some cornering grip (friction ellipse), never all of it
       const useF = SL && SL.awd ? Math.min(0.6, 0.4 * drive / xF) : 0, useR = SL && SL.awd ? Math.min(0.95, 0.75 * drive / xR) : Math.min(0.85, drive / xR);
       const capF = mu * Nf * Math.sqrt(1 - useF * useF), capR = muR * Nr * Math.sqrt(1 - useR * useR);
@@ -933,7 +933,8 @@ function padInput() {
     let x = g.axes[0] || 0; if (Math.abs(x) < 0.08) x = 0; else x = Math.sign(x) * ((Math.abs(x) - 0.08) / 0.92) ** 1.4;
     if (g.buttons[14] && g.buttons[14].pressed) x = -1; if (g.buttons[15] && g.buttons[15].pressed) x = 1;
     const thr = Math.max(g.buttons[7] ? g.buttons[7].value : 0, g.buttons[0] && g.buttons[0].pressed ? 1 : 0), brk = Math.max(g.buttons[6] ? g.buttons[6].value : 0, g.buttons[1] && g.buttons[1].pressed ? 1 : 0);
-    if (x || thr > 0.02 || brk > 0.02) return { steer: -x, thr, brk };
+    const hb = !!(g.buttons[2] && g.buttons[2].pressed);
+    if (x || thr > 0.02 || brk > 0.02 || hb) return { steer: -x, thr, brk, hb };
   }
   return null;
 }
@@ -944,7 +945,7 @@ function playerInput(c, dt) {
     // analog: follow the stick closely, with less lock at speed
     const want = pad.steer / Math.sqrt(slow);
     c.steer += clamp(want - c.steer, -9 * S.rate * dt, 9 * S.rate * dt);
-    return { throttle: pad.thr, brake: pad.brk, steer: c.steer };
+    return { throttle: pad.thr, brake: pad.brk, steer: c.steer, hb: pad.hb || !!keys.hb };
   }
   const tgt = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
   // keyboard: the wheel winds on progressively the longer the key is held, and snaps back quicker when released
@@ -952,7 +953,7 @@ function playerInput(c, dt) {
   const build = 0.6 + Math.min(1, c.held / 0.35) * 0.6;
   const rate = (tgt === 0 ? 7 * S.back : (c.steer !== 0 && Math.sign(tgt) !== Math.sign(c.steer) ? 9 : 4.2 * build) * S.rate) / slow;
   c.steer += clamp(tgt - c.steer, -rate * dt, rate * dt);
-  return { throttle: keys.w ? 1 : 0, brake: keys.s ? 1 : 0, steer: c.steer };
+  return { throttle: keys.w ? 1 : 0, brake: keys.s ? 1 : 0, steer: c.steer, hb: !!keys.hb };   // Space: handbrake (rally cars)
 }
 
 function aiInput(c, dt, Tr) {
@@ -2807,7 +2808,8 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   const ak = { arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' }[k];
   if (ak) { keys[ak] = true; e.preventDefault(); }
-  if (k === 'w' || k === 'a' || k === 's' || k === 'd') { keys[k] = true; e.preventDefault(); }
+  if (k === 'w' || k === 'a' || k === 'd' || k === 's') { keys[k] = true; e.preventDefault(); }
+  if (e.code === 'Space' && game.state === 'race') { keys.hb = true; e.preventDefault(); }
   if (e.repeat) return;
   if (k === 'c' && game.state === 'race' && !game.paused) setCam((game.camMode + 1) % 3);
   if (k === 'escape') togglePause();
@@ -2819,7 +2821,7 @@ addEventListener('keydown', e => {
   if (k === 'm') { audio.muted = !audio.muted; store.set('apexgp-muted', audio.muted ? '1' : '0'); if (game.state === 'race') flashMsg(audio.muted ? 'SOUND OFF' : 'SOUND ON', 0.9); }
 });
 $('engMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (b) engAsk(+b.dataset.k); });
-addEventListener('keyup', e => { const k = e.key.toLowerCase(), ak = { arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' }[k]; if (ak) keys[ak] = false; if (k in keys) keys[k] = false; });
+addEventListener('keyup', e => { if (e.code === 'Space') keys.hb = false; const k = e.key.toLowerCase(), ak = { arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' }[k]; if (ak) keys[ak] = false; if (k in keys) keys[k] = false; });
 /* touch controls (phones and tablets): steering buttons on the left, pedals on the right */
 {
   const tc = document.getElementById('touch');
@@ -2878,7 +2880,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=v10s27u');
+await loadCarModel('js/car.bin?v=rally27v');
 initMenu();
 requestAnimationFrame(frame);
 

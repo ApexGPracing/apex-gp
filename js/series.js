@@ -12,7 +12,7 @@ export const CLASSES = {
   // VIP V10 monster: an early-2000s V10 F1 car, ~900 hp at 19,000+ rpm, a sharp piercing shriek with less bark
   v10: { label: 'V10', model: 'f1', drag: 0.95, vmax: 1.06, power: 1.25, grip: 1.0, brake: 1.05, drs: false, eng: { lo: 9000, hi: 19800, cyl: 10, roar: 0.35, scream: 2.4, sc2: 2.0, band: 2.6, q: 3.0, rasp: 0.45, blow: 0.2, bright: 1.5 } },
   // Rally1: ~380 hp turbo four, light and short, big mechanical grip from 4WD but little downforce
-  rally: { label: 'RALLY1', model: 'rally', drag: 0.95, vmax: 0.62, power: 0.5, grip: 0.68, brake: 0.7, drs: false, slide: { B: 7.5, C: 1.25, rearGrip: 0.87, yawDamp: 0.18, awd: true, lock: 0.55 }, eng: { lo: 3200, hi: 8500, cyl: 4, roar: 1.7, scream: 0.3 } },
+  rally: { label: 'RALLY1', model: 'rally', drag: 0.95, vmax: 0.62, power: 0.5, grip: 0.68, brake: 0.7, drs: false, slide: { B: 8.5, C: 1.28, rearGrip: 0.92, yawDamp: 0.32, awd: true, lock: 0.55 }, eng: { lo: 3200, hi: 8500, cyl: 4, roar: 1.7, scream: 0.3 } },
   hyper: { label: 'HYPERCAR', model: 'hyper', drag: 0.72, vmax: 0.95, power: 0.8, grip: 0.86, brake: 0.86, drs: false, eng: { lo: 4800, hi: 10000, cyl: 6, roar: 1.3, scream: 0.6 } },
 };
 
