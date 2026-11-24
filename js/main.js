@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=vip27r';
-import { World } from './world.js?v=vip27r';
-import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=vip27r';
-import { Sound } from './audio.js?v=vip27r';
-import { Particles, Skids, Fireworks } from './fx.js?v=vip27r';
-import { Weather } from './weather.js?v=vip27r';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=vip27r';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=vip27r';
-import { Net, newCode, loadTurn } from './net.js?v=vip27r';
-import { VIP_CODES } from './codes.js?v=vip27r';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=vip27r';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=vip27r';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=smoke27s';
+import { World } from './world.js?v=smoke27s';
+import { makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=smoke27s';
+import { Sound } from './audio.js?v=smoke27s';
+import { Particles, Skids, Fireworks } from './fx.js?v=smoke27s';
+import { Weather } from './weather.js?v=smoke27s';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=smoke27s';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=smoke27s';
+import { Net, newCode, loadTurn } from './net.js?v=smoke27s';
+import { VIP_CODES } from './codes.js?v=smoke27s';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=smoke27s';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=smoke27s';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -2033,6 +2033,19 @@ function carEffects(c, dt) {
       if (Math.random() < dt * 40) smoke.spawn(x, ey + 0.3, wz, -fx * sp * 0.15 + (Math.random() - 0.5), 0.6 + Math.random(), -fz * sp * 0.15 + (Math.random() - 0.5), 1.4 + Math.random(), 0.8, 4.5, c.smokeCol ? 0.5 : 0.32, c.smokeCol || SMOKE, 1.2);
     } else skids.lift(c.code + k);
   });
+  // VIP coloured tyre smoke: easy to show off. Rear-wheel burnout pulling away hard, puffs in any slide and
+  // under heavy braking, in bigger brighter clouds than normal smoke
+  if (c.smokeCol && c.inp && wet < 0.3 && c.surf <= 2) {
+    const thr = c.inp.throttle || 0, brk = c.inp.brake || 0, inPit = c.pit || c.inPitRoad;
+    // burnout: only when pulling away hard from (nearly) a standstill, for at most about two seconds
+    if (sp < 3) c.burnT = 2.2; else c.burnT = Math.max(0, (c.burnT || 0) - dt);
+    const burn = !inPit && thr > 0.8 && sp > 0.5 && sp < 16 && c.burnT > 0, slideAmt = Math.abs(c.slip) > 0.12 || c.scrub > 0.6, brake = brk > 0.7 && sp > 18;
+    const rate = inPit ? 0 : burn ? 16 : slideAmt ? 14 : brake ? 8 : 0;
+    if (rate) for (const s2 of [1, -1]) {
+      const [x, wz] = wheel(s2, brake && !burn ? AXLE_F : AXLE_R);
+      if (Math.random() < dt * rate) smoke.spawn(x, ey + 0.35, wz, -fx * sp * 0.12 + (Math.random() - 0.5) * 1.5, 0.8 + Math.random() * 1.2, -fz * sp * 0.12 + (Math.random() - 0.5) * 1.5, 1.1 + Math.random() * 0.6, 0.7, 3.2, 0.3, c.smokeCol, 1.4);
+    }
+  }
   // VIP exhaust flames: a burst of flame when lifting off at speed, and pops while coasting at high revs
   if (c.flames && c.inp) {
     const thr = c.inp.throttle || 0, lift = (c.prevThr || 0) > 0.7 && thr < 0.15 && sp > 25;
@@ -2862,7 +2875,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=vip27r');
+await loadCarModel('js/car.bin?v=smoke27s');
 initMenu();
 requestAnimationFrame(frame);
 
