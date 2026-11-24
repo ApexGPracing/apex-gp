@@ -5,8 +5,29 @@ const ENG_F1 = { lo: 7000, hi: 18000, cyl: 8, roar: 1, scream: 1 };
 export class Sound {
   constructor() { this.ctx = null; this.muted = false; this.prevGear = 0; this.popT = 0; this.stutT = 0; this.blowAmt = 0; }
 
+  /* Phones and tablets only let a page start sound from inside a tap or key press, and iOS mutes web audio
+     with the ring/silent switch. unlock() runs on every tap/key: it creates or resumes the audio context there,
+     plays a silent blip to wake it, asks for the "playback" audio session (not muted by the switch) and keeps a
+     silent media element looping, which does the same on older iOS. */
+  unlock() {
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
+    if (!this.ctx) this.init();
+    const ctx = this.ctx; if (!ctx) return;
+    if (ctx.state !== 'running') {
+      ctx.resume().catch(() => {});
+      try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ }
+    }
+    if (!this.keepAlive && /iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document) {
+      // 0.1 s of silence as a WAV, looped quietly so iOS treats the page as media playback
+      const n = 2205, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), w = (o, t) => { for (let k = 0; k < t.length; k++) v.setUint8(o + k, t.charCodeAt(k)); };
+      w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 22050, true); v.setUint32(28, 44100, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+      const a = this.keepAlive = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }))); a.loop = true; a.setAttribute('playsinline', ''); a.volume = 0.01;
+    }
+    if (this.keepAlive && this.keepAlive.paused) this.keepAlive.play().catch(() => {});
+  }
+
   init() {
-    if (this.ctx) { this.ctx.resume(); return; }
+    if (this.ctx) { if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); return; }
     try {
       const AC = window.AudioContext || window.webkitAudioContext, ctx = this.ctx = new AC();
       this.master = ctx.createGain(); this.master.gain.value = 0.9;

@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=conc27c';
-import { World } from './world.js?v=conc27c';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=conc27c';
-import { Sound } from './audio.js?v=conc27c';
-import { Particles, Skids, Fireworks } from './fx.js?v=conc27c';
-import { Weather } from './weather.js?v=conc27c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=conc27c';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=conc27c';
-import { Net, newCode, loadTurn } from './net.js?v=conc27c';
-import { VIP_CODES } from './codes.js?v=conc27c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=conc27c';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=conc27c';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=snd27d';
+import { World } from './world.js?v=snd27d';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=snd27d';
+import { Sound } from './audio.js?v=snd27d';
+import { Particles, Skids, Fireworks } from './fx.js?v=snd27d';
+import { Weather } from './weather.js?v=snd27d';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=snd27d';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=snd27d';
+import { Net, newCode, loadTurn } from './net.js?v=snd27d';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=snd27d';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=snd27d';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=snd27d';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -131,6 +131,7 @@ function vipExtras(car, x) {
     m.position.y = 0.03; m.renderOrder = 2; car.group.add(m);
   }
 }
+if (VIP_REVOKED.includes(store.get('apexgp-vip-code'))) { store.set('apexgp-vip', '0'); store.set('apexgp-vip-code', ''); }   // a code the owner switched off
 const isVip = () => store.get('apexgp-vip') === '1';
 const myLivery = () => settings.livery >= VIP_FROM && !isVip() ? 0 : settings.livery;
 function vipFinish(car, k) {
@@ -185,7 +186,7 @@ async function redeemVip(raw) {
       if (r.status === 409) return 'That code has already been used.';
     } catch (e) { return 'Could not check the code online. Check your internet and try again.'; }
   }
-  store.set('apexgp-vip', '1');
+  store.set('apexgp-vip', '1'); store.set('apexgp-vip-code', hash.slice(0, 24));   // remember which code, so it can be switched off later
   return true;
 }
 const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
@@ -250,6 +251,10 @@ function buildTrack(i) {
 /* ---------------- Audio ---------------- */
 const sound = new Sound();
 sound.muted = store.get('apexgp-muted') === '1';
+// wake the sound on every tap, click or key press (browsers block audio that is not started by the player), and
+// again when coming back to the tab (iOS suspends it in the background)
+for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) window.addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && sound.ctx) sound.unlock(); });
 const audio = { init() { sound.init(); }, set() {}, get muted() { return sound.muted; }, set muted(v) { sound.muted = v; } };
 
 /* ---------------- Championship ---------------- */
@@ -2956,7 +2961,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=conc27c');
+await loadCarModel('js/car.bin?v=snd27d');
 initMenu();
 requestAnimationFrame(frame);
 

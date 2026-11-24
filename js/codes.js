@@ -43,7 +43,6 @@ export const VIP_CODES = [
   '14b3bfccb688972d99f09c3c',
   // batch 2
   'b164f26de8271f57ef044339',
-  'dfe87ee403d636c5f9919323',
   '8a62f99d67ffb69bfaae044b',
   'b494fc58e3a1428869c0abe7',
   '96b1bc57e5490e988ad5e8a3',
@@ -83,3 +82,6 @@ export const VIP_CODES = [
   '90a0bb44313c90d4d2d414ea',
   'f050d567bf6fc8adbf8de171',
 ];
+
+/* codes switched off by the owner: removed from the list above, and VIP is taken away from a device that redeemed one */
+export const VIP_REVOKED = ['dfe87ee403d636c5f9919323'];   // no. 42
