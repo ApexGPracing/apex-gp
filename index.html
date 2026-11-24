@@ -50,6 +50,8 @@ button{font-family:inherit;cursor:pointer}
 #minimap{display:block;width:200px;height:200px}
 #camTag{position:absolute;left:16px;bottom:16px;padding:8px 14px;font-size:16px;font-weight:600;color:var(--muted)}
 #camTag b{color:var(--text)}
+#sndBtn{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;padding:6px 12px;border-radius:18px;border:1px solid var(--line);background:rgba(10,12,18,.8);color:var(--text);font:600 14px system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#sndBtn.off{color:#ff6b6b}
 #wrongway{position:absolute;left:50%;top:30%;transform:translateX(-50%);font-size:54px;font-weight:800;color:var(--red);text-shadow:0 3px 18px rgba(0,0,0,.6);animation:blink .6s steps(2) infinite}
 @keyframes blink{50%{opacity:.2}}
 #msg{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:46px;font-weight:800;font-style:italic;text-align:center;text-shadow:0 3px 18px rgba(0,0,0,.7);transition:opacity .3s;opacity:0;white-space:nowrap}
@@ -370,6 +372,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=m10fix27e"></script>
+<script type="module" src="js/main.js?v=snd27f"></script>
+<button id="sndBtn" type="button">🔊 Sound on</button>
 </body>
 </html>

@@ -17,13 +17,13 @@ export class Sound {
       ctx.resume().catch(() => {});
       try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ }
     }
-    if (!this.keepAlive && /iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document) {
+    if (!this.keepAlive && !navigator.audioSession && /iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document) {
       // 0.1 s of silence as a WAV, looped quietly so iOS treats the page as media playback
       const n = 2205, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), w = (o, t) => { for (let k = 0; k < t.length; k++) v.setUint8(o + k, t.charCodeAt(k)); };
       w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 22050, true); v.setUint32(28, 44100, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
       const a = this.keepAlive = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }))); a.loop = true; a.setAttribute('playsinline', ''); a.volume = 0.01;
     }
-    if (this.keepAlive && this.keepAlive.paused) this.keepAlive.play().catch(() => {});
+    if (this.keepAlive && this.keepAlive.paused) this.keepAlive.play().then(() => { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); }).catch(() => {});
   }
 
   init() {

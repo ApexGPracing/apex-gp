@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=m10fix27e';
-import { World } from './world.js?v=m10fix27e';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=m10fix27e';
-import { Sound } from './audio.js?v=m10fix27e';
-import { Particles, Skids, Fireworks } from './fx.js?v=m10fix27e';
-import { Weather } from './weather.js?v=m10fix27e';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=m10fix27e';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=m10fix27e';
-import { Net, newCode, loadTurn } from './net.js?v=m10fix27e';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=m10fix27e';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=m10fix27e';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=m10fix27e';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=snd27f';
+import { World } from './world.js?v=snd27f';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=snd27f';
+import { Sound } from './audio.js?v=snd27f';
+import { Particles, Skids, Fireworks } from './fx.js?v=snd27f';
+import { Weather } from './weather.js?v=snd27f';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=snd27f';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=snd27f';
+import { Net, newCode, loadTurn } from './net.js?v=snd27f';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=snd27f';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=snd27f';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=snd27f';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -255,6 +255,25 @@ sound.muted = store.get('apexgp-muted') === '1';
 // again when coming back to the tab (iOS suspends it in the background)
 for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) window.addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && sound.ctx) sound.unlock(); });
+/* the sound button (top centre): shows whether sound is really playing; tap it to switch sound on or off */
+function sndUi() {
+  const b = document.getElementById('sndBtn'); if (!b) return;
+  const st = sound.ctx ? sound.ctx.state : 'none', blocked = !sound.muted && st !== 'running';
+  b.textContent = sound.muted ? '🔇 Sound off' : blocked ? '🔈 Tap for sound' : '🔊 Sound on';
+  b.classList.toggle('off', sound.muted || blocked);
+}
+setInterval(sndUi, 1000);
+window.addEventListener('DOMContentLoaded', () => {
+  const b = document.getElementById('sndBtn'); if (!b) return;
+  b.addEventListener('click', e => {
+    e.stopPropagation(); sound.unlock();
+    const st = sound.ctx ? sound.ctx.state : 'none';
+    if (sound.muted || st === 'running') { sound.muted = !sound.muted; store.set('apexgp-muted', sound.muted ? '1' : '0'); }   // a blocked sound is just woken up, not muted
+    if (!sound.muted) try { sound.horn(); } catch (err) { /* no sound */ }   // a quick test beep so you can hear it works
+    setTimeout(sndUi, 150); sndUi();
+  });
+  sndUi();
+});
 const audio = { init() { sound.init(); }, set() {}, get muted() { return sound.muted; }, set muted(v) { sound.muted = v; } };
 
 /* ---------------- Championship ---------------- */
@@ -2899,7 +2918,7 @@ addEventListener('keydown', e => {
   if (k === 'r' && game.state === 'race' && !game.paused) engMenu();
   if (e.shiftKey && game.mp && /^Digit[1-6]$/.test(e.code)) { quickChat(+e.code.slice(5) - 1); return; }
   if (k >= '1' && k <= '9' && !$('engMenu').classList.contains('hidden')) engAsk(+k - 1);
-  if (k === 'm') { audio.muted = !audio.muted; store.set('apexgp-muted', audio.muted ? '1' : '0'); if (game.state === 'race') flashMsg(audio.muted ? 'SOUND OFF' : 'SOUND ON', 0.9); }
+  if (k === 'm') { audio.muted = !audio.muted; store.set('apexgp-muted', audio.muted ? '1' : '0'); sndUi(); if (game.state === 'race') flashMsg(audio.muted ? 'SOUND OFF' : 'SOUND ON', 0.9); }
 });
 $('engMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (b) engAsk(+b.dataset.k); });
 addEventListener('keyup', e => { if (e.code === 'Space') keys.hb = false; const k = e.key.toLowerCase(), ak = { arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' }[k]; if (ak) keys[ak] = false; if (k in keys) keys[k] = false; });
@@ -2961,7 +2980,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=m10fix27e');
+await loadCarModel('js/car.bin?v=snd27f');
 initMenu();
 requestAnimationFrame(frame);
 
