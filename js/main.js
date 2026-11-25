@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=vipon27p';
-import { World } from './world.js?v=vipon27p';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=vipon27p';
-import { Sound } from './audio.js?v=vipon27p';
-import { Particles, Skids, Fireworks } from './fx.js?v=vipon27p';
-import { Weather } from './weather.js?v=vipon27p';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=vipon27p';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=vipon27p';
-import { Net, newCode, loadTurn } from './net.js?v=vipon27p';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=vipon27p';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=vipon27p';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=vipon27p';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=pits27q';
+import { World } from './world.js?v=pits27q';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=pits27q';
+import { Sound } from './audio.js?v=pits27q';
+import { Particles, Skids, Fireworks } from './fx.js?v=pits27q';
+import { Weather } from './weather.js?v=pits27q';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=pits27q';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=pits27q';
+import { Net, newCode, loadTurn } from './net.js?v=pits27q';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=pits27q';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=pits27q';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=pits27q';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -810,7 +810,7 @@ function ttMedal(lt) {
   if (m > best) { store.set(medalKey(), String(m)); flashMsg(['', 'BRONZE MEDAL', 'SILVER MEDAL', 'GOLD MEDAL'][m], 2.5, fmt(lt)); radio(['', 'Bronze medal! Silver is ' + fmt(sv) + '.', 'Silver medal! Gold is ' + fmt(g) + '.', 'GOLD MEDAL! Mega lap, mate!'][m], 'good', 5); }
 }
 /* VIP Time Trial ghost: your best lap is recorded and replayed as a see-through car to race against */
-const ghostKey = () => 'apexgp-ghost2-' + serKey(game.T.def.id);   // v2: old Nordschleife ghosts were recorded the wrong way round
+const ghostKey = () => 'apexgp-ghost2-' + serKey(game.T.def.id) + (game.T.def.ghostV ? '-v' + game.T.def.ghostV : '');   // def.ghostV: bumped when a track's start line moves   // v2: old Nordschleife ghosts were recorded the wrong way round
 function ghostLap(lt, valid) {
   const G = game.ghost || (game.ghost = { rec: [], start: null });
   if (valid && G.rec.length > 20 && G.start !== null) {
@@ -3027,7 +3027,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=vipon27p');
+await loadCarModel('js/car.bin?v=pits27q');
 initMenu();
 requestAnimationFrame(frame);
 
