@@ -10,7 +10,7 @@ export const CLASSES = {
   indy: { label: 'INDY', model: 'indy', drag: 0.55, vmax: 1.12, power: 0.95, grip: 0.88, brake: 0.85, drs: false, eng: { lo: 6500, hi: 12000, cyl: 6, roar: 1.1, scream: 0.8 } },
   gt3: { label: 'GT3', model: 'gt3', drag: 0.85, vmax: 0.8, power: 0.6, grip: 0.74, brake: 0.74, drs: false, eng: { lo: 3500, hi: 8800, cyl: 8, roar: 1.6, scream: 0.35 } },
   // VIP V10 monster: an early-2000s V10 F1 car, ~900 hp at 19,000+ rpm, a sharp piercing shriek with less bark
-  v10: { label: 'V10', model: 'f1', drag: 0.95, vmax: 1.06, power: 1.25, grip: 1.0, brake: 1.05, drs: false, eng: { lo: 9000, hi: 19000, cyl: 10, roar: 0.45, scream: 0.2, sc2: 2.0, band: 0.8, q: 0.8, rasp: 0.55, blow: 0.2, bright: 0.85, comb: 1.4 } },
+  v10: { label: 'V10', model: 'f1', drag: 0.95, vmax: 1.06, power: 1.25, grip: 1.0, brake: 1.05, drs: false, eng: { lo: 9000, hi: 19000, cyl: 10, roar: 0.45, scream: 0.2, sc2: 2.0, band: 0.8, q: 0.8, rasp: 1.0, blow: 0.2, bright: 1.25, comb: 1.4, pulse: 1.0, combMix: 0.12, voice: 0.18, rough: 0.85, pnoise: 1.3, ptone: 1.4 } },
   // MX-5 Cup: ~180 hp spec roadster, light and grippy, ~200 km/h; London double-decker bus: heavy, slow, wallowy
   miata: { label: 'MX-5', model: 'miata', drag: 0.9, vmax: 0.62, power: 0.44, grip: 0.84, brake: 0.72, drs: false, eng: { lo: 2400, hi: 7500, cyl: 4, roar: 1.3, scream: 0.3 } },
   bus: { label: 'BUS', model: 'bus', drag: 2.2, vmax: 0.34, power: 0.15, grip: 0.42, brake: 0.45, drs: false, eng: { lo: 500, hi: 2300, cyl: 6, roar: 2.4, scream: 0.02, rasp: 1.6, blow: 0 } },

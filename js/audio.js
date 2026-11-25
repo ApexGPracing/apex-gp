@@ -39,6 +39,11 @@ export class Sound {
       this.noiseBuf = nb;
       this.engine = this.makeEngine(0.9);
       this.rival = this.makeEngine(0.35);
+      // combustion-pulse voices (V10/V8): an AudioWorklet; older browsers keep the oscillator comb instead
+      if (ctx.audioWorklet && window.AudioWorkletNode) {
+        const url = new URL('./engine-worklet.js' + new URL(import.meta.url).search, import.meta.url);
+        this.workletReady = ctx.audioWorklet.addModule(url).then(() => { for (const e of [this.engine, this.rival]) this.attachPulse(e); }).catch(() => {});
+      }
       this.rumble = this.makeNoise('lowpass', 160, 1.5); this.rumbleLfo = ctx.createOscillator(); this.rumbleLfo.type = 'square';
       // kerb rumble: the LFO chops a separate stage (0..1) AFTER the level gain, so at level 0 it is truly silent
       // (it used to add straight onto the level, which left a buzz playing on the menu and everywhere else)
@@ -133,8 +138,15 @@ export class Sound {
     const cG = ctx.createGain(); cG.gain.value = 0;
     const cPk = ctx.createBiquadFilter(); cPk.type = 'peaking'; cPk.frequency.value = 1400; cPk.Q.value = 0.9; cPk.gain.value = 7;   // body around the firing note
     const cLp = ctx.createBiquadFilter(); cLp.type = 'lowpass'; cLp.frequency.value = 5200; cLp.Q.value = 0.5;
-    cOsc.connect(cDrive); cDrive.connect(cShape); cShape.connect(cHp); cHp.connect(cPk); cPk.connect(cLp); cLp.connect(cG); cG.connect(out); cOsc.start();
-    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cDrive, cG, cPk, combCyl: 0 };
+    const cOscG = ctx.createGain(); cOscG.gain.value = 1;
+    cOsc.connect(cOscG); cOscG.connect(cDrive); cDrive.connect(cShape); cShape.connect(cHp); cHp.connect(cPk); cPk.connect(cLp); cLp.connect(cG); cG.connect(out); cOsc.start();
+    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cOscG, cDrive, cG, cPk, g1, g2, combCyl: 0 };
+  }
+  attachPulse(e) {
+    try {
+      const n = new AudioWorkletNode(this.ctx, 'engine-pulse', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { cyl: 10 } });
+      const g = this.ctx.createGain(); g.gain.value = 0; n.connect(g); g.connect(e.cDrive); e.pNode = n; e.pG = g; e.pCyl = 10;
+    } catch (err) { /* no worklet */ }
   }
   combWave(cyl, half = 0.8) {
     const H = 72, real = new Float32Array(H + 1), imag = new Float32Array(H + 1);
@@ -181,7 +193,15 @@ export class Sound {
       e.cOsc.frequency.setTargetAtTime(e.srpm / 120 * (1 + e.jit), t, 0.012);
       e.cDrive.gain.setTargetAtTime(0.9 + 1.0 * thr, t, 0.04); e.cPk.frequency.setTargetAtTime(e.srpm / 120 * eng.cyl * 0.95, t, 0.05);
       e.cG.gain.setTargetAtTime(eng.comb * (0.3 + 0.7 * Math.max(thr, 0.6 * blow)), t, 0.04);
-    } else e.cG.gain.setTargetAtTime(0, t, 0.05);
+      if (e.pNode && eng.pulse) {   // combustion pulses carry the sound; the steady comb only underpins them
+        if (e.pCyl !== eng.cyl) { e.pCyl = eng.cyl; e.pNode.port.postMessage({ cyl: eng.cyl }); }
+        const P = e.pNode.parameters;
+        P.get('freq').setTargetAtTime(fire, t, 0.012); P.get('rough').setTargetAtTime((eng.rough || 0.4) * (0.7 + 0.6 * thr), t, 0.05);
+        P.get('noise').setTargetAtTime((eng.pnoise || 0.6) * (0.5 + 0.8 * thr), t, 0.05); P.get('tone').setTargetAtTime(eng.ptone || 1, t, 0.1);
+        e.pG.gain.setTargetAtTime(eng.pulse, t, 0.04); e.cOscG.gain.setTargetAtTime(eng.combMix ?? 0.35, t, 0.05);
+      } else { if (e.pG) e.pG.gain.setTargetAtTime(0, t, 0.05); e.cOscG.gain.setTargetAtTime(1, t, 0.05); }
+      e.g1.gain.setTargetAtTime(0.55 * (eng.voice ?? 1), t, 0.05); e.g2.gain.setTargetAtTime(0.45 * (eng.voice ?? 1), t, 0.05);
+    } else { e.cG.gain.setTargetAtTime(0, t, 0.05); if (e.pG) e.pG.gain.setTargetAtTime(0, t, 0.05); e.g1.gain.setTargetAtTime(0.55, t, 0.05); e.g2.gain.setTargetAtTime(0.45, t, 0.05); }
     e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.09 + 0.17 * Math.max(thr, 0.75 * blow)), t, 0.04);
   }
   burst(gain, dur, freq = 1500, q = 1) {
