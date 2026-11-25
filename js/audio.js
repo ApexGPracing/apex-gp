@@ -1,7 +1,7 @@
 /* Synthesised sound: a screaming 2011-era V8 (18,000 rpm, exhaust-blown diffuser) for the player's car
    (plus the nearest rival), off-throttle "hot blowing" stutter and crackle, seamless-shift cuts,
    downshift blips, kerb rumble, tyre squeal, wind, rain and impacts. */
-const ENG_F1 = { lo: 7000, hi: 18000, cyl: 8, roar: 0.8, scream: 0.3, band: 1.0, q: 0.8, rasp: 0.6, bright: 0.62, comb: 1.3, half: 1.2 };
+const ENG_F1 = { lo: 7000, hi: 18000, cyl: 8, roar: 0.4, scream: 0.06, scBase: 0.08, band: 1.0, q: 0.8, rasp: 0.8, bright: 1.25, comb: 1.3, half: 0.6, pulse: 1.0, combMix: 0.06, voice: 0.12, rough: 1.1, pnoise: 1.5, ptone: 1.45, growl: 0.35, spread: 0.8 };
 export class Sound {
   constructor() { this.ctx = null; this.muted = false; this.prevGear = 0; this.popT = 0; this.stutT = 0; this.blowAmt = 0; }
 
