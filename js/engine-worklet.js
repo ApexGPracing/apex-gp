@@ -21,7 +21,10 @@ class EnginePulse extends AudioWorkletProcessor {
     this.seed = 12345;
     this.cg = []; for (let k = 0; k < 16; k++) this.cg.push(0.72 + 0.56 * this.rnd());   // fixed cylinder-to-cylinder differences
     this.ph = 0; this.k = 0; this.next = 1; this.env = 0; this.pop = 0;
-    this.port.onmessage = e => { if (e.data && e.data.cyl) this.cyl = e.data.cyl; };
+    this.port.onmessage = e => {
+      if (e.data && e.data.cyl) this.cyl = e.data.cyl;
+      if (e.data && e.data.spread !== undefined) { this.seed = 12345; const sp = e.data.spread; this.cg = []; for (let k = 0; k < 16; k++) this.cg.push(Math.max(0.1, 1 + sp * (this.rnd() * 2 - 1))); }   // how uneven the cylinders are
+    };
   }
   rnd() { this.seed = (this.seed * 16807) % 2147483647; return this.seed / 2147483647; }
   process(inputs, outputs, P) {

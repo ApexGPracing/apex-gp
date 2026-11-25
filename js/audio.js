@@ -84,8 +84,12 @@ export class Sound {
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6000; lp.Q.value = 0.5;
     const out = ctx.createGain(); out.gain.value = 0;
     const gate = ctx.createGain(); gate.gain.value = 1;
+    // GROWL (eng.growl): the whole engine is chopped once per engine cycle by an uneven pattern (some cylinders bang
+    // harder than others), the 100-300 Hz roughness that turns a smooth whir into a roar
+    const growl = ctx.createGain(); growl.gain.value = 1;
+    const gOsc = ctx.createOscillator(), gDepth = ctx.createGain(); gDepth.gain.value = 0; gOsc.connect(gDepth); gDepth.connect(growl.gain); gOsc.start();
     o1.connect(g1); o2.connect(g2); g1.connect(hp); g2.connect(hp);
-    hp.connect(pres); pres.connect(shaper); shaper.connect(lp); lp.connect(out); out.connect(gate); gate.connect(this.master);
+    hp.connect(pres); pres.connect(shaper); shaper.connect(lp); lp.connect(out); out.connect(growl); growl.connect(gate); gate.connect(this.master);
     o1.start(); o2.start();
     // "scream" layer: the firing frequency and its 2nd/3rd orders through a bright resonant band.
     // This is what makes a high-revving V8 sound like a V8 rather than a hum.
@@ -140,7 +144,14 @@ export class Sound {
     const cLp = ctx.createBiquadFilter(); cLp.type = 'lowpass'; cLp.frequency.value = 5200; cLp.Q.value = 0.5;
     const cOscG = ctx.createGain(); cOscG.gain.value = 1;
     cOsc.connect(cOscG); cOscG.connect(cDrive); cDrive.connect(cShape); cShape.connect(cHp); cHp.connect(cPk); cPk.connect(cLp); cLp.connect(cG); cG.connect(out); cOsc.start();
-    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cOscG, cDrive, cG, cPk, g1, g2, combCyl: 0 };
+    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cOscG, cDrive, cG, cPk, g1, g2, gOsc, gDepth, combCyl: 0 };
+  }
+  growlWave(cyl) {
+    // the once-per-engine-cycle beat: the strong and weak cylinders make the loudness swell and dip at the cycle rate
+    // (~150 Hz flat out), with a little of its 2nd and 3rd multiples so the beat is uneven, not a clean wobble
+    const real = new Float32Array(5), imag = new Float32Array(5);
+    [[1, 1], [2, 0.45], [3, 0.25], [4, 0.12]].forEach(([h, a], k) => { const ph = [0.3, 2.1, 4.0, 1.2][k]; real[h] = a * Math.cos(ph); imag[h] = a * Math.sin(ph); });
+    return this.ctx.createPeriodicWave(real, imag);
   }
   attachPulse(e) {
     try {
@@ -179,7 +190,7 @@ export class Sound {
     const hi = Math.min(1, Math.max(0, (e.srpm - (eng.lo + 0.18 * span)) / (0.82 * span))) * eng.scream;
     e.sc.frequency.setTargetAtTime(fire, t, ft); e.sc2.frequency.setTargetAtTime(fire * (eng.sc2 || 1.5), t, ft);
     e.scBand.frequency.setTargetAtTime(1600 + fire * (eng.band || 3.3), t, 0.05); e.scBand.Q.setTargetAtTime(eng.q || 1.1, t, 0.1);   // V10: a narrower, more piercing scream band
-    e.scG.gain.setTargetAtTime(0.3 + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);
+    e.scG.gain.setTargetAtTime(0.3 * (eng.scBase ?? 1) + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);   // eng.scBase: the steady floor of the scream tone (a steady tone in the top end is what whirs)
     e.pulse.frequency.setTargetAtTime(fire, t, ft);
     e.nzBand.frequency.setTargetAtTime(1200 + e.srpm * 0.08, t, 0.05);
     // off-throttle hot blowing keeps the exhaust loud and raspy instead of letting the engine fall quiet (2011 V8; a V10 has little)
@@ -202,8 +213,14 @@ export class Sound {
         P.get('noise').setTargetAtTime((eng.pnoise || 0.6) * (0.5 + 0.8 * thr), t, 0.05); P.get('tone').setTargetAtTime(eng.ptone || 1, t, 0.1);
         e.pG.gain.setTargetAtTime(eng.pulse, t, 0.04); e.cOscG.gain.setTargetAtTime(eng.combMix ?? 0.35, t, 0.05);
       } else { if (e.pG) e.pG.gain.setTargetAtTime(0, t, 0.05); e.cOscG.gain.setTargetAtTime(1, t, 0.05); }
+      if (e.pSpread !== (eng.spread || 0.28)) { e.pSpread = eng.spread || 0.28; if (e.pNode) e.pNode.port.postMessage({ spread: e.pSpread }); }
       e.g1.gain.setTargetAtTime(0.55 * (eng.voice ?? 1), t, 0.05); e.g2.gain.setTargetAtTime(0.45 * (eng.voice ?? 1), t, 0.05);
     } else { e.cG.gain.setTargetAtTime(0, t, 0.05); if (e.pG) e.pG.gain.setTargetAtTime(0, t, 0.05); e.g1.gain.setTargetAtTime(0.55, t, 0.05); e.g2.gain.setTargetAtTime(0.45, t, 0.05); }
+    if (eng.growl) {
+      if (e.gCyl !== eng.cyl) { e.gCyl = eng.cyl; e.gOsc.setPeriodicWave(this.growlWave(eng.cyl)); }
+      e.gOsc.frequency.setTargetAtTime(e.srpm / 120, t, snap ? 0.002 : 0.012);
+      e.gDepth.gain.setTargetAtTime(eng.growl * (0.55 + 0.45 * thr), t, 0.05);
+    } else e.gDepth.gain.setTargetAtTime(0, t, 0.05);
     e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.09 + 0.17 * Math.max(thr, 0.75 * blow)), t, 0.04);
   }
   burst(gain, dur, freq = 1500, q = 1) {
