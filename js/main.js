@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=v8p27o';
-import { World } from './world.js?v=v8p27o';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=v8p27o';
-import { Sound } from './audio.js?v=v8p27o';
-import { Particles, Skids, Fireworks } from './fx.js?v=v8p27o';
-import { Weather } from './weather.js?v=v8p27o';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=v8p27o';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=v8p27o';
-import { Net, newCode, loadTurn } from './net.js?v=v8p27o';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=v8p27o';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=v8p27o';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=v8p27o';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=vipon27p';
+import { World } from './world.js?v=vipon27p';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=vipon27p';
+import { Sound } from './audio.js?v=vipon27p';
+import { Particles, Skids, Fireworks } from './fx.js?v=vipon27p';
+import { Weather } from './weather.js?v=vipon27p';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=vipon27p';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=vipon27p';
+import { Net, newCode, loadTurn } from './net.js?v=vipon27p';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=vipon27p';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=vipon27p';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=vipon27p';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -173,11 +173,45 @@ function registerVipName() {
   if (vipNames) vipNames.add(n);
 }
 const accentFor = k => VIP_LIV[k] && VIP_LIV[k].c2 ? VIP_LIV[k].c2 : LIVERIES[k] === '#111827' ? '#ffcc00' : '#111827';
+async function vipRpc(fn, args) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json', ...(SUPABASE_ANON_KEY.startsWith('eyJ') ? { Authorization: 'Bearer ' + SUPABASE_ANON_KEY } : {}) }, body: JSON.stringify(args) });
+    let data = null; try { data = await r.json(); } catch (e) { /* empty */ }
+    return { status: r.status, data };
+  } catch (e) { return { status: 0, data: null }; }
+}
+/* on start-up: VIP stays on only while the database confirms this device's token (offline: left as it is) */
+async function vipVerify() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  const tok = store.get('apexgp-vip-token');
+  if (!tok && store.get('apexgp-vip') !== '1') return;
+  const r = await vipRpc('vip_check', { p_token: tok || '00000000-0000-0000-0000-000000000000' });
+  if (r.status !== 200) return;   // not set up yet, or offline: nothing changes
+  if (r.data === true) return;
+  // no valid token: VIP off. A player who redeemed before the online check just enters their code once more.
+  const legacy = !tok;
+  store.set('apexgp-vip', '0'); store.set('apexgp-vip-token', '');
+  if (legacy) store.set('apexgp-vip-reenter', '1');
+  if (SERIES[settings.series] && SERIES[settings.series].vip) settings.series = 'f1';
+  if (settings.mode === 'derby') settings.mode = 'race';
+  if (typeof window.__vipChanged === 'function') window.__vipChanged(legacy);
+}
 async function redeemVip(raw) {
   const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length < 8) return 'Type the whole code, like APEX-XXXX-XXXX.';
   let hash = '';
   try { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('apexgp-vip:' + code)); hash = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); } catch (e) { return 'Your browser could not check the code.'; }
+  // codes are checked online when the database has the VIP functions (supabase/vip-codes.sql): the database hands
+  // this device a secret token, and the token is re-checked every time the game starts
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    const r = await vipRpc('vip_claim', { p_hash: hash });
+    if (r.status === 200 && r.data) {
+      if (r.data.ok) { store.set('apexgp-vip', '1'); store.set('apexgp-vip-token', r.data.token); store.set('apexgp-vip-code', hash.slice(0, 24)); store.set('apexgp-vip-reenter', ''); return true; }
+      return r.data.why === 'used' ? 'That code has already been used.' : r.data.why === 'revoked' ? 'That code has been switched off.' : 'That code is not valid.';
+    }
+    if (r.status === 0) return 'Could not check the code online. Check your internet and try again.';
+    // 404: the online check is not set up yet, fall back to the list in the game
+  }
   if (!VIP_CODES.includes(hash.slice(0, 24))) return 'That code is not valid.';
   // each code works once: the first redeem is recorded online (if the codes table is set up)
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
@@ -2855,6 +2889,9 @@ function initMenu() {
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipFw').onclick = () => { settings.vipFw = settings.vipFw === false; saveSettings(); vipUi(); };
   vipUi();
+  window.__vipChanged = legacy => { vipUi(); refreshMenu(); $('vipMsg').textContent = legacy ? 'VIP codes are now checked online. Enter your VIP code once more to keep your VIP.' : 'Your VIP code has been switched off.'; };
+  if (store.get('apexgp-vip-reenter') === '1' && !isVip()) $('vipMsg').textContent = 'VIP codes are now checked online. Enter your VIP code once more to keep your VIP.';
+  vipVerify();
   $('vipBtn').onclick = async () => { $('vipBtn').disabled = true; $('vipMsg').textContent = 'Checking…'; const r = await redeemVip($('vipCode').value); $('vipBtn').disabled = false; if (r === true) { $('vipCode').value = ''; vipUi(); refreshMenu(); mpLastInfo = ''; mpShareInfo(); } else $('vipMsg').textContent = r; };
   TRACKS.forEach((d, i) => {
     const el = document.createElement('div'); el.className = 'tcard panel';
@@ -2990,7 +3027,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=v8p27o');
+await loadCarModel('js/car.bin?v=vipon27p');
 initMenu();
 requestAnimationFrame(frame);
 
