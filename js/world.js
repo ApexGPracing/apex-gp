@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=roar27m';
-import { AXLE_F, AXLE_R } from './car.js?v=roar27m';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=roar27m';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=clear27n';
+import { AXLE_F, AXLE_R } from './car.js?v=clear27n';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=clear27n';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -256,7 +256,7 @@ export class World {
     // where the lap crosses itself, the ground around the LOWER road is dug out so it does not climb up to the bridge
     // across the road (an underpass cutting with sloping sides), and the bridge deck spans the cutting
     const xUp = new Uint8Array(N), xLo = new Map();
-    if (T.elev) for (let i = 0; i < N; i += 2) for (let j = 0; j < N; j += 2) {
+    if (T.elev && T.def.crossover) for (let i = 0; i < N; i += 2) for (let j = 0; j < N; j += 2) {
       let di = Math.abs(i - j); di = Math.min(di, N - di); if (di * DS < 150) continue;
       const dx = T.px[j] - T.px[i], dz = T.pz[j] - T.pz[i];
       if (dx * dx + dz * dz < (2 * T.wallOff + 8) ** 2 && T.elev[i] - T.elev[j] > 4.5) { xUp[i] = xUp[(i + 1) % N] = 1; xLo.set(i, j); }
@@ -269,6 +269,17 @@ export class World {
       for (const k of cutS) { const dx = x - T.px[k], dz = z - T.pz[k], d2 = dx * dx + dz * dz; if (d2 > cutR * cutR) continue; cap = Math.min(cap, T.elev[k] - 0.6 + Math.max(0, Math.sqrt(d2) - flatW) * 0.45); }
       return cap;
     };
+    // is (x, z) inside the walls of ANY part of the lap? (scenery must not land on another stretch of track,
+    // e.g. beside a hairpin or where the lap doubles back)
+    const onTrackAt = (x, z, pad = 1) => {
+      const cx = Math.floor(x / HB), cz = Math.floor(z / HB);
+      for (let gx = cx - 2; gx <= cx + 2; gx++) for (let gz = cz - 2; gz <= cz + 2; gz++) {
+        const a = hash.get(gx + ',' + gz); if (!a) continue;
+        for (const k of a) { const dx = x - T.px[k], dz = z - T.pz[k], R = (dx * T.nx[k] + dz * T.nz[k] > 0 ? T.limL[k] : T.limR[k]) + pad; if (dx * dx + dz * dz < R * R) return true; }
+      }
+      return false;
+    };
+    this.onTrackAt = onTrackAt;
     const roadCap = (x, z) => {
       let cap = Infinity; const r2 = (reachR + T.wallOff) ** 2, cx = Math.floor(x / HB), cz = Math.floor(z / HB), nb = Math.ceil((reachR + T.wallOff) / HB);
       for (let gx = cx - nb; gx <= cx + nb; gx++) for (let gz = cz - nb; gz <= cz + nb; gz++) {
@@ -377,7 +388,7 @@ export class World {
         if (dx * dx + dz * dz < (2 * T.wallOff + 14) ** 2 && Math.abs(T.elev[i] - T.elev[j]) < 3) { for (let k = -6; k <= 7; k++) twin[(i + k + N) % N] = 1; }
       }
       const tarmac = new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.88, color: '#d0d2d6' });
-      for (const [a0, a1] of rangesOf(twin, N, v => v)) for (const sd of [1, -1]) add(ribbon(T, a0, a1 - a0, [col(sd * W, 0.015, 0), i => [sd * (sideLim(T, sd)(i) + 0.35), 0.015, 1]], 6), tarmac);
+      for (const [a0, a1] of rangesOf(twin, N, v => v)) for (const sd of [1, -1]) add(ribbon(T, a0, a1 - a0, [col(sd * W, 0.015, 0), i => [sd * Math.min(W + KERB + 2, sideLim(T, sd)(i) + 0.35), 0.015, 0.3], i => [sd * (sideLim(T, sd)(i) + 0.35), 0.015, 1]], 6), tarmac);
     }
     const onConcreteBank = (s0, e0) => bankRanges.some(([a0, a1]) => { const m = (s0 + ((e0 - s0 + N) % N >> 1)) % N; return m >= a0 && m <= a1; });
     if (T.gripMul === 1 && !T.def.noBarriers) for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * (W - 0.15), 0.035, 0), col(s * (W - 0.45), 0.035, 1)], 4), lineMat);   // no painted lines on loose surfaces
@@ -388,7 +399,8 @@ export class World {
       : rs === 'ricard' ? new THREE.MeshStandardMaterial({ map: ricardT, roughness: 0.75 })
       : T.street ? new THREE.MeshStandardMaterial({ map: tx.asphalt, normalMap: tx.asphaltN, color: T.def.pave || '#7d7f86', roughness: 0.9 })
       : new THREE.MeshStandardMaterial({ map: tx.verge, color: th.grass, roughness: 1 });
-    for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * W, 0.01, 0), i => [s * (sideLim(T, s)(i) + 0.3), 0.01, 1]], T.street ? 6 : 16), vergeMat);
+    const WbK = W + KERB + 2;   // where a banked surface stops tilting (bankH) - surfaces crossing it need a vertex there or they cut through the banking
+    for (const s of [1, -1]) add(ribbon(T, 0, N, [col(s * W, 0.01, 0), i => [s * Math.min(WbK, sideLim(T, s)(i) + 0.3), 0.01, 0.3], i => [s * (sideLim(T, s)(i) + 0.3), 0.01, 1]], T.street ? 6 : 16), vergeMat);
     // kerbs
     const kerbMat = new THREE.MeshStandardMaterial({ map: tx.kerbFor(...(T.def.kerb || ['#c8202a', '#f1f1f1'])), roughness: 0.55 });
     const kc = T.def.kerb || ['#c8202a', '#f1f1f1'];
@@ -397,7 +409,7 @@ export class World {
       const cnt = e0 - s0;
       for (const s of [1, -1]) {
         add(ribbon(T, s0, cnt, KERB_PROFILE.map(([dd, hh]) => col(s * (W + dd), hh, (dd + 0.03) / (KERB + 0.03))), 2.4), kerbMat);
-        if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
+        if (!T.street) add(ribbon(T, s0, cnt, [col(s * (W + KERB), 0.02, 0), i => [s * Math.min(W + KERB + 2, sideLim(T, s)(i) - 0.5), 0.02, 0.8], i => [s * Math.min(W + KERB + 2.4, sideLim(T, s)(i) - 0.5), 0.02, 1]], 9), apronMat);
       }
     }
     // big flat kerbs (e.g. Sainte Devote): a wider kerb on the inside of the corner
@@ -447,7 +459,7 @@ export class World {
       const conc = new THREE.MeshStandardMaterial({ color: '#b9b5ad', roughness: 0.85, side: THREE.DoubleSide });
       for (const [a0, a1] of rangesOf(up, N, v => v)) {
         const a = (a0 - 3 + N) % N, cnt = a1 - a0 + 7, eL = i => T.limL[i] + 0.8, eR = i => -T.limR[i] - 0.8;
-        add(ribbon(T, a, cnt, [i => [eL(i), -1.6, 0], i => [eR(i), -1.6, 1]], 8, { up: false }), conc);        // deck underside
+        const Wd = W + KERB + 2; add(ribbon(T, a, cnt, [i => [eL(i), -1.6, 0], i => [Math.min(Wd, eL(i)), -1.6, 0.3], i => [Math.max(-Wd, eR(i)), -1.6, 0.7], i => [eR(i), -1.6, 1]], 8, { up: false }), conc);        // deck underside (bent like the banked road above it)
         add(ribbon(T, a, cnt, [i => [eL(i), 1.1, 0], i => [eL(i), -1.6, 1]], 8, { up: false }), conc);         // outer faces
         add(ribbon(T, a, cnt, [i => [eR(i), -1.6, 0], i => [eR(i), 1.1, 1]], 8, { up: false }), conc);
         // piers either side of the road underneath, and solid abutments at both ends
@@ -712,7 +724,11 @@ export class World {
     }
     if (T.banked) for (const s of [1, -1]) {
       const lim = sideLim(T, s);
-      add(ribbon(T, 0, N, [i => [s * (lim(i) + 0.5), 0, 0], i => [s * (lim(i) + 0.5 + Math.max(2, bankH(T, i, s * lim(i)) * 2.2)), -bankH(T, i, s * (lim(i) + 0.5 + Math.max(2, bankH(T, i, s * lim(i)) * 2.2))), 1]], 12), new THREE.MeshStandardMaterial({ map: tx.verge, color: th.grass, roughness: 1, side: THREE.DoubleSide }));
+      // the embankment behind a banked turn: from the top of the banking back down to the road's own level. Its size comes
+      // from how much the BANKING lifts the edge, not the road's height above sea level (a hill track would get a slope
+      // hundreds of metres wide slicing through the rest of the lap)
+      const lift = i => Math.max(0, bankH(T, i, s * lim(i)) - (T.elev ? T.elev[i] : 0)), wid = i => Math.max(2, lift(i) * 2.2);
+      add(ribbon(T, 0, N, [i => [s * (lim(i) + 0.5), 0, 0], i => [s * (lim(i) + 0.5 + wid(i)), (T.elev ? T.elev[i] : 0) - bankH(T, i, s * (lim(i) + 0.5 + wid(i))) - 0.3, 1]], 12), new THREE.MeshStandardMaterial({ map: tx.verge, color: th.grass, roughness: 1, side: THREE.DoubleSide }));
     }
     // posts (instanced)
     {
@@ -921,7 +937,10 @@ export class World {
       }
       // grandstands
       const stand = (i, s, L) => {
-        const lim = s > 0 ? T.limL[i] : T.limR[i]; const fr = frameAt(i, s * (lim + 4), bankH(T, i, s * (lim + 4))); G.add(fr);
+        const lim = s > 0 ? T.limL[i] : T.limR[i]; const fr = frameAt(i, s * (lim + 4), bankH(T, i, s * (lim + 4)));
+        fr.updateMatrixWorld(true); const pt = new THREE.Vector3();
+        for (let x = 0; x <= 18; x += 3) for (let z = -L / 2; z <= L / 2; z += 5) { pt.set(s * x, 0, z).applyMatrix4(fr.matrixWorld); if (onTrackAt(pt.x, pt.z, 1)) return; }   // a straight stand beside a curve can cut across the track
+        G.add(fr);
         const crowdMat = new THREE.MeshStandardMaterial({ map: tx.crowd, roughness: 0.9, emissive: th.night ? '#ffffff' : '#000000', emissiveMap: th.night ? tx.crowd : null, emissiveIntensity: 0.12 });
         for (let k = 0; k < 7; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.3 * (k + 1), L), crowdMat); b.position.set(s * (1.2 + k * 2.4), 0.65 * (k + 1), 0); b.castShadow = q > 0; b.receiveShadow = true; fr.add(b); }
         const roof = new THREE.Mesh(new THREE.BoxGeometry(20, 0.35, L + 3), white); roof.position.set(s * 8.4, 12.8, 0); roof.rotation.z = s * 0.1; roof.castShadow = q > 0; fr.add(roof);
@@ -1008,19 +1027,21 @@ export class World {
       {
         const ps = P.side, k0 = 34, k1 = Math.max(k0 + 10, P.len - 34), base = Math.abs(P.lat) + 16 + 6.4;
         if (!T.street || (ps > 0 ? T.limL[(P.entry + 80) % N] : T.limR[(P.entry + 80) % N]) > 10) {
-          add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (base - 1), 0.05, 0], () => [ps * (base + 34), 0.05, 4]], 10), new THREE.MeshStandardMaterial({ map: tx.asphalt, color: '#8a8d94', roughness: 0.95 }));
-          const units = []; for (let k = k0 + 4; k < k1 - 4; k += 9) for (const row of [0, 1]) units.push([(P.entry + k) % N, row, units.length]);
+          const padW = new Map(), pw = i => { if (!padW.has(i)) { let w = 34; while (w > 0 && onTrackAt(T.px[i] + T.nx[i] * ps * (base + w), T.pz[i] + T.nz[i] * ps * (base + w), 1.5)) w -= 2; padW.set(i, w); } return padW.get(i); };   // stop short of any other stretch of track
+          add(ribbon(T, (P.entry + k0) % N, k1 - k0, [() => [ps * (base - 1), 0.05, 0], i => [ps * (base + pw(i)), 0.05, 4]], 10), new THREE.MeshStandardMaterial({ map: tx.asphalt, color: '#8a8d94', roughness: 0.95 }));
+          const units = []; for (let k = k0 + 4; k < k1 - 4; k += 9) for (const row of [0, 1]) { const i = (P.entry + k) % N; if (pw(i) >= 12 + row * 18) units.push([i, row, units.length]); }
           const box = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(5.5, 4.2, 15).translate(0, 2.1, 0), new THREE.BoxGeometry(5.9, 0.25, 15.4).translate(0, 4.3, 0)]), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4, metalness: 0.2 }), units.length);
           const stripe = new THREE.InstancedMesh(new THREE.BoxGeometry(5.55, 0.7, 15.05).translate(0, 2.9, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 }), units.length);
           const cc = new THREE.Color();
-          units.forEach(([i, row, k]) => { const l = ps * (base + 6 + row * 18); placeAt(box, k, i, l); placeAt(stripe, k, i, l); cc.set(teamColors[k % teamColors.length] || '#ffcc00'); stripe.setColorAt(k, cc); });
+          units.forEach(([i, row], k) => { const l = ps * (base + 6 + row * 18); placeAt(box, k, i, l); placeAt(stripe, k, i, l); cc.set(teamColors[k % teamColors.length] || '#ffcc00'); stripe.setColorAt(k, cc); });
           box.castShadow = q > 0; G.add(box, stripe);
         }
       }
       // fan zones at permanent circuits: tents and flags in the open ground behind the fences
       if (!T.street && !th.night) {
         const fz = sharp.filter(c => !inPit(c.i)).slice(0, 6), tents = [], flags = [];
-        for (const c of fz) for (let n = 0; n < 6; n++) { const i = (c.i + Math.round((r() - 0.5) * 60) + N) % N, l = c.s * (lim(i, c.s) + 14 + r() * 26); tents.push([i, l]); if (n < 3) flags.push([i, l + c.s * 4]); }
+        const clearAt = (i, l, pad) => !onTrackAt(T.px[i] + T.nx[i] * l, T.pz[i] + T.nz[i] * l, pad);
+        for (const c of fz) for (let n = 0; n < 6; n++) { const i = (c.i + Math.round((r() - 0.5) * 60) + N) % N, l = c.s * (lim(i, c.s) + 14 + r() * 26); if (clearAt(i, l, 5)) tents.push([i, l]); if (n < 3 && clearAt(i, l + c.s * 4, 2)) flags.push([i, l + c.s * 4]); }
         const tent = new THREE.InstancedMesh(mergeGeometries([new THREE.BoxGeometry(5, 2.2, 5).translate(0, 1.1, 0), new THREE.ConeGeometry(3.8, 1.6, 4).rotateY(Math.PI / 4).translate(0, 3.0, 0)]), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }), tents.length);
         const cols = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff', '#a855f7'], cc = new THREE.Color();
         tents.forEach(([i, l], k) => { placeAt(tent, k, i, l, 0, r() * 3); cc.set(cols[k % cols.length]); tent.setColorAt(k, cc); });
