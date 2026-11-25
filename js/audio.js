@@ -165,38 +165,40 @@ export class Sound {
     // the game's rev range (4k-12.5k) is mapped onto the real engine's range (F1 V8: 7k-18k, GT3 V8: 3.5k-8.8k...)
     const t = this.ctx.currentTime, span = eng.hi - eng.lo, target = eng.lo + Math.min(1, Math.max(0, (rpm - 4000) / 8500)) * span;
     if (e.eng !== eng) { e.eng = eng; e.srpm = target; }
-    e.srpm += (target - e.srpm) * 0.22;
+    const snap = e.snap; e.snap = false;
+    if (snap) e.srpm = target; else e.srpm += (target - e.srpm) * 0.22;
+    const ft = snap ? 0.002 : 0.015, ftc = snap ? 0.002 : 0.012;   // frequency glide time: instant on a gear change
     // combustion irregularity; a lazy big V8 (GT3) burbles much more than a screaming F1 engine
     const lumpy = eng.cyl === 8 && eng.hi < 10000 ? 4 : 1;
     e.jit = (e.jit || 0) * 0.85 + (Math.random() - 0.5) * 0.0035 * lumpy;
     const fire = e.srpm / 60 * eng.cyl / 2 * (1 + e.jit), base = fire / 2;
-    e.o1.frequency.setTargetAtTime(base, t, 0.015); e.o2.frequency.setTargetAtTime(base * 1.0035, t, 0.015);
+    e.o1.frequency.setTargetAtTime(base, t, ft); e.o2.frequency.setTargetAtTime(base * 1.0035, t, ft);
     e.f1.frequency.setTargetAtTime((1600 + e.srpm * 0.08) * (eng.bright || 1), t, 0.05);
     e.f2.frequency.setTargetAtTime((2500 + thr * 4500 + e.srpm * 0.15) * (eng.bright || 1), t, 0.05);   // V10: opens the top end up
     // scream gets stronger with revs and throttle; rasp is strongest on throttle
     const hi = Math.min(1, Math.max(0, (e.srpm - (eng.lo + 0.18 * span)) / (0.82 * span))) * eng.scream;
-    e.sc.frequency.setTargetAtTime(fire, t, 0.015); e.sc2.frequency.setTargetAtTime(fire * (eng.sc2 || 1.5), t, 0.015);
+    e.sc.frequency.setTargetAtTime(fire, t, ft); e.sc2.frequency.setTargetAtTime(fire * (eng.sc2 || 1.5), t, ft);
     e.scBand.frequency.setTargetAtTime(1600 + fire * (eng.band || 3.3), t, 0.05); e.scBand.Q.setTargetAtTime(eng.q || 1.1, t, 0.1);   // V10: a narrower, more piercing scream band
     e.scG.gain.setTargetAtTime(0.3 + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);
-    e.pulse.frequency.setTargetAtTime(fire, t, 0.015);
+    e.pulse.frequency.setTargetAtTime(fire, t, ft);
     e.nzBand.frequency.setTargetAtTime(1200 + e.srpm * 0.08, t, 0.05);
     // off-throttle hot blowing keeps the exhaust loud and raspy instead of letting the engine fall quiet (2011 V8; a V10 has little)
     blow *= eng.blow ?? 1;
     e.rasp.gain.setTargetAtTime((0.15 + 0.45 * thr + 0.6 * blow) * (eng.rasp ?? 1), t, 0.04);
     // roar: drive and brightness open up with throttle; stays meaty on hot-blown overrun
-    e.r1.frequency.setTargetAtTime(fire, t, 0.015); e.r2.frequency.setTargetAtTime(base * 1.004, t, 0.015); e.r3.frequency.setTargetAtTime(fire * 2, t, 0.015);
+    e.r1.frequency.setTargetAtTime(fire, t, ft); e.r2.frequency.setTargetAtTime(base * 1.004, t, ft); e.r3.frequency.setTargetAtTime(fire * 2, t, ft);
     e.rDrive.gain.setTargetAtTime((1 + 2.8 * thr + 2 * blow) * eng.roar, t, 0.04);
     e.rLp.frequency.setTargetAtTime(1400 + thr * 3200 + e.srpm * 0.12, t, 0.05);
     e.roarG.gain.setTargetAtTime((0.25 + 0.4 * thr + 0.3 * blow) * eng.roar, t, 0.04);
     if (eng.comb) {
       const ck = eng.cyl + ':' + (eng.half || 0.8); if (e.combCyl !== ck) { e.combCyl = ck; e.cOsc.setPeriodicWave(this.combWave(eng.cyl, eng.half || 0.8)); }
-      e.cOsc.frequency.setTargetAtTime(e.srpm / 120 * (1 + e.jit), t, 0.012);
+      e.cOsc.frequency.setTargetAtTime(e.srpm / 120 * (1 + e.jit), t, ftc);
       e.cDrive.gain.setTargetAtTime(0.9 + 1.0 * thr, t, 0.04); e.cPk.frequency.setTargetAtTime(e.srpm / 120 * eng.cyl * 0.95, t, 0.05);
       e.cG.gain.setTargetAtTime(eng.comb * (0.3 + 0.7 * Math.max(thr, 0.6 * blow)), t, 0.04);
       if (e.pNode && eng.pulse) {   // combustion pulses carry the sound; the steady comb only underpins them
         if (e.pCyl !== eng.cyl) { e.pCyl = eng.cyl; e.pNode.port.postMessage({ cyl: eng.cyl }); }
         const P = e.pNode.parameters;
-        P.get('freq').setTargetAtTime(fire, t, 0.012); P.get('rough').setTargetAtTime((eng.rough || 0.4) * (0.7 + 0.6 * thr), t, 0.05);
+        P.get('freq').setTargetAtTime(fire, t, ftc); P.get('rough').setTargetAtTime((eng.rough || 0.4) * (0.7 + 0.6 * thr), t, 0.05);
         P.get('noise').setTargetAtTime((eng.pnoise || 0.6) * (0.5 + 0.8 * thr), t, 0.05); P.get('tone').setTargetAtTime(eng.ptone || 1, t, 0.1);
         e.pG.gain.setTargetAtTime(eng.pulse, t, 0.04); e.cOscG.gain.setTargetAtTime(eng.combMix ?? 0.35, t, 0.05);
       } else { if (e.pG) e.pG.gain.setTargetAtTime(0, t, 0.05); e.cOscG.gain.setTargetAtTime(1, t, 0.05); }
@@ -238,11 +240,13 @@ export class Sound {
     if (!on) { [this.engine.out, this.rival.out, this.rumble.g, this.squeal.g, this.wind.g, this.rain.g].forEach(g => g.gain.setTargetAtTime(0, t, 0.05)); return; }
     let rpm = s.rpm;
     // downshift blip: rpm flares when a lower gear is selected
+    if (s.gear !== this.prevGear) this.engine.snap = true;   // a gear change is a step in revs, not a glide (a smooth swoop sounds like an electric motor)
     if (s.gear > 0 && this.prevGear > 0 && s.gear < this.prevGear) { this.blip = 0.12; this.burst(0.09, 0.08, 2600, 2); this.burst(0.08, 0.06, 700, 1); }
     // seamless upshift: a near-instant torque cut with a sharp crack
     if (s.gear > 1 && this.prevGear > 0 && s.gear > this.prevGear) {
-      const g = this.engine.gate.gain; g.cancelScheduledValues(t); g.setValueAtTime(0.25, t); g.setTargetAtTime(1, t + 0.025, 0.012);
-      this.burst(0.07, 0.04, 1800, 1.2);
+      // ignition cut: the revs drop while the engine is nearly silent, then it fires again on the new note with a crack
+      const g = this.engine.gate.gain, cut = s.eng && s.eng.cut ? s.eng.cut : 0.025; g.cancelScheduledValues(t); g.setValueAtTime(s.eng && s.eng.cut ? 0.06 : 0.25, t); g.setTargetAtTime(1, t + cut, 0.008);
+      this.burst(0.07, 0.04, 1800, 1.2); if (s.eng && s.eng.cut) { this.burst(0.16, 0.05, 900, 0.8); this.burst(0.1, 0.03, 3200, 1.0); }
     }
     this.prevGear = s.gear;
     if (this.blip > 0) { this.blip -= dt; rpm = Math.min(12500, rpm + 1600); }

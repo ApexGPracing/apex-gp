@@ -1,8 +1,8 @@
 /* Online championships (Supabase): people sign up with a code, vote on a start time for each round,
    race in a normal online room at that time, and the finishing order is saved for the points table.
    The tables and functions are set up once from supabase/online-championships.sql. */
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=v10c27i';
-import { store } from './util.js?v=v10c27i';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=shift27j';
+import { store } from './util.js?v=shift27j';
 
 export const OC_ON = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 const H = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json', ...(SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.startsWith('eyJ') ? { Authorization: 'Bearer ' + SUPABASE_ANON_KEY } : {}) };
