@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=pits27q';
-import { World } from './world.js?v=pits27q';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=pits27q';
-import { Sound } from './audio.js?v=pits27q';
-import { Particles, Skids, Fireworks } from './fx.js?v=pits27q';
-import { Weather } from './weather.js?v=pits27q';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=pits27q';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=pits27q';
-import { Net, newCode, loadTurn } from './net.js?v=pits27q';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=pits27q';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=pits27q';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=pits27q';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=rand27r';
+import { World } from './world.js?v=rand27r';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=rand27r';
+import { Sound } from './audio.js?v=rand27r';
+import { Particles, Skids, Fireworks } from './fx.js?v=rand27r';
+import { Weather } from './weather.js?v=rand27r';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=rand27r';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=rand27r';
+import { Net, newCode, loadTurn } from './net.js?v=rand27r';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=rand27r';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rand27r';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=rand27r';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -209,19 +209,8 @@ async function redeemVip(raw) {
       if (r.data.ok) { store.set('apexgp-vip', '1'); store.set('apexgp-vip-token', r.data.token); store.set('apexgp-vip-code', hash.slice(0, 24)); store.set('apexgp-vip-reenter', ''); return true; }
       return r.data.why === 'used' ? 'That code has already been used.' : r.data.why === 'revoked' ? 'That code has been switched off.' : 'That code is not valid.';
     }
-    if (r.status === 0) return 'Could not check the code online. Check your internet and try again.';
-    // 404: the online check is not set up yet, fall back to the list in the game
   }
-  if (!VIP_CODES.includes(hash.slice(0, 24))) return 'That code is not valid.';
-  // each code works once: the first redeem is recorded online (if the codes table is set up)
-  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-    try {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/vip_redeemed', { method: 'POST', headers: { ...lbHeaders, Prefer: 'return=minimal' }, body: JSON.stringify({ code_hash: hash }) });
-      if (r.status === 409) return 'That code has already been used.';
-    } catch (e) { return 'Could not check the code online. Check your internet and try again.'; }
-  }
-  store.set('apexgp-vip', '1'); store.set('apexgp-vip-code', hash.slice(0, 24));   // remember which code, so it can be switched off later
-  return true;
+  return 'Could not check the code online. Check your internet and try again.';
 }
 const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 // 100 = right on the limit and slightly over it (they rely on kerbs and run-off); 75 ≈ old Hard
@@ -1794,7 +1783,8 @@ async function refreshLeaderboard() {
 
 /* ---------------- Online multiplayer ---------------- */
 const net = new Net({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
-net.watchOnline(n => { $('onlineNow').classList.toggle('hidden', !n); $('onlineNow').querySelector('b').textContent = n; });
+let mpOnlineN = 0;
+net.watchOnline(n => { mpOnlineN = n; $('onlineNow').classList.toggle('hidden', !n); $('onlineNow').querySelector('b').textContent = n; });
 const carByNet = id => game.cars.find(c => c.netId === id);
 const mpName = () => lbName() || 'Driver';
 const mpCode3 = n => (n.replace(/[^A-Za-z]/g, '').toUpperCase() + 'XXX').slice(0, 3);
@@ -1810,7 +1800,16 @@ async function mpRandomLobby() {
   try {
     for (;;) {
       mpStatus('Searching for an opponent…');
-      const m = await net.matchmake(mpName(), n => mpStatus(n > 1 ? 'Opponent found, setting up the race…' : 'Searching for an opponent… (you are first in the queue)'));
+      // tell the player what is happening while nobody else is searching (it only pairs players who search at the same time)
+      const t0s = Date.now(); let alone = true;
+      const tick = () => {
+        if (!alone || !mpSearching) return;
+        const s = Math.round((Date.now() - t0s) / 1000), others = Math.max(0, mpOnlineN - 1);
+        mpStatus('Searching… ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' · nobody else is searching right now' + (others ? ' (' + others + (others === 1 ? ' other player has' : ' other players have') + ' the game open)' : '') + '. Ask a friend to press "Join random lobby" too: you will be paired as soon as they do.');
+      };
+      const tickT = setInterval(tick, 1000);
+      const m = await net.matchmake(mpName(), n => { alone = n <= 1; if (alone) tick(); else mpStatus('Opponent found, setting up the race…'); });
+      clearInterval(tickT);
       if (!m) { mpStatus('Search cancelled.'); break; }
       mpRandom = true;
       await net.join(m.code, mpName(), { livery: myLivery(), vip: isVip() ? 1 : 0, vx: myExtras(), num: isVip() ? myNum() : 0, hel: myHelmet(), track: settings.track, laps: settings.laps, rand: 1 });
@@ -3027,7 +3026,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=pits27q');
+await loadCarModel('js/car.bin?v=rand27r');
 initMenu();
 requestAnimationFrame(frame);
 
