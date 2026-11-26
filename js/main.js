@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=online27s';
-import { World } from './world.js?v=online27s';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=online27s';
-import { Sound } from './audio.js?v=online27s';
-import { Particles, Skids, Fireworks } from './fx.js?v=online27s';
-import { Weather } from './weather.js?v=online27s';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=online27s';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=online27s';
-import { Net, newCode, loadTurn } from './net.js?v=online27s';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=online27s';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=online27s';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=online27s';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=engines27t';
+import { World } from './world.js?v=engines27t';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=engines27t';
+import { Sound } from './audio.js?v=engines27t';
+import { Particles, Skids, Fireworks } from './fx.js?v=engines27t';
+import { Weather } from './weather.js?v=engines27t';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=engines27t';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=engines27t';
+import { Net, newCode, loadTurn } from './net.js?v=engines27t';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=engines27t';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=engines27t';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=engines27t';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -3037,7 +3037,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=online27s');
+await loadCarModel('js/car.bin?v=engines27t');
 initMenu();
 requestAnimationFrame(frame);
 

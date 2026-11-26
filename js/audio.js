@@ -144,7 +144,7 @@ export class Sound {
     const cLp = ctx.createBiquadFilter(); cLp.type = 'lowpass'; cLp.frequency.value = 5200; cLp.Q.value = 0.5;
     const cOscG = ctx.createGain(); cOscG.gain.value = 1;
     cOsc.connect(cOscG); cOscG.connect(cDrive); cDrive.connect(cShape); cShape.connect(cHp); cHp.connect(cPk); cPk.connect(cLp); cLp.connect(cG); cG.connect(out); cOsc.start();
-    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cOscG, cDrive, cG, cPk, g1, g2, gOsc, gDepth, combCyl: 0 };
+    return { o1, o2, f1: pres, f2: lp, out, gate, level, srpm: 7000, sc, sc2, scBand, scG, pulse, rasp, nzBand, r1, r2, r3, rDrive, rLp, roarG, cOsc, cOscG, cDrive, cG, cPk, cLp, g1, g2, gOsc, gDepth, combCyl: 0 };
   }
   growlWave(cyl) {
     // the once-per-engine-cycle beat: the strong and weak cylinders make the loudness swell and dip at the cycle rate
@@ -192,18 +192,19 @@ export class Sound {
     e.scBand.frequency.setTargetAtTime(1600 + fire * (eng.band || 3.3), t, 0.05); e.scBand.Q.setTargetAtTime(eng.q || 1.1, t, 0.1);   // V10: a narrower, more piercing scream band
     e.scG.gain.setTargetAtTime(0.3 * (eng.scBase ?? 1) + 1.3 * hi * (0.45 + 0.55 * thr), t, 0.04);   // eng.scBase: the steady floor of the scream tone (a steady tone in the top end is what whirs)
     e.pulse.frequency.setTargetAtTime(fire, t, ft);
-    e.nzBand.frequency.setTargetAtTime(1200 + e.srpm * 0.08, t, 0.05);
+    e.nzBand.frequency.setTargetAtTime((1200 + e.srpm * 0.08) * (eng.rlp ?? 1), t, 0.05);
     // off-throttle hot blowing keeps the exhaust loud and raspy instead of letting the engine fall quiet (2011 V8; a V10 has little)
     blow *= eng.blow ?? 1;
     e.rasp.gain.setTargetAtTime((0.15 + 0.45 * thr + 0.6 * blow) * (eng.rasp ?? 1), t, 0.04);
     // roar: drive and brightness open up with throttle; stays meaty on hot-blown overrun
     e.r1.frequency.setTargetAtTime(fire, t, ft); e.r2.frequency.setTargetAtTime(base * 1.004, t, ft); e.r3.frequency.setTargetAtTime(fire * 2, t, ft);
     e.rDrive.gain.setTargetAtTime((1 + 2.8 * thr + 2 * blow) * eng.roar, t, 0.04);
-    e.rLp.frequency.setTargetAtTime(1400 + thr * 3200 + e.srpm * 0.12, t, 0.05);
+    e.rLp.frequency.setTargetAtTime((1400 + thr * 3200 + e.srpm * 0.12) * (eng.rlp ?? 1), t, 0.05);   // eng.rlp: how bright the roar layer is
     e.roarG.gain.setTargetAtTime((0.25 + 0.4 * thr + 0.3 * blow) * eng.roar, t, 0.04);
     if (eng.comb) {
       const ck = eng.cyl + ':' + (eng.half || 0.8); if (e.combCyl !== ck) { e.combCyl = ck; e.cOsc.setPeriodicWave(this.combWave(eng.cyl, eng.half || 0.8)); }
       e.cOsc.frequency.setTargetAtTime(e.srpm / 120 * (1 + e.jit), t, ftc);
+      e.cLp.frequency.setTargetAtTime(5200 * (eng.plp ?? 1), t, 0.1);   // eng.plp: how open the top end is (a big V8 or a diesel is far darker than an F1 engine)
       e.cDrive.gain.setTargetAtTime(0.9 + 1.0 * thr, t, 0.04); e.cPk.frequency.setTargetAtTime(e.srpm / 120 * eng.cyl * 0.95, t, 0.05);
       e.cG.gain.setTargetAtTime(eng.comb * (0.3 + 0.7 * Math.max(thr, 0.6 * blow)), t, 0.04);
       if (e.pNode && eng.pulse) {   // combustion pulses carry the sound; the steady comb only underpins them
