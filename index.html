@@ -173,6 +173,7 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 #onlineNow{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:3px 10px;border-radius:99px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);font-size:13px;color:#bbf7d0}
 #onlineNow i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:blink 2s infinite}
 #onlineNow.hidden{display:none}
+.vipPaintRow{display:flex;flex:1 1 100%;gap:6px;align-items:center}.vipPaintRow .btn{flex:1 1 auto}.vipPaintRow input[type=color]{width:38px;height:32px;border:1px solid rgba(212,175,55,.6);border-radius:6px;background:none;padding:0;cursor:pointer}
 #onlineWhat{color:#86efac;opacity:.85;font-size:12px}#onlineWhat:not(:empty)::before{content:'·';margin-right:6px}
 .tag{color:var(--muted);font-size:18px;margin-top:4px}
 .opt{padding:11px 14px}
@@ -328,7 +329,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
     <div class="opt panel" id="optDmg"><h4>Damage</h4><div class="seg" data-opt="damage"><button data-v="off">Off</button><button data-v="reduced">Reduced</button><button data-v="sim">Simulation</button></div></div>
     <div class="opt panel"><h4>Steering</h4><div class="seg" data-opt="steer"><button data-v="smooth">Smooth</button><button data-v="normal">Normal</button><button data-v="sharp">Sharp</button></div></div>
     <div class="opt panel"><h4>Racing Line <span style="text-transform:none;letter-spacing:0">(L in race)</span></h4><div class="seg" data-opt="line"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
-    <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div><div class="mprow vipRow"><input id="vipCode" maxlength="16" placeholder="VIP code"><button class="btn" id="vipBtn">Redeem</button></div><div id="vipMsg"></div><div class="vipx"><button class="btn" id="vipRims"></button><button class="btn" id="vipGlow"></button><button class="btn" id="vipFw"></button><button class="btn" id="vipHelmet"></button><button class="btn" id="vipNight"></button><button class="btn" id="vipDonuts"></button><button class="btn" id="vipGhost"></button><button class="btn" id="vipSmoke"></button><button class="btn" id="vipFlames"></button><button class="btn" id="vipV10" style="flex-basis:100%;border-color:#e10600"></button><label class="vipin">Car number <input id="vipNum" type="number" min="1" max="99" placeholder="1"></label><label class="vipin wide">Win message <input id="vipMsgIn" maxlength="40" placeholder="e.g. Too easy!"></label></div></div>
+    <div class="opt panel"><h4>Your Livery</h4><div class="swatches" id="swatches"></div><div class="mprow vipRow"><input id="vipCode" maxlength="16" placeholder="VIP code"><button class="btn" id="vipBtn">Redeem</button></div><div id="vipMsg"></div><div class="vipx"><span class="vipPaintRow"><button class="btn" id="vipPaint"></button><input type="color" id="vipC1" title="Main colour"><input type="color" id="vipC2" title="Accent colour"><button class="btn" id="vipFin"></button></span><button class="btn" id="vipRims"></button><button class="btn" id="vipGlow"></button><button class="btn" id="vipFw"></button><button class="btn" id="vipHelmet"></button><button class="btn" id="vipNight"></button><button class="btn" id="vipDonuts"></button><button class="btn" id="vipGhost"></button><button class="btn" id="vipSmoke"></button><button class="btn" id="vipFlames"></button><button class="btn" id="vipV10" style="flex-basis:100%;border-color:#e10600"></button><label class="vipin">Car number <input id="vipNum" type="number" min="1" max="99" placeholder="1"></label><label class="vipin wide">Win message <input id="vipMsgIn" maxlength="40" placeholder="e.g. Too easy!"></label></div></div>
     <div class="opt panel"><h4>Controls</h4><div class="keys"><kbd>W</kbd>/<kbd>↑</kbd> Throttle &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> Brake / reverse<br><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> Steer · controllers work too &nbsp; <kbd>C</kbd> Camera &nbsp; <kbd>L</kbd> Racing line<br><kbd>P</kbd> Box / stay out &nbsp; <kbd>R</kbd> Team radio &nbsp; <kbd>ESC</kbd> Pause &nbsp; <kbd>M</kbd> Mute<br>DRS opens automatically</div></div>
     <button class="btn primary" id="startBtn">Start Race</button>
   </div>
@@ -373,7 +374,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=engines27t"></script>
+<script type="module" src="js/main.js?v=paint27u"></script>
 <button id="sndBtn" type="button">🔊 Sound on</button>
 </body>
 </html>

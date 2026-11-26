@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=engines27t';
-import { World } from './world.js?v=engines27t';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=engines27t';
-import { Sound } from './audio.js?v=engines27t';
-import { Particles, Skids, Fireworks } from './fx.js?v=engines27t';
-import { Weather } from './weather.js?v=engines27t';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=engines27t';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=engines27t';
-import { Net, newCode, loadTurn } from './net.js?v=engines27t';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=engines27t';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=engines27t';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=engines27t';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=paint27u';
+import { World } from './world.js?v=paint27u';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=paint27u';
+import { Sound } from './audio.js?v=paint27u';
+import { Particles, Skids, Fireworks } from './fx.js?v=paint27u';
+import { Weather } from './weather.js?v=paint27u';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=paint27u';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=paint27u';
+import { Net, newCode, loadTurn } from './net.js?v=paint27u';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=paint27u';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=paint27u';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=paint27u';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -102,7 +102,16 @@ const VIP_FROM = 7, VIP_LIV = { 7: { name: 'Gold', metal: 0.95, rough: 0.18 }, 8
   11: { name: 'Rose Gold', metal: 0.95, rough: 0.15 }, 12: { name: 'Red Chrome', metal: 1, rough: 0.07 }, 13: { name: 'Ice Chrome', metal: 1, rough: 0.06 }, 14: { name: 'Matte Black', metal: 0.1, rough: 0.85, c2: '#ff2d2d' } };
 /* VIP extras: gold rims, coloured underglow (both seen by other players online) and podium fireworks */
 const GLOWS = [null, '#22d3ee', '#ff2bd6', '#39ff14', '#ffcc00', '#ff3b30'], GLOW_NAMES = ['Off', 'Blue', 'Pink', 'Green', 'Gold', 'Red'];
-const myExtras = () => isVip() ? { rims: settings.vipRims !== false ? 1 : 0, glow: settings.vipGlow || 0, smoke: settings.vipSmoke || 0, flames: settings.vipFlames !== false ? 1 : 0 } : { rims: 0, glow: 0, smoke: 0, flames: 0 };
+/* VIP garage: any main and accent colour, and a paint finish (shared with other players online) */
+const FINISHES = [['Gloss', 0.25, 0.3, 1], ['Matte', 0.05, 0.85, 0], ['Chrome', 1, 0.05, 1], ['Pearl', 0.6, 0.2, 1], ['Satin', 0.35, 0.55, 0.3], ['Candy', 0.85, 0.12, 1]];
+const HEX = /^#[0-9a-f]{6}$/i;
+const myPaint = () => isVip() && settings.vipPaint && HEX.test(settings.vipC1 || '') ? { c1: settings.vipC1, c2: HEX.test(settings.vipC2 || '') ? settings.vipC2 : '#111827', f: (settings.vipFin | 0) % FINISHES.length } : null;
+const paintOk = pp => pp && HEX.test(pp.c1 || '') && HEX.test(pp.c2 || '') ? pp : null;
+function applyPaint(car, pp) {
+  const m = car && car.mats && car.mats.body, F = pp && FINISHES[(pp.f | 0) % FINISHES.length]; if (!m || !F) return;
+  m.metalness = F[1]; m.roughness = F[2]; if ('clearcoat' in m) m.clearcoat = F[3]; if (m.emissive) m.emissiveIntensity = 0; m.needsUpdate = true;
+}
+const myExtras = () => isVip() ? { rims: settings.vipRims !== false ? 1 : 0, glow: settings.vipGlow || 0, smoke: settings.vipSmoke || 0, flames: settings.vipFlames !== false ? 1 : 0, paint: myPaint() } : { rims: 0, glow: 0, smoke: 0, flames: 0 };
 const SMOKES = [null, '#f2c94c', '#ff2bd6', '#22d3ee', '#39ff14', '#ff3b30', '#a855f7'], SMOKE_NAMES = ['Normal', 'Gold', 'Pink', 'Blue', 'Green', 'Red', 'Purple'];
 const QCHAT = ['GG!', 'Nice move!', 'Sorry!', 'Thanks!', 'Good race!', 'See ya!'];
 function makeCrown() { const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: '#d4af37', emissive: '#7a5a00', emissiveIntensity: 0.6, metalness: 1, roughness: 0.25 }); g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 20, 1, true), m)); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, c = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 6), m); c.position.set(Math.cos(a) * 0.42, 0.26, Math.sin(a) * 0.42); g.add(c); } g.position.y = 2.1; return g; }   // gold rims on unless switched off
@@ -345,11 +354,12 @@ function setTyres(c, comp) { c.tyre = { comp, wear: 0 }; c.tyreLap = Math.max(1,
 /* Build the field: player, teammate (in Your Team colours) and AI rivals */
 function makeField(lineup, skill) {
   clearCars();
-  const lv = myLivery(), colr = LIVERIES[lv], acc = accentFor(lv);
+  const lv = myLivery(), mp0 = myPaint(), colr = mp0 ? mp0.c1 : LIVERIES[lv], acc = mp0 ? mp0.c2 : accentFor(lv);
   const basePcls = classFor(TEAMS.length, true), pcls = v10On() ? 'v10' : basePcls;
   const myLiv = { p: PATS[(lv * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
   const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: myNum(), compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
-  vipFinish(p, lv); vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); mergeCarStatic(p); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
+  if (mp0) applyPaint(p, mp0); else vipFinish(p, lv);
+  vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); mergeCarStatic(p); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
     const tm = TEAMS[teamIdxOf(di)], cls = mate ? basePcls : classFor(teamIdxOf(di), false);
@@ -1998,12 +2008,13 @@ function startMp(cfg) {
     TEAM_MAP = shuffleTeams();
     clearCars();
     cfg.players.forEach((pl, k) => {
-      const lv = LIVERIES[pl.livery] ? pl.livery : 0, colr = LIVERIES[lv], acc = accentFor(lv), mine = pl.id === net.id;
+      const mine0 = pl.id === net.id, pp = paintOk(mine0 ? myPaint() : pl.vx && pl.vx.paint);
+      const lv = LIVERIES[pl.livery] ? pl.livery : 0, colr = pp ? pp.c1 : LIVERIES[lv], acc = pp ? pp.c2 : accentFor(lv), mine = mine0;
       const mcls = SER.multiClass ? 'hyper' : SER.cls;
       const c = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: pl.num || k + 1, compound: 'medium', model: CLASSES[mcls].model, livery: { p: PATS[(pl.livery * 5) % PATS.length], c2: acc, c3: '#ffffff' } }), { cls: mcls, spec: CLASSES[mcls] },
         { name: pl.name, code: mpCode3(pl.name), team: mine ? 'Your Team' : 'Online', color: colr, isPlayer: mine, remote: !mine, netId: pl.id, pace: 1,
           teamIdx: mine ? TEAMS.length : k % TEAMS.length, per: personaOf(''), snaps: [], lastSeq: undefined, ocPid: pl.ocPid || null });
-      vipFinish(c, lv); vipExtras(c, mine ? myExtras() : pl.vx); helmetDesign(c, mine ? myHelmet() : (pl.hel ?? -1)); c.vip = mine ? isVip() : !!pl.vip;
+      if (pp) applyPaint(c, pp); else vipFinish(c, lv); vipExtras(c, mine ? myExtras() : pl.vx); helmetDesign(c, mine ? myHelmet() : (pl.hel ?? -1)); c.vip = mine ? isVip() : !!pl.vip;
       if (c.vip && !mine) c.group.add(makeCrown());   // VIP crown over other VIP players' cars
       mergeCarStatic(c); if (!mine) addLodProxy(c); game.cars.push(c); if (mine) { game.player = c; addLiveMirrors(c, mirrorRT.texture); c.hasMirrors = true; }
     });
@@ -2882,6 +2893,8 @@ function initMenu() {
     $('vipSmoke').textContent = 'Tyre smoke: ' + SMOKE_NAMES[settings.vipSmoke || 0];
     $('vipFlames').textContent = 'Exhaust flames: ' + (settings.vipFlames === false ? 'Off' : 'On');
     $('vipV10').textContent = 'V10 monster car: ' + (settings.vipV10 ? 'On' : 'Off');
+    $('vipPaint').textContent = 'Custom paint: ' + (settings.vipPaint ? 'On' : 'Off'); $('vipFin').textContent = 'Finish: ' + FINISHES[(settings.vipFin | 0) % FINISHES.length][0];
+    $('vipC1').value = HEX.test(settings.vipC1 || '') ? settings.vipC1 : '#e10600'; $('vipC2').value = HEX.test(settings.vipC2 || '') ? settings.vipC2 : '#111827';
     if (document.activeElement !== $('vipNum')) $('vipNum').value = settings.vipNum || '';
     if (document.activeElement !== $('vipMsgIn')) $('vipMsgIn').value = settings.vipMsg || '';
   };
@@ -2897,6 +2910,10 @@ function initMenu() {
   $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
   $('vipRims').onclick = () => { settings.vipRims = settings.vipRims === false; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
+  const paintChanged = () => { saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
+  $('vipPaint').onclick = () => { settings.vipPaint = !settings.vipPaint; if (settings.vipPaint && !HEX.test(settings.vipC1 || '')) settings.vipC1 = $('vipC1').value; paintChanged(); };
+  $('vipFin').onclick = () => { settings.vipFin = ((settings.vipFin | 0) + 1) % FINISHES.length; paintChanged(); };
+  for (const id of ['vipC1', 'vipC2']) $(id).addEventListener('input', () => { settings[id] = $(id).value; settings.vipPaint = true; paintChanged(); });
   $('vipFw').onclick = () => { settings.vipFw = settings.vipFw === false; saveSettings(); vipUi(); };
   vipUi();
   window.__vipChanged = legacy => { vipUi(); refreshMenu(); $('vipMsg').textContent = legacy ? 'VIP codes are now checked online. Enter your VIP code once more to keep your VIP.' : 'Your VIP code has been switched off.'; };
@@ -3037,7 +3054,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=engines27t');
+await loadCarModel('js/car.bin?v=paint27u');
 initMenu();
 requestAnimationFrame(frame);
 
