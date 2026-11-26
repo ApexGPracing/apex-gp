@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=classic27v';
-import { World } from './world.js?v=classic27v';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=classic27v';
-import { Sound } from './audio.js?v=classic27v';
-import { Particles, Skids, Fireworks } from './fx.js?v=classic27v';
-import { Weather } from './weather.js?v=classic27v';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=classic27v';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=classic27v';
-import { Net, newCode, loadTurn } from './net.js?v=classic27v';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=classic27v';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=classic27v';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=classic27v';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=replay27w';
+import { World } from './world.js?v=replay27w';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=replay27w';
+import { Sound } from './audio.js?v=replay27w';
+import { Particles, Skids, Fireworks } from './fx.js?v=replay27w';
+import { Weather } from './weather.js?v=replay27w';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=replay27w';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=replay27w';
+import { Net, newCode, loadTurn } from './net.js?v=replay27w';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=replay27w';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=replay27w';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=replay27w';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -2617,6 +2617,72 @@ function showQualiResults(name, ent, elim) {
   $('qNext').disabled = false;
   $('hud').classList.add('hidden'); $('qres').classList.remove('hidden');
 }
+/* ---------------- VIP replays and photo mode ----------------
+   Every race is recorded (each car's position and angle, 20 times a second). From the results a VIP can watch it
+   back from trackside TV cameras, a chase camera or a helicopter, follow any car, and take clean screenshots. */
+const REC_HZ = 20, REC_F = 9;
+function recTick() {
+  if (game.replay || game.session !== 'race' || !game.cars.length) return;
+  const R = game.rec && game.rec.race === game.cars ? game.rec : (game.rec = { race: game.cars, cars: game.cars.slice(), frames: [], t: [] });
+  if (R.t.length && game.raceTime - R.t[R.t.length - 1] < 1 / REC_HZ - 1e-6) return;
+  if (R.t.length > REC_HZ * 60 * 20) return;   // 20 minutes is plenty
+  const f = new Float32Array(R.cars.length * REC_F);
+  R.cars.forEach((c, k) => { const g = c.group, o = k * REC_F; f[o] = g.position.x; f[o + 1] = g.position.y; f[o + 2] = g.position.z; f[o + 3] = g.rotation.x; f[o + 4] = g.rotation.y; f[o + 5] = g.rotation.z; f[o + 6] = c.steer || 0; f[o + 7] = c.v || 0; f[o + 8] = g.visible ? 1 : 0; });
+  R.frames.push(f); R.t.push(game.raceTime);
+}
+const RP_SPEEDS = [0.25, 0.5, 1, 2, 4], RP_CAMS = ['TV', 'Chase', 'Heli'];
+function startReplay() {
+  const R = game.rec; if (!R || R.t.length < 10 || !isVip()) return;
+  const T = game.T, cams = [];
+  for (let m = 0; m < T.length; m += 260) { const i = Math.round(m / DS) % T.N, sd = (m / 260) % 2 ? 1 : -1, l = sd * ((sd > 0 ? T.limL[i] : T.limR[i]) + 10); cams.push({ i, x: T.px[i] + T.nx[i] * l, z: T.pz[i] + T.nz[i] * l, y: elevAt(T, i) + 7.5 /* up on a gantry, above the catch fencing */ }); }
+  game.replay = { t: R.t[0], speed: 2, playing: true, cam: 0, focus: Math.max(0, R.cars.indexOf(game.player)), cams, tvCam: null };
+  $('results').classList.add('hidden'); $('hud').classList.add('hidden'); $('replayUi').classList.remove('hidden'); $('rpSeek').max = R.t[R.t.length - 1]; rpUi();
+}
+function stopReplay() { game.replay = null; $('replayUi').classList.add('hidden'); $('hud').classList.remove('hidden'); $('results').classList.remove('hidden'); }
+function rpUi() {
+  const P = game.replay, R = game.rec; if (!P) return;
+  $('rpPlay').textContent = P.playing ? '⏸' : '▶'; $('rpSpeed').textContent = RP_SPEEDS[P.speed] + 'x'; $('rpCam').textContent = '🎥 ' + RP_CAMS[P.cam];
+  $('rpCar').textContent = (R.cars[P.focus] && R.cars[P.focus].name) || '—';
+}
+function replayTick(dt) {
+  const P = game.replay, R = game.rec, T = game.T;
+  if (P.playing) P.t = Math.min(R.t[R.t.length - 1], P.t + dt * RP_SPEEDS[P.speed]);
+  if (P.t >= R.t[R.t.length - 1]) P.playing = false;
+  if (document.activeElement !== $('rpSeek')) $('rpSeek').value = P.t;
+  $('rpTime').textContent = fmt(Math.max(0, P.t));
+  let k = 0, lo = 0, hi = R.t.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (R.t[mid] <= P.t) lo = mid; else hi = mid - 1; } k = lo;
+  const a = R.frames[k], b = R.frames[Math.min(k + 1, R.frames.length - 1)], span = (R.t[Math.min(k + 1, R.t.length - 1)] - R.t[k]) || 1, u = Math.min(1, Math.max(0, (P.t - R.t[k]) / span));
+  const L = (x, y) => x + (y - x) * u, LA = (x, y) => x + angDiff(y, x) * u;
+  R.cars.forEach((c, n) => {
+    const o = n * REC_F, g = c.group; if (!g) return;
+    g.position.set(L(a[o], b[o]), L(a[o + 1], b[o + 1]), L(a[o + 2], b[o + 2])); g.rotation.order = 'YXZ'; g.rotation.set(LA(a[o + 3], b[o + 3]), LA(a[o + 4], b[o + 4]), LA(a[o + 5], b[o + 5]));
+    g.visible = a[o + 8] > 0.5; const v = L(a[o + 7], b[o + 7]), st = L(a[o + 6], b[o + 6]);
+    for (const w of c.wheels || []) { if (P.playing) w.spin.rotation.x += v * dt * RP_SPEEDS[P.speed] / 0.33; if (w.front) w.pivot.rotation.y = st * 0.35; }
+    if (c.lodProxy) setCarLod(c, Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) > 42);
+  });
+  // camera
+  const f = R.cars[P.focus] || R.cars[0], fg = f.group, fp = fg.position;
+  if (P.cam === 0) {   // trackside TV cameras: the next camera ahead picks the car up, then the next one takes over
+    let best = null, bd = 1e9;
+    for (const cm of P.cams) { const d = Math.hypot(cm.x - fp.x, cm.z - fp.z); const ahead = (cm.x - fp.x) * Math.sin(fg.rotation.y) + (cm.z - fp.z) * Math.cos(fg.rotation.y); if (ahead > -45 && d < bd) { bd = d; best = cm; } }
+    if (best) { camera.position.set(best.x, best.y, best.z); camera.lookAt(fp.x, fp.y + 0.6, fp.z); camera.fov = Math.max(8, Math.min(55, 1400 / Math.max(10, bd))); }
+  } else if (P.cam === 1) {
+    const h = fg.rotation.y; camera.position.set(fp.x - Math.sin(h) * 9, fp.y + 3, fp.z - Math.cos(h) * 9); camera.lookAt(fp.x + Math.sin(h) * 5, fp.y + 1, fp.z + Math.cos(h) * 5); camera.fov = 60;
+  } else {
+    const h = fg.rotation.y; camera.position.set(fp.x - Math.sin(h) * 30 + Math.cos(h) * 18, fp.y + 34, fp.z - Math.cos(h) * 30 - Math.sin(h) * 18); camera.lookAt(fp.x, fp.y, fp.z); camera.fov = 45;
+  }
+  camera.updateProjectionMatrix();
+  focus.set(fp.x, fp.y, fp.z);
+}
+function replayPhoto() {
+  // a clean frame with no buttons: render once and grab the picture straight away
+  $('replayUi').classList.add('hidden');
+  world.update(0.016, focus, camera); renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png');
+  $('replayUi').classList.remove('hidden');
+  $('photoImg').src = url; $('photoSave').href = url; $('photoSave').download = 'apexgp-' + (game.T.def.id || 'photo') + '-' + Date.now() + '.png'; $('photoBox').classList.remove('hidden');
+}
+
 function showResults() {
   const Tr = game.T, champ = settings.mode === 'champ';
   // two-compound rule for dry races
@@ -2654,6 +2720,7 @@ function showResults() {
     $('champBox').classList.remove('hidden');
     $('rAgain').textContent = s.finished ? 'New season' : 'Next round: ' + TRACKS[calIdx()[s.round]].name;
   }
+  $('rReplay').classList.toggle('hidden', !(isVip() && game.rec && game.rec.t.length > 10 && game.rec.race === game.cars));
   $('results').classList.remove('hidden');
 }
 
@@ -2955,7 +3022,17 @@ function initMenu() {
   $('pResume').onclick = () => togglePause(false);
   $('pRestart').onclick = () => { if (settings.mode === 'champ') return; withLoading(startWeekend); };
   $('pEnd').onclick = () => { togglePause(false); if (!isRace() && game.session !== 'tt') { game.player.lapInvalid = false; endQualiSession(); } };
-  $('pQuit').onclick = toMenu; $('rMenu').onclick = toMenu;
+  $('pQuit').onclick = toMenu; $('rMenu').onclick = () => { if (game.replay) stopReplay(); toMenu(); };
+  $('rReplay').onclick = startReplay;
+  $('rpExit').onclick = stopReplay;
+  $('rpPlay').onclick = () => { const P = game.replay; if (!P) return; if (!P.playing && P.t >= game.rec.t[game.rec.t.length - 1] - 0.05) P.t = game.rec.t[0]; P.playing = !P.playing; rpUi(); };
+  $('rpBack').onclick = () => { if (game.replay) { game.replay.t = Math.max(game.rec.t[0], game.replay.t - 10); } };
+  $('rpSpeed').onclick = () => { const P = game.replay; if (P) { P.speed = (P.speed + 1) % RP_SPEEDS.length; rpUi(); } };
+  $('rpCam').onclick = () => { const P = game.replay; if (P) { P.cam = (P.cam + 1) % RP_CAMS.length; rpUi(); } };
+  const rpCarStep = d => { const P = game.replay, R = game.rec; if (!P) return; for (let n = 0; n < R.cars.length; n++) { P.focus = (P.focus + d + R.cars.length) % R.cars.length; if (R.cars[P.focus].group && !R.cars[P.focus].dnf) break; } rpUi(); };
+  $('rpPrev').onclick = () => rpCarStep(-1); $('rpNext').onclick = () => rpCarStep(1);
+  $('rpSeek').addEventListener('input', () => { if (game.replay) game.replay.t = +$('rpSeek').value; });
+  $('rpPhoto').onclick = replayPhoto; $('photoClose').onclick = () => $('photoBox').classList.add('hidden');
   $('rAgain').onclick = () => { if (game.mp) return toMenu(); if (settings.mode === 'champ') { const s = loadSeason(); if (s && s.finished) store.del(seasonKey()); } withLoading(startWeekend); };
   $('qNext').onclick = () => { if (game.mp) return; $('qres').classList.add('hidden'); $('hud').classList.remove('hidden'); withLoading(nextQualiStep); };
   $('stratGo').onclick = () => withLoading(startRace);
@@ -3036,13 +3113,12 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
   if (game.state === 'race' && game.player) {
-    if (!game.paused || game.mp) {
-      update(dt); updateCarVisuals(dt);
+    if (game.replay) replayTick(dt);
+    else if (!game.paused || game.mp) {
+      update(dt); updateCarVisuals(dt); recTick();
       audio.set(game.player.rpm, game.phase === 'lights' ? (keys.w ? 1 : 0) : game.player.inp.throttle, game.phase !== 'idle');
     }
-    if (!window.__camLock) updateCamera(dt, clock);
-    updateHUD(dt);
-    focus.set(game.player.x, game.player.group.position.y, game.player.z);
+    if (!game.replay) { if (!window.__camLock) updateCamera(dt, clock); updateHUD(dt); focus.set(game.player.x, game.player.group.position.y, game.player.z); }
   } else {
     if (!window.__camLock) updateMenuCamera(dt);
     focus.copy(camera.position).setY(0);
@@ -3055,20 +3131,21 @@ function frame(now) {
 }
 function updateSound(dt) {
   const p = game.player;
-  if (!(game.state === 'race' && p && !game.paused && game.phase !== 'idle' && game.phase !== 'red')) { sound.update(dt, { on: false }); return; }
+  if (!(game.state === 'race' && p && !game.paused && !game.replay && game.phase !== 'idle' && game.phase !== 'red')) { sound.update(dt, { on: false }); return; }
   let rival = null, bd = 60;
   for (const o of game.cars) { if (o === p || !o.active || !o.group.visible) continue; const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < bd) { bd = d; rival = { eng: o.spec && o.spec.eng, rpm: o.rpm, thr: o.inp.throttle, gain: (1 - d / 60) ** 2 * 0.8 }; } }
   const lock = p.inp.brake > 0.8 && Math.abs(p.v) > 25 && Math.abs(p.steer) > 0.5;
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=classic27v');
+await loadCarModel('js/car.bin?v=replay27w');
 initMenu();
 requestAnimationFrame(frame);
 
 // debugging hooks for automated checks
 window.__apex = {
   deployFlag, game, settings, update, updateCarVisuals, updateCamera, updateHUD, setCam, startWeekend, startRace, startSession, leaveGarage, nextQualiStep, endQualiSession, showStrategy,
+  recTick, startReplay, replayTick, replayPhoto,
   buildTrack, getTrack, world, weather, renderer, scene, camera, standings, positionOf, keys, estimateLap, aiPace,
   frameOnce: () => { renderWeather(0.016); world.update(0.016, focus.set(game.player ? game.player.x : 0, game.player ? game.player.group.position.y : 0, game.player ? game.player.z : 0), camera); mirrorTick = 1; renderMirrors(); renderer.render(scene, camera); },
 };
