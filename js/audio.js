@@ -222,6 +222,14 @@ export class Sound {
       e.gOsc.frequency.setTargetAtTime(e.srpm / 120, t, snap ? 0.002 : 0.012);
       e.gDepth.gain.setTargetAtTime(eng.growl * (0.55 + 0.45 * thr), t, 0.05);
     } else e.gDepth.gain.setTargetAtTime(0, t, 0.05);
+    // eng.turbo: a turbo whistle that spools up with throttle and revs, and a "pssh" blow-off when you lift
+    if (eng.turbo && !e.turboOsc) { const ctx = this.ctx; e.turboOsc = ctx.createOscillator(); e.turboOsc.type = 'sine'; e.turboG = ctx.createGain(); e.turboG.gain.value = 0; e.turboOsc.connect(e.turboG); e.turboG.connect(e.out); e.turboOsc.start(); e.boost = 0; }
+    if (e.turboOsc) {
+      const want = eng.turbo ? thr * Math.min(1, Math.max(0, (e.srpm - eng.lo) / (eng.hi - eng.lo) * 1.4)) : 0, was = e.boost;
+      e.boost += (want - e.boost) * (want > e.boost ? 0.04 : 0.25);   // slow to spool (turbo lag), quick to drop
+      e.turboOsc.frequency.setTargetAtTime(1800 + e.boost * 4200, t, 0.05); e.turboG.gain.setTargetAtTime(eng.turbo ? e.boost * 0.05 : 0, t, 0.05);
+      if (eng.turbo && was > 0.55 && want < 0.1 && e === this.engine) this.burst(0.12, 0.35, 3200, 0.7);   // blow-off valve
+    }
     e.out.gain.setTargetAtTime(this.muted ? 0 : gain * e.level * (0.09 + 0.17 * Math.max(thr, 0.75 * blow)), t, 0.04);
   }
   burst(gain, dur, freq = 1500, q = 1) {

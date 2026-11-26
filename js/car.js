@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasTex } from './util.js?v=paint27u';
+import { canvasTex } from './util.js?v=classic27v';
 
 /* A generic open-wheeler built to the shape of the 2025 technical rules:
    ground-effect floor, undercut sidepods with downwash ramps, 4-element front wing,
@@ -243,7 +243,7 @@ export function setCarLod(car, far) {
 
 export function makeCar({ color, accent, helmet = '#ffffff', number = 1, compound = 'medium', model = 'f1', livery = null }) {
   const M = MODEL || buildModel();
-  if (model === 'miata' || model === 'bus') { const car = makeSpecialCar(model, { color, accent, helmet, number, compound }); if (livery && model === 'miata') applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); return fitCockpit(car, model, helmet); }
+  if (model === 'miata' || model === 'bus' || model === 'classic60' || model === 'turbo80') { const car = makeSpecialCar(model, { color, accent, helmet, number, compound }); if (livery && model === 'miata') applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); return fitCockpit(car, model, helmet); }
   if (model === 'gt3' || model === 'hyper' || model === 'rally') { const car = makeClosedCar(model, { color, accent, helmet, number, compound }); if (livery) applyLivery(car.mats.body, livery.p, livery.c2 || accent, livery.c3 || '#ffffff'); addInterior(car.group, model); return fitCockpit(car, model, helmet); }
   const g = new THREE.Group();
   const mats = {
@@ -486,7 +486,7 @@ function makeClosedCar(kind, { color, accent, helmet, number, compound }) {
   }
   const steering = new THREE.Group(); steering.position.set(C.helmet[0], 0.8, C.helmet[2] + 0.45); steering.rotation.x = -0.9; g.add(steering);
   steering.add(new THREE.Mesh(SW, DARK)); steering.visible = false;
-  return { group: g, wheels, helmet: helmetMesh, steering, cockpitHide: [helmetMesh], mats, numTex: tex, stripes, fwing, rwing, closed: kind };
+  return { group: g, wheels, helmet: helmetMesh, steering, cockpitHide: [helmetMesh], mats, numTex: tex, stripes, fwing, rwing, closed: C.open ? null : kind };
 }
 
 /* ---- Miata-style roadster (open top, roll hoop, driver's helmet showing) and a London double-decker bus ---- */
@@ -494,6 +494,9 @@ const OPEN_GLASS = new THREE.MeshPhysicalMaterial({ color: 0xa9c4d8, roughness: 
 const SPECIAL = {
   miata: { axF: 1.2, axR: -1.12, track: 0.72, ws: 0.82, helmet: [0.3, 0.98, -0.42], num: [0.86, 0.58, 0.05] },
   bus: { axF: 3.15, axR: -2.55, track: 1.02, ws: 1.42, helmet: [-0.72, 2.05, 3.95], num: [1.27, 1.55, 1.2] },
+  // VIP classics: a 1960s cigar-shaped car (skinny tyres, no wings) and a 1980s turbo car (wedge, fat rears, huge rear wing)
+  classic60: { axF: 1.18, axR: -1.12, track: 0.6, ws: 0.92, wx: [0.72, 0.85], wsR: 1.0, helmet: [0, 0.9, -0.22], num: [0.33, 0.47, 0.75], open: true },
+  turbo80: { axF: 1.6, axR: -1.28, track: 0.7, ws: 0.95, wx: [1.1, 1.55], wsR: 1.12, helmet: [0, 0.8, 0.12], num: [0.84, 0.42, -0.4], open: true },
 };
 function makeSpecialCar(kind, { color, accent, helmet, number, compound }) {
   const C = SPECIAL[kind], M = MODEL, g = new THREE.Group();
@@ -501,7 +504,35 @@ function makeSpecialCar(kind, { color, accent, helmet, number, compound }) {
   const box = (w, h, d, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d).rotateX(rx), m); o.position.set(x, y, z); o.castShadow = true; return o; };
   const shadow = new THREE.Mesh(SHADOW, SHADOW_MAT); shadow.position.y = 0.025; shadow.renderOrder = 1; g.add(shadow);
   const fwing = new THREE.Group(), rwing = new THREE.Group(); g.add(fwing, rwing);
-  if (kind === 'miata') {
+  const metalM = new THREE.MeshStandardMaterial({ color: 0xb9bec6, roughness: 0.3, metalness: 0.9 });
+  const rod = (a, b, r = 0.018, m = DARK) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, A.distanceTo(B), 8), m); o.position.copy(A).add(B).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); o.castShadow = true; g.add(o); return o; };
+  if (kind === 'classic60') {
+    shadow.scale.set(0.7, 1, 0.85);
+    // the cigar: one long rounded tube, an oval nose intake, a tiny wrap-round screen and the driver sitting up in the open
+    g.add(new THREE.Mesh(loft([[2.08, 0.08, 0.09, 0.4, 2.2], [1.9, 0.2, 0.2, 0.41, 2.2], [1.4, 0.29, 0.27, 0.43, 2.4], [0.6, 0.33, 0.3, 0.45, 2.6], [-0.3, 0.34, 0.3, 0.46, 2.6], [-1.1, 0.31, 0.27, 0.45, 2.4], [-1.75, 0.22, 0.2, 0.44, 2.2], [-2.05, 0.1, 0.1, 0.44, 2]], 32), mats.body));
+    const intake = new THREE.Mesh(new THREE.CircleGeometry(0.085, 20), DARK); intake.position.set(0, 0.4, 2.085); g.add(intake);
+    g.add(box(0.46, 0.06, 0.95, DARK, 0, 0.745, -0.05));                                    // cockpit opening
+    g.add(box(0.5, 0.16, 0.02, OPEN_GLASS, 0, 0.83, 0.46, -0.5));                           // little wrap-round screen
+    g.add(box(0.7, 0.05, 0.06, mats.acc, 0, 0.62, 1.2));                                     // racing stripe band
+    for (const sx of [1, -1]) { rod([sx * 0.24, 0.44, -0.9], [sx * 0.32, 0.5, -2.25], 0.028, metalM); rod([sx * 0.18, 0.4, -0.9], [sx * 0.26, 0.46, -2.3], 0.028, metalM); }   // open exhaust pipes
+    rod([-0.18, 0.75, -0.62], [-0.16, 1.02, -0.62], 0.02, metalM); rod([0.18, 0.75, -0.62], [0.16, 1.02, -0.62], 0.02, metalM); rod([-0.16, 1.02, -0.62], [0.16, 1.02, -0.62], 0.02, metalM);   // roll hoop
+    for (const [z, ax] of [[1.18, 1], [-1.12, -1]]) for (const sx of [1, -1]) { rod([sx * 0.25, 0.38, z + 0.12 * ax], [sx * 0.6, 0.33, z], 0.016); rod([sx * 0.25, 0.5, z - 0.1 * ax], [sx * 0.6, 0.38, z], 0.016); }   // spindly wishbones
+    for (const sx of [1, -1]) g.add(box(0.07, 0.05, 0.03, metalM, sx * 0.3, 0.8, 0.38));   // mirrors
+  } else if (kind === 'turbo80') {
+    shadow.scale.set(0.95, 1, 0.95);
+    // the wedge: a narrow tub, flat wide sidepods, a long engine cover and the huge rear wing of the turbo era
+    g.add(new THREE.Mesh(loft([[2.25, 0.1, 0.06, 0.24, 3], [1.7, 0.22, 0.12, 0.28, 3], [0.95, 0.29, 0.19, 0.34, 3], [0.25, 0.33, 0.24, 0.4, 3], [-0.4, 0.33, 0.27, 0.43, 3], [-1.3, 0.3, 0.26, 0.43, 3], [-1.95, 0.22, 0.18, 0.4, 3]], 30), mats.body));
+    for (const sx of [1, -1]) { g.add(box(0.42, 0.28, 2.0, mats.body, sx * 0.62, 0.32, -0.45)); g.add(box(0.4, 0.22, 0.04, DARK, sx * 0.62, 0.33, 0.56)); g.add(box(0.46, 0.04, 2.0, mats.acc, sx * 0.62, 0.47, -0.45)); }   // sidepods, radiator mouths, accent stripe
+    g.add(box(0.42, 0.06, 0.8, DARK, 0, 0.66, 0.05));                                        // cockpit
+    g.add(box(0.52, 0.12, 0.02, OPEN_GLASS, 0, 0.74, 0.5, -0.6));
+    g.add(new THREE.Mesh(loft([[-0.45, 0.2, 0.08, 0.66, 3], [-0.9, 0.24, 0.12, 0.62, 3], [-1.6, 0.2, 0.1, 0.56, 3], [-1.95, 0.12, 0.06, 0.5, 3]], 20), mats.body));   // engine cover
+    fwing.add(box(1.65, 0.035, 0.42, mats.acc, 0, 0.15, 2.05)); for (const sx of [1, -1]) fwing.add(box(0.03, 0.18, 0.46, mats.body, sx * 0.83, 0.2, 2.05));
+    rwing.add(box(1.0, 0.045, 0.42, mats.acc, 0, 1.0, -2.05), box(1.0, 0.035, 0.2, mats.acc, 0, 1.12, -2.22));
+    for (const sx of [1, -1]) rwing.add(box(0.03, 0.55, 0.72, mats.body, sx * 0.5, 0.9, -2.1));
+    rwing.add(box(0.06, 0.5, 0.1, DARK, 0, 0.72, -1.95));
+    rod([0.15, 0.4, -2.0], [0.15, 0.36, -2.3], 0.05, metalM); rod([-0.15, 0.4, -2.0], [-0.15, 0.36, -2.3], 0.05, metalM);   // turbo exhausts
+    for (const sx of [1, -1]) g.add(box(0.08, 0.05, 0.03, DARK, sx * 0.38, 0.72, 0.35));
+  } else if (kind === 'miata') {
     shadow.scale.set(0.85, 1, 0.7);
     g.add(new THREE.Mesh(loft([[-1.96, 0.78, 0.2, 0.52, 4], [-1.86, 0.83, 0.27, 0.54, 6], [-1.2, 0.85, 0.29, 0.54, 8], [-0.5, 0.84, 0.28, 0.54, 8], [0.3, 0.83, 0.26, 0.52, 8], [1.0, 0.82, 0.24, 0.5, 7], [1.6, 0.79, 0.19, 0.47, 6], [1.9, 0.72, 0.13, 0.44, 4], [1.99, 0.6, 0.07, 0.42, 3]], 40), mats.body));
     g.add(box(1.25, 0.06, 1.15, DARK, 0, 0.83, -0.4));                                     // open cockpit tub
@@ -533,8 +564,8 @@ function makeSpecialCar(kind, { color, accent, helmet, number, compound }) {
   // side numbers on white roundels (the bus shows its route number)
   const tex = numberTex(number, '#111111', 'rgba(255,255,255,0)'), nmat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
   for (const sx of [1, -1]) {
-    const pl = new THREE.Mesh(new THREE.CircleGeometry(kind === 'bus' ? 0.32 : 0.19, 24), PLATE_MAT); pl.position.set(sx * C.num[0], C.num[1], C.num[2]); pl.rotation.y = sx * Math.PI / 2; g.add(pl);
-    const n = new THREE.Mesh(NUM_FIN, nmat); n.scale.setScalar(kind === 'bus' ? 1.5 : 0.85); n.position.set(sx * (C.num[0] + 0.004), C.num[1], C.num[2]); n.rotation.y = sx * Math.PI / 2; g.add(n);
+    const pl = new THREE.Mesh(new THREE.CircleGeometry(kind === 'bus' ? 0.32 : C.open ? 0.15 : 0.19, 24), PLATE_MAT); pl.position.set(sx * C.num[0], C.num[1], C.num[2]); pl.rotation.y = sx * Math.PI / 2; g.add(pl);
+    const n = new THREE.Mesh(NUM_FIN, nmat); n.scale.setScalar(kind === 'bus' ? 1.5 : C.open ? 0.65 : 0.85); n.position.set(sx * (C.num[0] + 0.004), C.num[1], C.num[2]); n.rotation.y = sx * Math.PI / 2; g.add(n);
   }
   const helmetMesh = new THREE.Group(); helmetMesh.position.set(...C.helmet);
   helmetMesh.add(new THREE.Mesh(HELMET, new THREE.MeshPhysicalMaterial({ color: helmet, roughness: 0.2, metalness: 0.3, clearcoat: 1 })), new THREE.Mesh(VISOR, VISOR_MAT));
@@ -542,7 +573,8 @@ function makeSpecialCar(kind, { color, accent, helmet, number, compound }) {
   const wheels = [], stripes = [];
   for (const [front, sx] of [[true, 1], [true, -1], [false, 1], [false, -1]]) {
     const Wg = front ? M.front : M.rear;
-    const pivot = new THREE.Group(); pivot.position.set(sx * (C.track + 0.04 * C.ws), 0.36 * C.ws, front ? C.axF : C.axR); pivot.scale.setScalar(C.ws); g.add(pivot);
+    const wsA = C.ws * (front ? 1 : (C.wsR || 1)), wxA = C.wx ? C.wx[front ? 0 : 1] : 1;
+    const pivot = new THREE.Group(); pivot.position.set(sx * (C.track + 0.04 * wsA * wxA), 0.36 * wsA, front ? C.axF : C.axR); pivot.scale.set(wsA * wxA, wsA, wsA); g.add(pivot);
     const spin = new THREE.Group(); pivot.add(spin);
     spin.add(new THREE.Mesh(Wg.tyre, M.wheelMats.tyre), new THREE.Mesh(Wg.rim, M.wheelMats.rim));
     const face = new THREE.Mesh(Wg.face, M.wheelMats.face); face.position.x = sx * (Wg.w / 2 - 0.004); face.rotation.y = sx * Math.PI / 2; spin.add(face);
@@ -609,7 +641,7 @@ export function updateDash(car, { gear, kmh, rpm, frac, lap, pos, delta }) {
 /* replace a car's simple wheel with the detailed one, placed for its cockpit */
 function fitCockpit(car, kind, glove) {
   const W = buildWheel(kind === 'gt3' || kind === 'hyper' || kind === 'rally' || kind === 'miata' || kind === 'bus', glove);
-  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, gt3: { wheel: [0.32, 0.99, 0.3, -0.32], eye: [0.32, 1.14, -0.1], scale: 0.72 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.11, 0.22, -0.32], eye: [0.32, 1.28, -0.2], scale: 0.72 }, miata: { wheel: [0.3, 0.92, -0.05, -0.35], eye: [0.3, 1.08, -0.42], scale: 0.62 }, bus: { wheel: [-0.72, 1.55, 4.55, -1.0], eye: [-0.72, 2.05, 4.1], scale: 1.25 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
+  const P = { f1: { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] }, classic60: { wheel: [0, 0.8, 0.2, -0.75], eye: [0, 1.02, -0.3], scale: 0.85 }, turbo80: { wheel: [0, 0.7, 0.44, -0.55], eye: [0, 0.93, 0.06] }, gt3: { wheel: [0.32, 0.99, 0.3, -0.32], eye: [0.32, 1.14, -0.1], scale: 0.72 }, hyper: { wheel: [0, 0.78, 0.36, -0.34], eye: [0, 0.98, 0.02], scale: 0.72 }, rally: { wheel: [0.32, 1.11, 0.22, -0.32], eye: [0.32, 1.28, -0.2], scale: 0.72 }, miata: { wheel: [0.3, 0.92, -0.05, -0.35], eye: [0.3, 1.08, -0.42], scale: 0.62 }, bus: { wheel: [-0.72, 1.55, 4.55, -1.0], eye: [-0.72, 2.05, 4.1], scale: 1.25 } }[kind === 'indy' ? 'f1' : kind] || { wheel: [0, 0.8, 0.4, -0.5], eye: [0, 1.06, 0.0] };
   const st = car.steering; st.clear(); st.position.set(P.wheel[0], P.wheel[1], P.wheel[2]); st.rotation.set(P.wheel[3], 0, 0); st.add(W.group); if (P.scale) W.group.scale.setScalar(P.scale); st.visible = false;
   car.dash = W; car.eye = P.eye;
   // T-cam mount: above the airbox on single-seaters; at the front of the roof, over the windscreen, on closed cars
