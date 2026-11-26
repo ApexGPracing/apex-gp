@@ -173,6 +173,7 @@ table.res tr.me td{background:rgba(255,204,0,.16);color:var(--acc);font-weight:7
 #onlineNow{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:3px 10px;border-radius:99px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);font-size:13px;color:#bbf7d0}
 #onlineNow i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:blink 2s infinite}
 #onlineNow.hidden{display:none}
+#onlineWhat{color:#86efac;opacity:.85;font-size:12px}#onlineWhat:not(:empty)::before{content:'·';margin-right:6px}
 .tag{color:var(--muted);font-size:18px;margin-top:4px}
 .opt{padding:11px 14px}
 .calHead{font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;color:#ffcc00;padding:10px 4px 2px}.calHead small{display:block;letter-spacing:.02em;text-transform:none;font-weight:600;color:var(--muted);font-size:13px;margin-top:2px}
@@ -308,7 +309,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
 
 <div id="menu">
   <div class="left">
-    <div><div class="logo">APEX<span>GP</span></div><div class="tag" id="menuSub">Formula 1 · 24-round championship</div><div id="onlineNow" class="hidden"><i></i><b>0</b> online now</div></div>
+    <div><div class="logo">APEX<span>GP</span></div><div class="tag" id="menuSub">Formula 1 · 24-round championship</div><div id="onlineNow" class="hidden"><i></i><b>0</b> online now<small id="onlineWhat"></small></div></div>
     <div class="opt panel"><h4>Series</h4><div class="seg" data-opt="series"><button data-v="f1">F1</button><button data-v="f2">F2</button><button data-v="indy">IndyCar</button><button data-v="gt3">GT3</button><button data-v="lemans">Le Mans</button><button data-v="rally">Rally</button><button data-v="wrc" class="vipser">WRC Stages ★</button><button data-v="miata">MX-5 Cup</button><button data-v="bus" class="vipser">London Bus ★</button></div></div>
     <div class="opt panel hidden" id="optLmClass"><h4>Your Le Mans car</h4><div class="seg" data-opt="lmClass"><button data-v="hyper">Hypercar</button><button data-v="gt3">GT3</button></div></div>
     <div class="opt panel"><h4>Mode</h4><div class="seg" data-opt="mode"><button data-v="race">Quick Race</button><button data-v="champ">Championship</button><button data-v="tt">Time Trial</button><button data-v="mp">Online</button><button data-v="derby" class="vipser">Bus Derby ★</button></div></div>
@@ -372,7 +373,7 @@ i.cls{font-style:normal;font-size:10px;font-weight:800;padding:0 4px;border-radi
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="js/main.js?v=rand27r"></script>
+<script type="module" src="js/main.js?v=online27s"></script>
 <button id="sndBtn" type="button">🔊 Sound on</button>
 </body>
 </html>

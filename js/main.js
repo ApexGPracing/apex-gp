@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=rand27r';
-import { World } from './world.js?v=rand27r';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=rand27r';
-import { Sound } from './audio.js?v=rand27r';
-import { Particles, Skids, Fireworks } from './fx.js?v=rand27r';
-import { Weather } from './weather.js?v=rand27r';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=rand27r';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=rand27r';
-import { Net, newCode, loadTurn } from './net.js?v=rand27r';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=rand27r';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=rand27r';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=rand27r';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=online27s';
+import { World } from './world.js?v=online27s';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=online27s';
+import { Sound } from './audio.js?v=online27s';
+import { Particles, Skids, Fireworks } from './fx.js?v=online27s';
+import { Weather } from './weather.js?v=online27s';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=online27s';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=online27s';
+import { Net, newCode, loadTurn } from './net.js?v=online27s';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=online27s';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=online27s';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=online27s';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1784,7 +1784,18 @@ async function refreshLeaderboard() {
 /* ---------------- Online multiplayer ---------------- */
 const net = new Net({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
 let mpOnlineN = 0;
-net.watchOnline(n => { mpOnlineN = n; $('onlineNow').classList.toggle('hidden', !n); $('onlineNow').querySelector('b').textContent = n; });
+// live count of players with the game open, and what they are doing
+const ACT_NAMES = [['online', 'in online races'], ['derby', 'in bus derbies'], ['room', 'in online rooms'], ['search', 'searching for a 1v1'], ['ai', 'in AI races'], ['tt', 'in Time Trial'], ['menu', 'in the menus']];
+net.watchOnline((n, list) => {
+  mpOnlineN = n; const el = $('onlineNow'); el.classList.toggle('hidden', !n); el.querySelector('b').textContent = n;
+  const c = {}; for (const p of list || []) { const a = p.a || 'menu'; c[a] = (c[a] || 0) + 1; }
+  $('onlineWhat').textContent = ACT_NAMES.filter(([k]) => c[k]).map(([k, t]) => c[k] + ' ' + t).join(' · ');
+});
+function myActivity() {
+  if (game.state === 'race' && game.player) return game.mp ? (game.derby ? 'derby' : 'online') : settings.mode === 'tt' ? 'tt' : game.derby ? 'derby' : 'ai';
+  return mpSearching ? 'search' : net.code ? 'room' : 'menu';
+}
+setInterval(() => net.setActivity(myActivity()), 2000);
 const carByNet = id => game.cars.find(c => c.netId === id);
 const mpName = () => lbName() || 'Driver';
 const mpCode3 = n => (n.replace(/[^A-Za-z]/g, '').toUpperCase() + 'XXX').slice(0, 3);
@@ -3026,7 +3037,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=rand27r');
+await loadCarModel('js/car.bin?v=online27s');
 initMenu();
 requestAnimationFrame(frame);
 

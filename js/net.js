@@ -7,7 +7,7 @@
      channel instead, at a lower rate.
    For local testing, ?mplocal in the URL swaps Supabase for a BroadcastChannel between tabs of one browser. */
 
-import { TURN_USER, TURN_PASS } from './config.js?v=rand27r';
+import { TURN_USER, TURN_PASS } from './config.js?v=online27s';
 let ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
 // Metered TURN relay: UDP and TCP on port 80, TCP on 443, and TLS on 443 (gets through most school firewalls)
 if (TURN_USER && TURN_PASS) ICE = ICE.concat([{ urls: 'stun:stun.relay.metered.ca:80' }, ...['turn:global.relay.metered.ca:80', 'turn:global.relay.metered.ca:80?transport=tcp', 'turn:global.relay.metered.ca:443', 'turns:global.relay.metered.ca:443?transport=tcp'].map(urls => ({ urls, username: TURN_USER, credential: TURN_PASS }))]);
@@ -123,9 +123,15 @@ export class Net {
   /* live count of everyone with the game open: a presence-only channel that every player joins on load */
   async watchOnline(onCount) {
     if (!this.available || this.onlineTr) return;
-    const me = { id: this.id + '-o', joined: Date.now() }, onPeers = list => onCount(list.length);
+    const me = this.onlineMe = { id: this.id + '-o', joined: Date.now(), a: this.onlineAct || 'menu' }, onPeers = list => onCount(list.length, list);
     try { this.onlineTr = this.local ? await localTransport('ONLINE', me, () => {}, onPeers) : await supabaseTransport(this.url, this.key, 'ONLINE', me, () => {}, onPeers); }
     catch (e) { this.onlineTr = null; setTimeout(() => this.watchOnline(onCount), 30000); }
+  }
+  /* what this player is doing (menu / ai / tt / room / search / online / derby), shown in everyone's online count */
+  setActivity(a) {
+    this.onlineAct = a;
+    if (!this.onlineTr || !this.onlineMe || this.onlineMe.a === a) return;
+    this.onlineMe = { ...this.onlineMe, a }; try { this.onlineTr.update(this.onlineMe); } catch (e) { /* gone */ }
   }
   cancelMatch() { if (this.matchCancel) { const f = this.matchCancel; this.matchCancel = null; f(); } }
   setInfo(extra) { if (!this.tr) return; this.me = { ...this.me, ...extra }; this.tr.update(this.me); }
