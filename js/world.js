@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=cams28c';
-import { AXLE_F, AXLE_R } from './car.js?v=cams28c';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=cams28c';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=crew28d';
+import { AXLE_F, AXLE_R } from './car.js?v=crew28d';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=crew28d';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -1189,6 +1189,14 @@ export class World {
       sc.g.position.set(bx, by, bz); sc.g.rotation.set(0, h, 0); sc.g.visible = true; sc.anim(-1);
     } else if (sc) sc.g.visible = false;
   }
+  /* recolour one team's crew (the VIP gold crew), both the crew waiting in the garage and the pit-stop crew */
+  setTeamCrew(team, color) {
+    if (!this.crew || !this.crewColors) return;
+    this.crewColors[team] = color; const { per } = this.crewInfo, cc = new THREE.Color(color);
+    for (let k = 0; k < per; k++) this.crew.setColorAt(team * per + k, cc);
+    if (this.crew.instanceColor) this.crew.instanceColor.needsUpdate = true;
+    const sc = this.stopCrews.get(team); if (sc) { this.crewG.remove(sc.g); this.stopCrews.delete(team); }
+  }
   /* s < 0: waiting for the car; 0..1: through the stop; > 1: car released */
   crewAnim(team, s) { const sc = this.stopCrews && this.stopCrews.get(team); if (sc && sc.g.visible) sc.anim(s); }
   resetCrews() { if (!this.crew) return; for (let t = 0; t < this.crewInfo.teams; t++) this.crewPose(t, null); }
@@ -1239,10 +1247,11 @@ export class World {
 const CREW_MATS = {};
 function crewMats(color) {
   if (!CREW_MATS[color]) CREW_MATS[color] = {
-    suit: new THREE.MeshStandardMaterial({ color, roughness: 0.75 }),
-    trim: new THREE.MeshStandardMaterial({ color: '#f2f4f7', roughness: 0.7 }),
+    // VIP crew ('#d4af37'): shiny gold suits and helmets with black trim
+    suit: color === '#d4af37' ? new THREE.MeshStandardMaterial({ color, roughness: 0.32, metalness: 0.75 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.75 }),
+    trim: new THREE.MeshStandardMaterial({ color: color === '#d4af37' ? '#121212' : '#f2f4f7', roughness: 0.7 }),
     dark: new THREE.MeshStandardMaterial({ color: '#16181d', roughness: 0.6 }),
-    helmet: new THREE.MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.2 }),
+    helmet: new THREE.MeshStandardMaterial({ color, roughness: color === '#d4af37' ? 0.15 : 0.25, metalness: color === '#d4af37' ? 0.95 : 0.2 }),
     visor: new THREE.MeshStandardMaterial({ color: '#0b0d12', roughness: 0.1, metalness: 0.6 }),
     steel: new THREE.MeshStandardMaterial({ color: '#9aa3ad', roughness: 0.35, metalness: 0.8 }),
     tyre: new THREE.MeshStandardMaterial({ color: '#131417', roughness: 0.9 }),

@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=cams28c';
-import { World } from './world.js?v=cams28c';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=cams28c';
-import { Sound } from './audio.js?v=cams28c';
-import { Particles, Skids, Fireworks } from './fx.js?v=cams28c';
-import { Weather } from './weather.js?v=cams28c';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=cams28c';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=cams28c';
-import { Net, newCode, loadTurn } from './net.js?v=cams28c';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=cams28c';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=cams28c';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=cams28c';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=crew28d';
+import { World } from './world.js?v=crew28d';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=crew28d';
+import { Sound } from './audio.js?v=crew28d';
+import { Particles, Skids, Fireworks } from './fx.js?v=crew28d';
+import { Weather } from './weather.js?v=crew28d';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=crew28d';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=crew28d';
+import { Net, newCode, loadTurn } from './net.js?v=crew28d';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=crew28d';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=crew28d';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=crew28d';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -416,6 +416,7 @@ function makeField(lineup, skill) {
   const myLiv = { p: PATS[(lv * 5) % PATS.length], c2: acc, c3: acc === '#111827' ? '#ffcc00' : '#ffffff' };
   const p = Object.assign(makeCar({ color: colr, accent: acc, helmet: '#ffffff', number: myNum(), compound: 'medium', model: CLASSES[pcls].model, livery: myLiv }), { name: 'You', code: 'YOU', team: 'Your Team', color: colr, isPlayer: true, pace: 1, teamIdx: TEAMS.length, cls: pcls, spec: CLASSES[pcls] });
   if (mp0) applyPaint(p, mp0); else vipFinish(p, lv);
+  world.setTeamCrew(TEAMS.length, isVip() ? '#d4af37' : '#ffcc00');   // VIP: a gold pit crew
   vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); mergeCarStatic(p); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
@@ -3250,7 +3251,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=cams28c');
+await loadCarModel('js/car.bin?v=crew28d');
 initMenu();
 requestAnimationFrame(frame);
 
