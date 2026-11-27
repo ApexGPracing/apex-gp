@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=trail27z';
-import { World } from './world.js?v=trail27z';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=trail27z';
-import { Sound } from './audio.js?v=trail27z';
-import { Particles, Skids, Fireworks } from './fx.js?v=trail27z';
-import { Weather } from './weather.js?v=trail27z';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=trail27z';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=trail27z';
-import { Net, newCode, loadTurn } from './net.js?v=trail27z';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=trail27z';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=trail27z';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=trail27z';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=daily28a';
+import { World } from './world.js?v=daily28a';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=daily28a';
+import { Sound } from './audio.js?v=daily28a';
+import { Particles, Skids, Fireworks } from './fx.js?v=daily28a';
+import { Weather } from './weather.js?v=daily28a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=daily28a';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=daily28a';
+import { Net, newCode, loadTurn } from './net.js?v=daily28a';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=daily28a';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=daily28a';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=daily28a';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -198,7 +198,7 @@ function helmetDesign(car, k) {
 }
 /* VIP sky: sunset, dawn, fog or a thunderstorm (with rain and lightning) at any track */
 const SKIES = [['', 'Normal'], ['sunset', 'Sunset'], ['dawn', 'Dawn'], ['fog', 'Fog'], ['storm', 'Thunderstorm']];
-const mySky = () => isVip() ? (SKIES.some(v => v[0] === settings.vipSky) ? settings.vipSky : '') : '';
+const mySky = () => { const D = typeof dailyOn === 'function' && dailyOn(); if (D) return D.sky; return isVip() ? (SKIES.some(v => v[0] === settings.vipSky) ? settings.vipSky : '') : ''; };
 function skyTheme(th, k) {
   if (!k || th.night) return th;
   const o = {
@@ -373,9 +373,19 @@ const cm = parseInt(store.get('apexgp-cam'), 10); if (cm >= 0 && cm < 3) game.ca
 const keys = {};
 // VIP cars (not online): the V10 monster and the 1960s / 1980s classics; their times are kept separate
 const VIP_CARS = [['', 'Off'], ['v10', 'V10 monster'], ['classic60', '1960s classic'], ['turbo80', '1980s turbo'], ['f2', 'F2'], ['indy', 'IndyCar'], ['gt3', 'GT3'], ['hyper', 'Hypercar'], ['rally', 'Rally car'], ['miata', 'MX-5'], ['bus', 'London bus']];   // any car on any track
-const vipCarCls = () => { if (!isVip() || settings.mode === 'mp') return ''; const c = settings.vipCar ?? (settings.vipV10 ? 'v10' : ''); return VIP_CARS.some(v => v[0] === c) ? c : ''; };
+/* VIP daily challenge: one track, car and sky for everyone each day (UTC), Time Trial, its own leaderboard */
+function dailyToday() {
+  const d = new Date(), date = d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+  let h = 2166136261; for (const ch of 'apexgp-daily-' + date) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const pick = (arr, salt) => arr[((h ^ Math.imul(salt, 2654435761)) >>> 0) % arr.length];
+  const pool = TRACKS.map((t, i) => i).filter(i => !TRACKS[i].arena && !TRACKS[i].noBarriers && TRACKS[i].surface !== 'dirt' && TRACKS[i].surface !== 'gravel');
+  const track = pick(pool, 1), car = pick(VIP_CARS.filter(v => v[0]), 2)[0], sky = pick(SKIES, 3)[0];
+  return { date, track, car, sky };
+}
+const dailyOn = () => { if (!isVip() || !settings.daily || settings.mode !== 'tt') return null; const D = dailyToday(); return settings.track === D.track && settings.dailyDate === D.date ? D : null; };
+const vipCarCls = () => { const D = dailyOn(); if (D) return D.car; if (!isVip() || settings.mode === 'mp') return ''; const c = settings.vipCar ?? (settings.vipV10 ? 'v10' : ''); return VIP_CARS.some(v => v[0] === c) ? c : ''; };
 const v10On = () => vipCarCls() === 'v10';
-const serKey = id => (vipCarCls() ? vipCarCls() + '-' : SER.id === 'f1' ? '' : SER.id + '-') + id;
+const serKey = id => (dailyOn() ? 'daily' + dailyOn().date + '-' : vipCarCls() ? vipCarCls() + '-' : SER.id === 'f1' ? '' : SER.id + '-') + id;
 const bestKey = T => 'apexgp2-best-' + serKey(T.def.id);
 const recordFor = T => { const v = parseFloat(store.get(bestKey(T))); return isFinite(v) ? v : 0; };
 const T = () => game.T;
@@ -1830,7 +1840,7 @@ async function refreshLeaderboard() {
   const box = $('lbBox'); if (!box) return;
   const show = settings.mode === 'tt'; box.classList.toggle('hidden', !show); if (!show) return;
   if (!LB_ON) { $('lbList').innerHTML = '<small>The global leaderboard is not switched on yet.</small>'; return; }
-  const id = serKey(TRACKS[settings.track].id), req = ++lbReq; $('lbTitle').textContent = (TRACKS[settings.track].vip ? '★ VIP leaderboard · ' : 'Global leaderboard · ') + SER.short + ' · ' + TRACKS[settings.track].name;
+  const id = serKey(TRACKS[settings.track].id), req = ++lbReq; const DC = dailyOn(); $('lbTitle').textContent = DC ? '★ Daily VIP challenge · ' + TRACKS[DC.track].name + ' · ' + VIP_CARS.find(v => v[0] === DC.car)[1] + (DC.sky ? ' · ' + SKIES.find(v => v[0] === DC.sky)[1] : '') : (TRACKS[settings.track].vip ? '★ VIP leaderboard · ' : 'Global leaderboard · ') + SER.short + ' · ' + TRACKS[settings.track].name;
   $('lbList').innerHTML = '<small>Loading…</small>';
   const rows = await lbFetch(id); if (req !== lbReq) return;
   if (!rows) { $('lbList').innerHTML = '<small>Could not reach the leaderboard.</small>'; return; }
@@ -3009,6 +3019,7 @@ function initMenu() {
     $('vipSmoke').textContent = 'Tyre smoke: ' + SMOKE_NAMES[settings.vipSmoke || 0];
     $('vipFlames').textContent = 'Exhaust flames: ' + (settings.vipFlames === false ? 'Off' : 'On');
     $('vipV10').textContent = 'VIP car: ' + (VIP_CARS.find(v => v[0] === (settings.vipCar ?? (settings.vipV10 ? 'v10' : ''))) || VIP_CARS[0])[1];
+    { const D = dailyToday(); $('vipDaily').textContent = '🏆 Daily challenge: ' + TRACKS[D.track].name + ' · ' + VIP_CARS.find(v => v[0] === D.car)[1] + (D.sky ? ' · ' + SKIES.find(v => v[0] === D.sky)[1] : '') + (dailyOn() ? ' ✓' : ''); }
     $('vipTrail').textContent = 'Light trail: ' + TRAIL_NAMES[(settings.vipTrail | 0) % TRAILS.length];
     $('vipSky').textContent = 'Sky: ' + (SKIES.find(v => v[0] === mySky()) || SKIES[0])[1];
     $('vipPaint').textContent = 'Custom paint: ' + (settings.vipPaint ? 'On' : 'Off'); $('vipFin').textContent = 'Finish: ' + FINISHES[(settings.vipFin | 0) % FINISHES.length][0];
@@ -3032,6 +3043,11 @@ function initMenu() {
   $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
   $('vipRims').onclick = () => { settings.vipRims = settings.vipRims === false; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipDaily').onclick = () => {
+    const D = dailyToday(); settings.daily = true; settings.dailyDate = D.date; settings.mode = 'tt'; settings.track = D.track; saveSettings(); vipUi(); refreshMenu();
+    $('vipMsg').textContent = "Today's challenge is set: Time Trial at " + TRACKS[D.track].name + ' in the ' + VIP_CARS.find(v => v[0] === D.car)[1] + '. Press Start and set the fastest lap: it has its own VIP leaderboard, and a new challenge comes every day.';
+    $('startBtn').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
   $('vipTrail').onclick = () => { settings.vipTrail = ((settings.vipTrail | 0) + 1) % TRAILS.length; saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
   $('vipSky').onclick = () => { const k = (SKIES.findIndex(v => v[0] === mySky()) + 1) % SKIES.length; settings.vipSky = SKIES[k][0]; saveSettings(); vipUi(); };
   const paintChanged = () => { saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
@@ -3192,7 +3208,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=trail27z');
+await loadCarModel('js/car.bin?v=daily28a');
 initMenu();
 requestAnimationFrame(frame);
 
