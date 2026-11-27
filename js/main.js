@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=daily28a';
-import { World } from './world.js?v=daily28a';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=daily28a';
-import { Sound } from './audio.js?v=daily28a';
-import { Particles, Skids, Fireworks } from './fx.js?v=daily28a';
-import { Weather } from './weather.js?v=daily28a';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=daily28a';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=daily28a';
-import { Net, newCode, loadTurn } from './net.js?v=daily28a';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=daily28a';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=daily28a';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=daily28a';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=voice28b';
+import { World } from './world.js?v=voice28b';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=voice28b';
+import { Sound } from './audio.js?v=voice28b';
+import { Particles, Skids, Fireworks } from './fx.js?v=voice28b';
+import { Weather } from './weather.js?v=voice28b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=voice28b';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=voice28b';
+import { Net, newCode, loadTurn } from './net.js?v=voice28b';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=voice28b';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=voice28b';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=voice28b';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -1565,7 +1565,7 @@ function checkLaps(c, Tr) {
     if (valid && lt < c.bestLap) c.bestLap = lt;
     if (c.isPlayer && game.session === 'tt') { ghostLap(lt, valid); if (valid) ttMedal(lt); }
     c.lapStart = game.raceTime;
-    if (isRace() && valid && lt < game.fastest && done >= 1) { game.fastest = lt; if (c.isPlayer && done > 1) radio('Purple! Fastest lap of the race: ' + fmt(lt) + '.', 'good', 4); }
+    if (isRace() && valid && lt < game.fastest && done >= 1) { game.fastest = lt; if (c.isPlayer && done > 1) say(pickLine(['Purple sector, purple lap! Fastest lap, {n}!', 'That is the fastest lap of the race. Mega, {n}!']), true); if (c.isPlayer && done > 1) radio('Purple! Fastest lap of the race: ' + fmt(lt) + '.', 'good', 4); }
     const notTimed = c.isPlayer && !isRace() && (c.pit || c.outLap);
     if (notTimed) { c.outLap = !!c.pit; c.lapTimes.pop(); if (c.bestLap === lt) c.bestLap = Math.min(Infinity, ...c.lapTimes); flashMsg(c.pit ? 'IN LAP' : 'FLYING LAP', 1.5); c.lapInvalid = false; }
     else if (c.isPlayer) {
@@ -1741,6 +1741,21 @@ const positionOf = c => standings().indexOf(c) + 1;
 
 /* ---------------- Race engineer & team orders ---------------- */
 let radioQ = [], radioNext = 0;
+/* VIP team radio voice: the engineer talks to you by name (the device's own speech voice) */
+const voiceOn = () => isVip() && settings.vipVoice !== false && 'speechSynthesis' in window && !sound.muted;
+let radioVoice = null, lastSay = 0;
+function say(text, force) {
+  if (!voiceOn()) return;
+  const now = performance.now(); if (!force && now - lastSay < 6000) return; lastSay = now;
+  try {
+    const ss = window.speechSynthesis;
+    if (!radioVoice) { const vs = ss.getVoices(); radioVoice = vs.find(v => /en-GB/i.test(v.lang) && /male|daniel|arthur|oliver|george/i.test(v.name)) || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; }
+    if (force) ss.cancel();
+    const u = new SpeechSynthesisUtterance(text); if (radioVoice) u.voice = radioVoice; u.rate = 1.08; u.pitch = 0.92; u.volume = 1; ss.speak(u);
+  } catch (e) { /* no speech */ }
+}
+const myCallName = () => { const n = (typeof lbName === 'function' && lbName()) || (typeof mpName === 'function' && mpName()) || ''; return n && n !== 'Driver' ? n : 'mate'; };
+const pickLine = arr => arr[Math.floor(Math.random() * arr.length)].replace('{n}', myCallName());
 function radio(text, kind = 'info', dur = 6, who) {
   if (performance.now() < radioNext && kind !== 'bad' && !who) { if (radioQ.length < 3) radioQ.push([text, kind, dur]); return; }
   showRadio(text, kind, dur, who);
@@ -1863,6 +1878,14 @@ function myActivity() {
   return mpSearching ? 'search' : net.code ? 'room' : 'menu';
 }
 setInterval(() => net.setActivity(myActivity()), 2000);
+// the engineer calls out places gained and lost
+setInterval(() => {
+  const p = game.player; if (!p || game.state !== 'race' || !isRace() || game.phase !== 'race' || game.replay || p.finished || game.raceTime < 12) { if (p) p.lastCallPos = undefined; return; }
+  const pos = positionOf(p);
+  if (p.lastCallPos !== undefined && pos < p.lastCallPos) say(pos === 1 ? pickLine(['You are leading the race, {n}! P1!', "Into the lead! Brilliant, {n}, now bring it home."]) : pickLine(['Nice move, {n}. P' + pos + '.', 'Great overtake. P' + pos + ' now, {n}.', 'Up to P' + pos + '. Keep pushing, {n}.']));
+  else if (p.lastCallPos !== undefined && pos > p.lastCallPos && pos - p.lastCallPos === 1) say(pickLine(['Lost a place, P' + pos + '. Stay calm, {n}.', 'P' + pos + '. Get it back, {n}.']));
+  p.lastCallPos = pos;
+}, 1500);
 const carByNet = id => game.cars.find(c => c.netId === id);
 const mpName = () => lbName() || 'Driver';
 const mpCode3 = n => (n.replace(/[^A-Za-z]/g, '').toUpperCase() + 'XXX').slice(0, 3);
@@ -2313,7 +2336,7 @@ function update(dt) {
   if (game.phase === 'lights') {
     game.lightsT += dt;
     setStartLights(Math.min(5, Math.floor(game.lightsT)));
-    if (game.lightsT >= game.goAt) { game.phase = 'race'; setStartLights(0); flashMsg('GO!', 1.2); }
+    if (game.lightsT >= game.goAt) { game.phase = 'race'; setStartLights(0); flashMsg('GO!', 1.2); if (isRace()) say(pickLine(['Lights out, go go go, {n}!', 'Go, go, go! Good start, {n}.', "And away we go. Let's do this, {n}."]), true); }
     const rev = keys.w ? 1 : 0;
     p.rpm += ((rev ? 11000 : 4000) - p.rpm) * Math.min(1, dt * (rev ? 4 : 2));
     audio.set(p.rpm, rev, true);
@@ -2405,6 +2428,7 @@ function updateCarVisuals(dt) {
   if (game.player && game.player.finished && isRace() && !game.fwDone) {
     game.fwDone = true;
     const pos = positionOf(game.player);
+    say(pos === 1 ? pickLine(["Get in there, {n}! You've won it! P1! What a drive!", 'Yes! Yes! Yes! You win, {n}! Fantastic job!']) : pos <= 3 ? pickLine(['P' + pos + ', {n}! That is a podium! Great job.', 'Brilliant, {n}, P' + pos + '. Podium!']) : pickLine(['P' + pos + '. Good effort, {n}. We go again.', 'Chequered flag, P' + pos + '. Well driven, {n}.']), true);
     if (isVip() && pos <= 3) {
       const fw = settings.vipFw !== false, msg = vipMsgText();
       try { sound.horn(); } catch (e) { /* no sound */ }
@@ -3020,6 +3044,7 @@ function initMenu() {
     $('vipFlames').textContent = 'Exhaust flames: ' + (settings.vipFlames === false ? 'Off' : 'On');
     $('vipV10').textContent = 'VIP car: ' + (VIP_CARS.find(v => v[0] === (settings.vipCar ?? (settings.vipV10 ? 'v10' : ''))) || VIP_CARS[0])[1];
     { const D = dailyToday(); $('vipDaily').textContent = '🏆 Daily challenge: ' + TRACKS[D.track].name + ' · ' + VIP_CARS.find(v => v[0] === D.car)[1] + (D.sky ? ' · ' + SKIES.find(v => v[0] === D.sky)[1] : '') + (dailyOn() ? ' ✓' : ''); }
+    $('vipVoice').textContent = 'Team radio voice: ' + (settings.vipVoice !== false ? 'On' : 'Off');
     $('vipTrail').textContent = 'Light trail: ' + TRAIL_NAMES[(settings.vipTrail | 0) % TRAILS.length];
     $('vipSky').textContent = 'Sky: ' + (SKIES.find(v => v[0] === mySky()) || SKIES[0])[1];
     $('vipPaint').textContent = 'Custom paint: ' + (settings.vipPaint ? 'On' : 'Off'); $('vipFin').textContent = 'Finish: ' + FINISHES[(settings.vipFin | 0) % FINISHES.length][0];
@@ -3048,6 +3073,7 @@ function initMenu() {
     $('vipMsg').textContent = "Today's challenge is set: Time Trial at " + TRACKS[D.track].name + ' in the ' + VIP_CARS.find(v => v[0] === D.car)[1] + '. Press Start and set the fastest lap: it has its own VIP leaderboard, and a new challenge comes every day.';
     $('startBtn').scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
+  $('vipVoice').onclick = () => { settings.vipVoice = settings.vipVoice === false; saveSettings(); vipUi(); if (settings.vipVoice !== false) say('Radio check. Loud and clear, ' + myCallName() + '.', true); };
   $('vipTrail').onclick = () => { settings.vipTrail = ((settings.vipTrail | 0) + 1) % TRAILS.length; saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
   $('vipSky').onclick = () => { const k = (SKIES.findIndex(v => v[0] === mySky()) + 1) % SKIES.length; settings.vipSky = SKIES[k][0]; saveSettings(); vipUi(); };
   const paintChanged = () => { saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
@@ -3208,7 +3234,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=daily28a');
+await loadCarModel('js/car.bin?v=voice28b');
 initMenu();
 requestAnimationFrame(frame);
 
