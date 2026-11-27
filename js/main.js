@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=voice28b';
-import { World } from './world.js?v=voice28b';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=voice28b';
-import { Sound } from './audio.js?v=voice28b';
-import { Particles, Skids, Fireworks } from './fx.js?v=voice28b';
-import { Weather } from './weather.js?v=voice28b';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=voice28b';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=voice28b';
-import { Net, newCode, loadTurn } from './net.js?v=voice28b';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=voice28b';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=voice28b';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=voice28b';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=cams28c';
+import { World } from './world.js?v=cams28c';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=cams28c';
+import { Sound } from './audio.js?v=cams28c';
+import { Particles, Skids, Fireworks } from './fx.js?v=cams28c';
+import { Weather } from './weather.js?v=cams28c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=cams28c';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=cams28c';
+import { Net, newCode, loadTurn } from './net.js?v=cams28c';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=cams28c';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=cams28c';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=cams28c';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -271,7 +271,8 @@ const aiPace = s => 0.8 + 0.225 * Math.pow(clamp(s, 0, 100) / 100, 0.75);
 const aiBoost = s => 1 + BOOST_MAX * Math.pow(clamp((s - 70) / 30, 0, 1), 2);
 const BOOST_MAX = 0.16;
 const GEARS = [0, 22, 33, 44, 54, 64, 74, 84, 200];
-const CAMS = ['COCKPIT', 'T-CAM', 'CHASE'];
+const CAMS = ['COCKPIT', 'T-CAM', 'CHASE', 'HELMET CAM ★', 'BUMPER CAM ★', 'TV CAM ★'];   // the last three are VIP cameras
+const camCount = () => isVip() ? CAMS.length : 3;
 const COMP = {
   soft: { name: 'Soft', s: 'S', color: '#e2231a', grip: 1.035, life: 0.4 },
   medium: { name: 'Medium', s: 'M', color: '#f5c400', grip: 1.0, life: 0.68 },
@@ -369,7 +370,7 @@ function newSeason() {
 
 /* ---------------- Game state ---------------- */
 const game = { state: 'menu', T: null, cars: [], player: null, mate: null, session: null, phase: 'idle', lightsT: 0, goAt: 0, raceTime: 0, camMode: 2, paused: false, finishCount: 0, orbit: 0, resultsAt: 0, season: null, laps: 5, skill: 50, q: null, grid: null, wx: {}, to: null, fastest: Infinity };
-const cm = parseInt(store.get('apexgp-cam'), 10); if (cm >= 0 && cm < 3) game.camMode = cm;
+const cm = parseInt(store.get('apexgp-cam'), 10); if (cm >= 0 && cm < CAMS.length) game.camMode = cm;
 const keys = {};
 // VIP cars (not online): the V10 monster and the 1960s / 1980s classics; their times are kept separate
 const VIP_CARS = [['', 'Off'], ['v10', 'V10 monster'], ['classic60', '1960s classic'], ['turbo80', '1980s turbo'], ['f2', 'F2'], ['indy', 'IndyCar'], ['gt3', 'GT3'], ['hyper', 'Hypercar'], ['rally', 'Rally car'], ['miata', 'MX-5'], ['bus', 'London bus']];   // any car on any track
@@ -2458,7 +2459,7 @@ mirrorRT.texture.wrapS = THREE.RepeatWrapping; mirrorRT.texture.repeat.x = -1; m
 const rearCam = new THREE.PerspectiveCamera(46, 3, 0.4, 900);
 let mirrorTick = 0;
 function renderMirrors() {
-  const p = game.player; if (!p || !p.hasMirrors || game.camMode !== 0) return;
+  const p = game.player; if (!p || !p.hasMirrors || (game.camMode !== 0 && game.camMode !== 3)) return;
   if (++mirrorTick % (document.body.classList.contains('touchUI') ? 3 : 2)) return;
   const g = p.group, E = p.eye || [0, 1, 0];
   g.localToWorld(rearCam.position.set(0, E[1] + 0.05, -0.4)); g.localToWorld(tmpL.set(0, E[1] - 0.25, -30)); rearCam.lookAt(tmpL);
@@ -2469,8 +2470,9 @@ function renderMirrors() {
 /* ---------------- Camera ---------------- */
 const tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3(), camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 function setCam(m, silent) {
+  if (m >= 3 && !isVip()) m = 2;
   game.camMode = m; $('camName').textContent = CAMS[m];
-  if (game.player) game.player.cockpitHide.forEach(o => o.visible = m !== 0);
+  if (game.player) game.player.cockpitHide.forEach(o => o.visible = m !== 0 && m !== 3);
   store.set('apexgp-cam', String(m)); camPos.set(0, 0, 0);
   if (!silent) flashMsg(CAMS[m], 0.9);
 }
@@ -2491,6 +2493,20 @@ function updateCamera(dt, time) {
     c.headZ = (c.headZ || 0) + (lonG * 0.02 - (c.headZ || 0)) * kk;
     g.localToWorld(tmpV.set(E[0] + jx + c.headX, E[1] + jy - Math.abs(c.headZ) * 0.4, E[2] + c.headZ)); g.localToWorld(tmpL.set(E[0] + c.steer * 0.6, E[1] - (c.dash && !c.closed ? 0.35 : -0.02), 14));
     camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = c.closed ? 72 : 78;
+  } else if (game.camMode === 3) {   // VIP helmet cam: from inside the helmet, rolling with the corners and shaking over kerbs
+    const E = c.eye || [0, 0.92, 0.05], latG = clamp((c.r || 0) * Math.abs(c.v) / 9.81, -4, 4);
+    g.localToWorld(tmpV.set(E[0] + jx * 1.8, E[1] + 0.05 + jy * 1.8, E[2] - 0.1)); g.localToWorld(tmpL.set(E[0] + c.steer * 1.2, E[1] - 0.05, 14));
+    camera.position.copy(tmpV); camera.lookAt(tmpL); camera.rotateZ(clamp(latG * 0.025, -0.09, 0.09)); camera.fov = 62;
+  } else if (game.camMode === 4) {   // VIP bumper cam: low on the nose
+    const nz = c.closed === 'bus' ? 5.25 : c.closed ? 2.35 : 2.45;
+    g.localToWorld(tmpV.set(jx * 0.5, (c.closed === 'bus' ? 0.9 : 0.34) + jy * 0.5, nz)); g.localToWorld(tmpL.set(0, 0.3, nz + 20));
+    camera.position.copy(tmpV); camera.lookAt(tmpL); camera.fov = 76;
+  } else if (game.camMode === 5) {   // VIP TV cam: live trackside cameras up on gantries
+    const T = game.T;
+    if (!T.tvCams) { T.tvCams = []; for (let m = 0; m < T.length; m += 260) { const i = Math.round(m / DS) % T.N, sd = (m / 260) % 2 ? 1 : -1, l = sd * ((sd > 0 ? T.limL[i] : T.limR[i]) + 10); T.tvCams.push({ x: T.px[i] + T.nx[i] * l, z: T.pz[i] + T.nz[i] * l, y: elevAt(T, i) + 7.5 }); } }
+    const fp = g.position; let best = null, bd = 1e9;
+    for (const cm of T.tvCams) { const d = Math.hypot(cm.x - fp.x, cm.z - fp.z), ahead = (cm.x - fp.x) * Math.sin(c.h) + (cm.z - fp.z) * Math.cos(c.h); if (ahead > -45 && d < bd) { bd = d; best = cm; } }
+    if (best) { camera.position.set(best.x, best.y, best.z); camera.lookAt(fp.x, fp.y + 0.6, fp.z); camera.fov = Math.max(8, Math.min(55, 1400 / Math.max(10, bd))); }
   } else if (game.camMode === 1) {
     const tc = c.tcam || [0, 1.36, -0.5, 0.8];
     g.localToWorld(tmpV.set(tc[0] + jx, tc[1] + jy, tc[2])); g.localToWorld(tmpL.set(tc[0], tc[3], tc[2] + 12.5));
@@ -3234,7 +3250,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=voice28b');
+await loadCarModel('js/car.bin?v=cams28c');
 initMenu();
 requestAnimationFrame(frame);
 
