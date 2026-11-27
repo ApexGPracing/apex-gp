@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=sky27x';
-import { World } from './world.js?v=sky27x';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=sky27x';
-import { Sound } from './audio.js?v=sky27x';
-import { Particles, Skids, Fireworks } from './fx.js?v=sky27x';
-import { Weather } from './weather.js?v=sky27x';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=sky27x';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=sky27x';
-import { Net, newCode, loadTurn } from './net.js?v=sky27x';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=sky27x';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=sky27x';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=sky27x';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=anycar27y';
+import { World } from './world.js?v=anycar27y';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=anycar27y';
+import { Sound } from './audio.js?v=anycar27y';
+import { Particles, Skids, Fireworks } from './fx.js?v=anycar27y';
+import { Weather } from './weather.js?v=anycar27y';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=anycar27y';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=anycar27y';
+import { Net, newCode, loadTurn } from './net.js?v=anycar27y';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=anycar27y';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=anycar27y';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=anycar27y';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -342,7 +342,7 @@ const game = { state: 'menu', T: null, cars: [], player: null, mate: null, sessi
 const cm = parseInt(store.get('apexgp-cam'), 10); if (cm >= 0 && cm < 3) game.camMode = cm;
 const keys = {};
 // VIP cars (not online): the V10 monster and the 1960s / 1980s classics; their times are kept separate
-const VIP_CARS = [['', 'Off'], ['v10', 'V10 monster'], ['classic60', '1960s classic'], ['turbo80', '1980s turbo']];
+const VIP_CARS = [['', 'Off'], ['v10', 'V10 monster'], ['classic60', '1960s classic'], ['turbo80', '1980s turbo'], ['f2', 'F2'], ['indy', 'IndyCar'], ['gt3', 'GT3'], ['hyper', 'Hypercar'], ['rally', 'Rally car'], ['miata', 'MX-5'], ['bus', 'London bus']];   // any car on any track
 const vipCarCls = () => { if (!isVip() || settings.mode === 'mp') return ''; const c = settings.vipCar ?? (settings.vipV10 ? 'v10' : ''); return VIP_CARS.some(v => v[0] === c) ? c : ''; };
 const v10On = () => vipCarCls() === 'v10';
 const serKey = id => (vipCarCls() ? vipCarCls() + '-' : SER.id === 'f1' ? '' : SER.id + '-') + id;
@@ -378,7 +378,7 @@ function makeField(lineup, skill) {
   vipExtras(p, myExtras()); helmetDesign(p, myHelmet()); p.vip = isVip(); mergeCarStatic(p); game.cars.push(p); game.player = p; addLiveMirrors(p, mirrorRT.texture); p.hasMirrors = true;
   lineup.forEach((L, k) => {
     const di = L.di, mate = k === 0 && settings.mode !== 'tt';
-    const retro = pcls === 'classic60' || pcls === 'turbo80';   // a retro VIP car races a whole retro field
+    const retro = !!vipCarCls() && pcls !== 'v10';   // a VIP car (classic or any other) races a whole field of the same car
     const tm = TEAMS[teamIdxOf(di)], cls = retro ? pcls : mate ? basePcls : classFor(teamIdxOf(di), false);
     const c = Object.assign(makeCar({ color: mate ? colr : tm.color, accent: mate ? acc : tm.accent, helmet: ['#ffffff', '#ffcc00', '#ff4d4d', '#4da6ff'][di % 4], number: CAR_NUMS[di], compound: 'medium', model: CLASSES[cls].model, livery: mate ? myLiv : liveryFor(teamIdxOf(di)) }), { cls, spec: CLASSES[cls] },
       { name: DRIVERS[di][0], code: DRIVERS[di][1], team: mate ? 'Your Team' : tm.name, color: mate ? colr : tm.color, isPlayer: false, mate, teamIdx: mate ? TEAMS.length : teamIdxOf(di),
@@ -2992,7 +2992,7 @@ function initMenu() {
   $('vipV10').onclick = () => {
     const cur = settings.vipCar ?? (settings.vipV10 ? 'v10' : ''), k = (VIP_CARS.findIndex(v => v[0] === cur) + 1) % VIP_CARS.length;
     settings.vipCar = VIP_CARS[k][0]; settings.vipV10 = settings.vipCar === 'v10'; saveSettings(); vipUi(); refreshMenu();
-    $('vipMsg').textContent = { '': 'VIP car off: you drive the normal car for the series.', v10: 'V10 monster on: ~900 hp, 19,000 rpm V10 scream. Quick Race, Time Trial and championships (not online).', classic60: '1960s classic on: a cigar-shaped 1.5-litre V8 with skinny tyres and no wings. Slide it! (not online)', turbo80: '1980s turbo on: 1.5-litre turbo V6, huge power, turbo lag and a giant rear wing (not online).' }[settings.vipCar];
+    $('vipMsg').textContent = ({ '': 'VIP car off: you drive the normal car for the series.', v10: 'V10 monster on: ~900 hp, 19,000 rpm V10 scream. Quick Race, Time Trial and championships (not online).', classic60: '1960s classic on: a cigar-shaped 1.5-litre V8 with skinny tyres and no wings. Slide it! (not online)', turbo80: '1980s turbo on: 1.5-litre turbo V6, huge power, turbo lag and a giant rear wing (not online).' })[settings.vipCar] || (VIP_CARS.find(v => v[0] === settings.vipCar)[1] + ' on: race it on any track you pick, against a whole field of them (not online).');
   };
   document.querySelectorAll('#qchat button').forEach(b => b.onclick = () => quickChat(+b.dataset.k));
   $('vipNum').onchange = () => { const v = Math.round(+$('vipNum').value); settings.vipNum = v >= 1 && v <= 99 ? v : null; saveSettings(); vipUi(); mpShareInfo(); };
@@ -3158,7 +3158,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=sky27x');
+await loadCarModel('js/car.bin?v=anycar27y');
 initMenu();
 requestAnimationFrame(frame);
 
