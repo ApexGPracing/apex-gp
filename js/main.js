@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=replay27w';
-import { World } from './world.js?v=replay27w';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=replay27w';
-import { Sound } from './audio.js?v=replay27w';
-import { Particles, Skids, Fireworks } from './fx.js?v=replay27w';
-import { Weather } from './weather.js?v=replay27w';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=replay27w';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=replay27w';
-import { Net, newCode, loadTurn } from './net.js?v=replay27w';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=replay27w';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=replay27w';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=replay27w';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=sky27x';
+import { World } from './world.js?v=sky27x';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=sky27x';
+import { Sound } from './audio.js?v=sky27x';
+import { Particles, Skids, Fireworks } from './fx.js?v=sky27x';
+import { Weather } from './weather.js?v=sky27x';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=sky27x';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=sky27x';
+import { Net, newCode, loadTurn } from './net.js?v=sky27x';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=sky27x';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=sky27x';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=sky27x';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -166,6 +166,19 @@ function helmetDesign(car, k) {
   }
   car.helmet.traverse(o => { if (o.isMesh && o.material && o.material.clearcoat === 1 && o.material.color) { o.material = o.material.clone(); o.material.color.set('#ffffff'); o.material.map = helmetTex[k]; o.material.metalness = k === 7 ? 0.9 : 0.3; o.material.needsUpdate = true; } });
 }
+/* VIP sky: sunset, dawn, fog or a thunderstorm (with rain and lightning) at any track */
+const SKIES = [['', 'Normal'], ['sunset', 'Sunset'], ['dawn', 'Dawn'], ['fog', 'Fog'], ['storm', 'Thunderstorm']];
+const mySky = () => isVip() ? (SKIES.some(v => v[0] === settings.vipSky) ? settings.vipSky : '') : '';
+function skyTheme(th, k) {
+  if (!k || th.night) return th;
+  const o = {
+    sunset: { sunElev: 4, sunAz: 255, turbidity: 9, rayleigh: 3.2, mie: 0.025, exposure: 0.52, fog: '#e3a77e', fogDensity: th.fogDensity * 1.3, bloom: 0.5 },
+    dawn: { sunElev: 6, sunAz: 105, turbidity: 6, rayleigh: 3.6, mie: 0.014, exposure: 0.48, fog: '#c9bfd8', fogDensity: th.fogDensity * 2.2, bloom: 0.4 },
+    fog: { sunElev: 28, turbidity: 12, rayleigh: 0.8, mie: 0.025, exposure: 0.5, fog: '#c9cdd1', fogDensity: 0.0042, bloom: 0.3 },
+    storm: { sunElev: 22, turbidity: 16, rayleigh: 0.5, mie: 0.035, exposure: 0.36, fog: '#5f6973', fogDensity: 0.0011, bloom: 0.3 },
+  }[k];
+  return o ? Object.assign({}, th, o) : th;
+}
 function nightTheme(th) {
   if (th.night) return th;
   return Object.assign({}, th, { night: true, lights: true, nightSky: ['#03050d', '#1b2340'], exposure: Math.max(0.9, th.exposure || 0), bloom: Math.max(0.5, th.bloom || 0), fog: '#0b1020' });
@@ -271,10 +284,10 @@ const saveSettings = () => store.set('apexgp2-settings', JSON.stringify(settings
 
 let builtFor = null;
 function buildTrack(i) {
-  const key = i + (myNight() ? ':night' : '');
+  const key = i + (myNight() ? ':night' : '') + (mySky() ? ':' + mySky() : '');
   if (builtFor === key) return getTrack(i);
   const T = getTrack(i);
-  T.baseTheme = T.baseTheme || T.theme; T.theme = myNight() ? nightTheme(T.baseTheme) : T.baseTheme;   // VIP: night racing anywhere
+  T.baseTheme = T.baseTheme || T.theme; T.theme = myNight() ? nightTheme(T.baseTheme) : skyTheme(T.baseTheme, mySky());   // VIP: night racing or a special sky anywhere
   world.build(T, 0, TEAMS.map(t => t.color), TEAMS.map(t => t.name));
   builtFor = key;
   smoke.clear(); sparks.clear(); skids.clear();
@@ -422,7 +435,7 @@ function startWeekend() {
   game.seed = (Date.now() & 0xfffff) + 3;
   game.lapEst = estimateLap(Tr, aiPace(game.skill), null, 1, CLASSES[SER.cls]);
   game.record = recordFor(Tr); game.fastest = Infinity;
-  game.wxMode = tt ? 'dry' : rule('weather');
+  game.wxMode = tt ? 'dry' : mySky() === 'storm' ? 'wet' : rule('weather');
   $('menu').classList.add('hidden'); $('results').classList.add('hidden'); $('pause').classList.add('hidden'); $('hud').classList.remove('hidden');
   buildMinimap(Tr);
   audio.init();
@@ -2964,6 +2977,7 @@ function initMenu() {
     $('vipSmoke').textContent = 'Tyre smoke: ' + SMOKE_NAMES[settings.vipSmoke || 0];
     $('vipFlames').textContent = 'Exhaust flames: ' + (settings.vipFlames === false ? 'Off' : 'On');
     $('vipV10').textContent = 'VIP car: ' + (VIP_CARS.find(v => v[0] === (settings.vipCar ?? (settings.vipV10 ? 'v10' : ''))) || VIP_CARS[0])[1];
+    $('vipSky').textContent = 'Sky: ' + (SKIES.find(v => v[0] === mySky()) || SKIES[0])[1];
     $('vipPaint').textContent = 'Custom paint: ' + (settings.vipPaint ? 'On' : 'Off'); $('vipFin').textContent = 'Finish: ' + FINISHES[(settings.vipFin | 0) % FINISHES.length][0];
     $('vipC1').value = HEX.test(settings.vipC1 || '') ? settings.vipC1 : '#e10600'; $('vipC2').value = HEX.test(settings.vipC2 || '') ? settings.vipC2 : '#111827';
     if (document.activeElement !== $('vipNum')) $('vipNum').value = settings.vipNum || '';
@@ -2985,6 +2999,7 @@ function initMenu() {
   $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
   $('vipRims').onclick = () => { settings.vipRims = settings.vipRims === false; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipSky').onclick = () => { const k = (SKIES.findIndex(v => v[0] === mySky()) + 1) % SKIES.length; settings.vipSky = SKIES[k][0]; saveSettings(); vipUi(); };
   const paintChanged = () => { saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
   $('vipPaint').onclick = () => { settings.vipPaint = !settings.vipPaint; if (settings.vipPaint && !HEX.test(settings.vipC1 || '')) settings.vipC1 = $('vipC1').value; paintChanged(); };
   $('vipFin').onclick = () => { settings.vipFin = ((settings.vipFin | 0) + 1) % FINISHES.length; paintChanged(); };
@@ -3123,6 +3138,11 @@ function frame(now) {
     if (!window.__camLock) updateMenuCamera(dt);
     focus.copy(camera.position).setY(0);
   }
+  if (game.state === 'race' && mySky() === 'storm' && !game.paused) {   // lightning: a flash, then thunder a moment later
+    game.boltT = (game.boltT ?? 4) - dt;
+    if (game.boltT <= 0) { game.boltT = 5 + Math.random() * 12; game.bolt = 1; const far = 0.4 + Math.random() * 2.2; setTimeout(() => { try { sound.burst(0.5 / far, 2.2, 70, 0.6); sound.burst(0.25 / far, 0.6, 220, 0.8); } catch (e) { /* no sound */ } }, far * 1000); }
+  }
+  game.bolt = Math.max(0, (game.bolt || 0) - dt * 5); world.flash = game.bolt > 0.6 || (game.bolt > 0.2 && game.bolt < 0.35) ? game.bolt : 0;
   renderWeather(dt);
   world.update(dt, focus, camera);
   renderer.render(scene, camera);
@@ -3138,7 +3158,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=replay27w');
+await loadCarModel('js/car.bin?v=sky27x');
 initMenu();
 requestAnimationFrame(frame);
 

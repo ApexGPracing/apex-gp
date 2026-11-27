@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=replay27w';
-import { AXLE_F, AXLE_R } from './car.js?v=replay27w';
-import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=replay27w';
+import { W, KERB, KERB_PROFILE, DS, bankH, elevAt, pitRoad, mergeWallAt } from './tracks.js?v=sky27x';
+import { AXLE_F, AXLE_R } from './car.js?v=sky27x';
+import { rng, makeNoise, canvasTex, normalTex, noiseFill, smooth, clamp } from './util.js?v=sky27x';
 
 const TMP_GREY = new THREE.Color('#8b939c');
 const AD_WORDS = ['APEX GP', 'NOVA FUEL', 'KITE TYRES', 'ORBITAL', 'HELIX', 'SUMMIT', 'VOLTA', 'RAPIDE', 'ZENITH', 'TORQUE+'];
@@ -1160,7 +1160,8 @@ export class World {
     if (rm) { rm.roughness = 0.86 - 0.62 * wet; rm.metalness = 0.15 * wet; rm.color.setScalar(this.night ? 0.79 - 0.25 * wet : 1 - 0.38 * wet); }
     this.sun.intensity = b.sun * (1 - 0.7 * rain); this.hemi.intensity = b.hemi * (1 + 0.6 * rain);
     this.scene.environmentIntensity = b.env * (1 - 0.45 * rain);
-    this.renderer.toneMappingExposure = b.exposure * (1 - 0.38 * rain);
+    this.renderer.toneMappingExposure = b.exposure * (1 - 0.38 * rain) * (1 + 3.5 * (this.flash || 0));   // this.flash: a lightning strike (0..1)
+    this.hemi.intensity *= 1 + 6 * (this.flash || 0);
     if (this.scene.fog) { this.scene.fog.density = b.fog * (1 + 3 * rain); this.scene.fog.color.copy(b.fogColor).lerp(TMP_GREY, 0.7 * rain); }
     if (!this.night) { const u = this.sky.material.uniforms; u.turbidity.value = b.turb + 20 * rain; u.rayleigh.value = b.ray * (1 - 0.95 * rain); u.mieCoefficient.value = 0.004 + 0.03 * rain; }
     if (this.clouds) { this.clouds.material.opacity = Math.min(1, 0.7 + 0.6 * rain); this.clouds.material.color.setScalar(1 - 0.65 * rain); }
