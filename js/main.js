@@ -1,16 +1,16 @@
 import * as THREE from 'three';
-import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=anycar27y';
-import { World } from './world.js?v=anycar27y';
-import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=anycar27y';
-import { Sound } from './audio.js?v=anycar27y';
-import { Particles, Skids, Fireworks } from './fx.js?v=anycar27y';
-import { Weather } from './weather.js?v=anycar27y';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=anycar27y';
-import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=anycar27y';
-import { Net, newCode, loadTurn } from './net.js?v=anycar27y';
-import { VIP_CODES, VIP_REVOKED } from './codes.js?v=anycar27y';
-import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=anycar27y';
-import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=anycar27y';
+import { W, KERB, kerbHeight, DS, AI_GRIP, TRACKS, getTrack, previewPoints, locate, bankH, elevAt, pitRoad, mergeWallAt, speedProfiles } from './tracks.js?v=trail27z';
+import { World } from './world.js?v=trail27z';
+import { addLodProxy, setCarLod, mergeCarStatic, makeCar, disposeCar, setCompound, makeSafetyCar, loadCarModel, updateDash, addLiveMirrors, AXLE_F, AXLE_R } from './car.js?v=trail27z';
+import { Sound } from './audio.js?v=trail27z';
+import { Particles, Skids, Fireworks } from './fx.js?v=trail27z';
+import { Weather } from './weather.js?v=trail27z';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, METERED_APP, METERED_KEY } from './config.js?v=trail27z';
+import { SERIES, CLASSES, SERIES_ORDER } from './series.js?v=trail27z';
+import { Net, newCode, loadTurn } from './net.js?v=trail27z';
+import { VIP_CODES, VIP_REVOKED } from './codes.js?v=trail27z';
+import { clamp, angDiff, rng, fmt, store, setMaxAniso, smooth } from './util.js?v=trail27z';
+import { OC_ON, oc, ocMe, agreedSlot, ocStandings, ocRoomCode } from './champs.js?v=trail27z';
 
 const $ = id => document.getElementById(id);
 const VMAX = 100;
@@ -111,13 +111,43 @@ function applyPaint(car, pp) {
   const m = car && car.mats && car.mats.body, F = pp && FINISHES[(pp.f | 0) % FINISHES.length]; if (!m || !F) return;
   m.metalness = F[1]; m.roughness = F[2]; if ('clearcoat' in m) m.clearcoat = F[3]; if (m.emissive) m.emissiveIntensity = 0; m.needsUpdate = true;
 }
-const myExtras = () => isVip() ? { rims: settings.vipRims !== false ? 1 : 0, glow: settings.vipGlow || 0, smoke: settings.vipSmoke || 0, flames: settings.vipFlames !== false ? 1 : 0, paint: myPaint() } : { rims: 0, glow: 0, smoke: 0, flames: 0 };
+const myExtras = () => isVip() ? { rims: settings.vipRims !== false ? 1 : 0, glow: settings.vipGlow || 0, smoke: settings.vipSmoke || 0, flames: settings.vipFlames !== false ? 1 : 0, paint: myPaint(), trail: settings.vipTrail | 0 } : { rims: 0, glow: 0, smoke: 0, flames: 0 };
 const SMOKES = [null, '#f2c94c', '#ff2bd6', '#22d3ee', '#39ff14', '#ff3b30', '#a855f7'], SMOKE_NAMES = ['Normal', 'Gold', 'Pink', 'Blue', 'Green', 'Red', 'Purple'];
 const QCHAT = ['GG!', 'Nice move!', 'Sorry!', 'Thanks!', 'Good race!', 'See ya!'];
 function makeCrown() { const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: '#d4af37', emissive: '#7a5a00', emissiveIntensity: 0.6, metalness: 1, roughness: 0.25 }); g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 20, 1, true), m)); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, c = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 6), m); c.position.set(Math.cos(a) * 0.42, 0.26, Math.sin(a) * 0.42); g.add(c); } g.position.y = 2.1; return g; }   // gold rims on unless switched off
 let goldRim = null, goldFace = null, glowTex = null;
+/* VIP neon light trail: a glowing ribbon that follows the car's path and fades out behind it */
+const TRAILS = [null, '#00e5ff', '#ff2bd6', '#39ff14', '#ffd400', '#ff3b30', '#ffffff', 'rainbow'], TRAIL_NAMES = ['Off', 'Cyan', 'Pink', 'Green', 'Yellow', 'Red', 'White', 'Rainbow'];
+const TRAIL_N = 60, trailMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, fog: false });
+function trailTick(c, dt) {
+  const g = c.group; if (!g || !g.visible) { if (c.trail) c.trail.visible = false; return; }
+  if (!c.trail) {
+    const geo = new THREE.BufferGeometry(), pos = new Float32Array(TRAIL_N * 2 * 3), col = new Float32Array(TRAIL_N * 2 * 3), idx = [];
+    for (let k = 0; k < TRAIL_N - 1; k++) { const a = k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(idx);
+    c.trail = new THREE.Mesh(geo, trailMat); c.trail.frustumCulled = false; c.trail.renderOrder = 3; scene.add(c.trail); c.trailPts = [];
+  }
+  c.trail.visible = true;
+  // a point every ~1.2 m, taken just behind the car's rear wing
+  const h = g.rotation.y, bx = g.position.x - Math.sin(h) * 2.4, bz = g.position.z - Math.cos(h) * 2.4, by = game.replay ? g.position.y : bankH(game.T, c.idx || 0, c.lat || 0);   // the car's own height is set later in the frame
+  const P = c.trailPts, last = P[0];
+  // P[0] rides with the car; once it is 1.2 m clear of the last fixed point, a new fixed point is laid down
+  if (!last) P.push([bx, by, bz, h], [bx, by, bz, h]);
+  else { last[0] = bx; last[1] = by; last[2] = bz; last[3] = h; if (P.length < 2 || Math.hypot(bx - P[1][0], bz - P[1][2]) > 1.2) { P.unshift([bx, by, bz, h]); if (P.length > TRAIL_N) P.pop(); } }
+  const pos = c.trail.geometry.attributes.position.array, col = c.trail.geometry.attributes.color.array, base = c.trailRainbow ? null : c.trailCol, tc = new THREE.Color();
+  for (let k = 0; k < TRAIL_N; k++) {
+    const p = P[Math.min(k, P.length - 1)] || [bx, by, bz, h], fade = P.length > 1 ? Math.max(0, 1 - k / (P.length - 1)) : 0, a = k * 6;
+    // a flat glowing band about a metre wide, just above the road, so it shows from behind and from above
+    const cx = Math.cos(p[3]) * 0.32, cz = -Math.sin(p[3]) * 0.32, w = 0.3 + 0.7 * fade;
+    pos[a] = p[0] + cx * w; pos[a + 1] = p[1] + 0.32; pos[a + 2] = p[2] + cz * w; pos[a + 3] = p[0] - cx * w; pos[a + 4] = p[1] + 0.32; pos[a + 5] = p[2] - cz * w;
+    if (base) tc.copy(base); else tc.setHSL(((k * 0.05 + performance.now() * 0.0004) % 1), 1, 0.55);
+    const f = fade * fade * 0.85; col[a] = col[a + 3] = tc.r * f; col[a + 1] = col[a + 4] = tc.g * f; col[a + 2] = col[a + 5] = tc.b * f;
+  }
+  c.trail.geometry.attributes.position.needsUpdate = true; c.trail.geometry.attributes.color.needsUpdate = true;
+}
 function vipExtras(car, x) {
   if (!car || !x) return;
+  const tr = TRAILS[x.trail | 0]; car.trailRainbow = tr === 'rainbow'; car.trailCol = tr && tr !== 'rainbow' ? new THREE.Color(tr) : null;
   car.smokeCol = x.smoke && SMOKES[x.smoke] ? new THREE.Color(SMOKES[x.smoke]) : null; car.flames = !!x.flames;
   if (x.rims) {
     goldRim = goldRim || new THREE.MeshStandardMaterial({ color: '#d4af37', roughness: 0.18, metalness: 1 });
@@ -353,7 +383,7 @@ const isRace = () => game.session === 'race';
 const racing = () => isRace() && game.phase === 'race';
 const curLap = c => Math.max(1, c.maxDone + 1);
 
-function clearCars() { world.resetCrews(); for (const c of game.cars) { scene.remove(c.group); disposeCar(c); } game.cars = []; game.player = null; game.mate = null; }
+function clearCars() { world.resetCrews(); for (const c of game.cars) { scene.remove(c.group); if (c.trail) { scene.remove(c.trail); c.trail.geometry.dispose(); } disposeCar(c); } game.cars = []; game.player = null; game.mate = null; }
 
 function resetState(c) {
   Object.assign(c, {
@@ -2327,6 +2357,7 @@ function updateCarVisuals(dt) {
   for (const c of game.cars) {
     if (!c.group.visible) continue;
     c.group.position.set(c.x, 0, c.z); c.group.rotation.order = 'YXZ'; c.group.rotation.y = c.h;
+    if (c.trailCol || c.trailRainbow) trailTick(c, dt);
     if (c.lodProxy) { const dC = Math.hypot(c.x - camera.position.x, c.z - camera.position.z); setCarLod(c, c.lodFar ? dC > 34 : dC > 42); }   // far cars: one merged mesh
     if (c.spec && c.spec.slide && !c.isPlayer && !c.dnf) {
       // AI rally cars slide too: the nose points into the corner, more the faster and tighter it is
@@ -2672,6 +2703,7 @@ function replayTick(dt) {
     g.visible = a[o + 8] > 0.5; const v = L(a[o + 7], b[o + 7]), st = L(a[o + 6], b[o + 6]);
     for (const w of c.wheels || []) { if (P.playing) w.spin.rotation.x += v * dt * RP_SPEEDS[P.speed] / 0.33; if (w.front) w.pivot.rotation.y = st * 0.35; }
     if (c.lodProxy) setCarLod(c, Math.hypot(g.position.x - camera.position.x, g.position.z - camera.position.z) > 42);
+    if ((c.trailCol || c.trailRainbow) && P.playing) trailTick(c, dt);
   });
   // camera
   const f = R.cars[P.focus] || R.cars[0], fg = f.group, fp = fg.position;
@@ -2977,6 +3009,7 @@ function initMenu() {
     $('vipSmoke').textContent = 'Tyre smoke: ' + SMOKE_NAMES[settings.vipSmoke || 0];
     $('vipFlames').textContent = 'Exhaust flames: ' + (settings.vipFlames === false ? 'Off' : 'On');
     $('vipV10').textContent = 'VIP car: ' + (VIP_CARS.find(v => v[0] === (settings.vipCar ?? (settings.vipV10 ? 'v10' : ''))) || VIP_CARS[0])[1];
+    $('vipTrail').textContent = 'Light trail: ' + TRAIL_NAMES[(settings.vipTrail | 0) % TRAILS.length];
     $('vipSky').textContent = 'Sky: ' + (SKIES.find(v => v[0] === mySky()) || SKIES[0])[1];
     $('vipPaint').textContent = 'Custom paint: ' + (settings.vipPaint ? 'On' : 'Off'); $('vipFin').textContent = 'Finish: ' + FINISHES[(settings.vipFin | 0) % FINISHES.length][0];
     $('vipC1').value = HEX.test(settings.vipC1 || '') ? settings.vipC1 : '#e10600'; $('vipC2').value = HEX.test(settings.vipC2 || '') ? settings.vipC2 : '#111827';
@@ -2999,6 +3032,7 @@ function initMenu() {
   $('vipMsgIn').onchange = () => { settings.vipMsg = $('vipMsgIn').value.replace(/[<>&]/g, '').trim().slice(0, 40); saveSettings(); vipUi(); };
   $('vipRims').onclick = () => { settings.vipRims = settings.vipRims === false; saveSettings(); vipUi(); mpShareInfo(); };
   $('vipGlow').onclick = () => { settings.vipGlow = ((settings.vipGlow || 0) + 1) % GLOWS.length; saveSettings(); vipUi(); mpShareInfo(); };
+  $('vipTrail').onclick = () => { settings.vipTrail = ((settings.vipTrail | 0) + 1) % TRAILS.length; saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
   $('vipSky').onclick = () => { const k = (SKIES.findIndex(v => v[0] === mySky()) + 1) % SKIES.length; settings.vipSky = SKIES[k][0]; saveSettings(); vipUi(); };
   const paintChanged = () => { saveSettings(); vipUi(); mpLastInfo = ''; mpShareInfo(); };
   $('vipPaint').onclick = () => { settings.vipPaint = !settings.vipPaint; if (settings.vipPaint && !HEX.test(settings.vipC1 || '')) settings.vipC1 = $('vipC1').value; paintChanged(); };
@@ -3158,7 +3192,7 @@ function updateSound(dt) {
   sound.update(dt, { on: true, eng: p.spec && p.spec.eng, rpm: p.rpm, throttle: game.phase === 'lights' ? (keys.w ? 1 : 0) : p.inp.throttle, gear: p.gear, speed: Math.abs(p.v), kerb: p.surf === 1, slide: Math.max(Math.abs(p.slip) * 2.5, lock ? 0.6 : 0, p.scrub > 0.9 ? 0.4 : 0) * (weather.N && weather.wetAt(p.idx) > 0.3 ? 0.2 : 1), rain: weather.N ? weather.rainAt(p.idx) : 0, impact: p.impact || 0, rival });
   p.impact = 0;
 }
-await loadCarModel('js/car.bin?v=anycar27y');
+await loadCarModel('js/car.bin?v=trail27z');
 initMenu();
 requestAnimationFrame(frame);
 
